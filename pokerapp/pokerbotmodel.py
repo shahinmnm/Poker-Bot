@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
+import asyncio
 import datetime
 import traceback
-from threading import Timer
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional, Callable, Awaitable
 
 import redis
-from telegram import Message, ReplyKeyboardMarkup, Update, Bot
-from telegram.ext import Handler, CallbackContext
+from telegram import ReplyKeyboardMarkup, Update, Bot
+from telegram.ext import ContextTypes, Application
 
 from pokerapp.config import Config
 from pokerapp.privatechatmodel import UserPrivateChatModel
@@ -55,6 +55,7 @@ class PokerBotModel:
         bot: Bot,
         cfg: Config,
         kv,
+        application: Application,
     ):
         self._view: PokerBotViewer = view
         self._bot: Bot = bot
@@ -62,6 +63,7 @@ class PokerBotModel:
         self._kv = kv
         self._cfg: Config = cfg
         self._round_rate: RoundRateModel = RoundRateModel()
+        self._application = application
 
         self._readyMessages = {}
 
@@ -73,7 +75,7 @@ class PokerBotModel:
         return MIN_PLAYERS
 
     @staticmethod
-    def _game_from_context(context: CallbackContext) -> Game:
+    def _game_from_context(context: ContextTypes.DEFAULT_TYPE) -> Game:
         if KEY_CHAT_DATA_GAME not in context.chat_data:
             context.chat_data[KEY_CHAT_DATA_GAME] = Game()
         return context.chat_data[KEY_CHAT_DATA_GAME]
@@ -83,20 +85,22 @@ class PokerBotModel:
         i = game.current_player_index % len(game.players)
         return game.players[i]
 
-    def ready(self, update: Update, context: CallbackContext) -> None:
+    async def ready(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
 
         if game.state != GameState.INITIAL:
-            self._view.send_message_reply(
+            await self._view.send_message_reply(
                 chat_id=chat_id,
                 message_id=update.effective_message.message_id,
-                text="The game is already started. Wait!"
+                text="The game is already started. Wait!",
             )
             return
 
         if len(game.players) > MAX_PLAYERS:
-            self._view.send_message_reply(
+            await self._view.send_message_reply(
                 chat_id=chat_id,
                 text="The room is full",
                 message_id=update.effective_message.message_id,
@@ -106,7 +110,7 @@ class PokerBotModel:
         user = update.effective_message.from_user
 
         if user.id in game.ready_users:
-            self._view.send_message_reply(
+            await self._view.send_message_reply(
                 chat_id=chat_id,
                 message_id=update.effective_message.message_id,
                 text="You are already ready",
@@ -120,51 +124,48 @@ class PokerBotModel:
             ready_message_id=update.effective_message.message_id,
         )
 
-        if player.wallet.value() < 2*SMALL_BLIND:
-            return self._view.send_message_reply(
+        if player.wallet.value() < 2 * SMALL_BLIND:
+            await self._view.send_message_reply(
                 chat_id=chat_id,
                 message_id=update.effective_message.message_id,
                 text="You don't have enough money",
             )
+            return
 
         game.ready_users.add(user.id)
 
         game.players.append(player)
 
-        members_count = self._bot.get_chat_member_count(chat_id)
+        members_count = await self._bot.get_chat_member_count(chat_id)
         players_active = len(game.players)
         # One is the bot.
-        if players_active == members_count - 1 and \
-                players_active >= self._min_players:
-            self._start_game(context=context, game=game, chat_id=chat_id)
+        if (
+            players_active == members_count - 1
+            and players_active >= self._min_players
+        ):
+            await self._start_game(context=context, game=game, chat_id=chat_id)
 
-    def stop(self, user_id: UserId) -> None:
+    async def stop(self, user_id: UserId) -> None:
         UserPrivateChatModel(user_id=user_id, kv=self._kv).delete()
 
-    def start(self, update: Update, context: CallbackContext) -> None:
+    async def start(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         user_id = update.effective_message.from_user.id
 
         if game.state not in (GameState.INITIAL, GameState.FINISHED):
-            self._view.send_message(
+            await self._view.send_message(
                 chat_id=chat_id,
                 text="The game is already in progress"
             )
             return
 
         # One is the bot.
-        members_count = self._bot.get_chat_member_count(chat_id) - 1
+        members_count = (await self._bot.get_chat_member_count(chat_id)) - 1
         if members_count == 1:
-            with open(DESCRIPTION_FILE, 'r') as f:
-                text = f.read()
-
-            chat_id = update.effective_message.chat_id
-            self._view.send_message(
-                chat_id=chat_id,
-                text=text,
-            )
-            self._view.send_photo(chat_id=chat_id)
+            await self.show_help(update, context)
 
             if update.effective_chat.type == 'private':
                 UserPrivateChatModel(user_id=user_id, kv=self._kv) \
@@ -174,23 +175,42 @@ class PokerBotModel:
 
         players_active = len(game.players)
         if players_active >= self._min_players:
-            self._start_game(context=context, game=game, chat_id=chat_id)
+            await self._start_game(context=context, game=game, chat_id=chat_id)
         else:
-            self._view.send_message(
+            await self._view.send_message(
                 chat_id=chat_id,
                 text="Not enough player"
             )
         return
 
-    def _start_game(
+    async def show_help(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        chat_id = update.effective_message.chat_id
+        try:
+            with open(DESCRIPTION_FILE, 'r', encoding='utf-8') as f:
+                text = f.read()
+        except FileNotFoundError:
+            text = (
+                "Welcome to Poker Bot!\n"
+                "Use /ready to join the next game and /money to claim your daily bonus."
+            )
+
+        await self._view.send_message(
+            chat_id=chat_id,
+            text=text,
+        )
+        await self._view.send_photo(chat_id=chat_id)
+
+    async def _start_game(
         self,
-        context: CallbackContext,
+        context: ContextTypes.DEFAULT_TYPE,
         game: Game,
         chat_id: ChatId
     ) -> None:
         print(f"new game: {game.id}, players count: {len(game.players)}")
 
-        self._view.send_message(
+        await self._view.send_message(
             chat_id=chat_id,
             text='The game is started! 🃏',
             reply_markup=ReplyKeyboardMarkup(
@@ -211,18 +231,20 @@ class PokerBotModel:
         game.players.sort(key=lambda p: index(old_players_ids, p.user_id))
 
         game.state = GameState.ROUND_PRE_FLOP
-        self._divide_cards(game=game, chat_id=chat_id)
+        await self._divide_cards(game=game, chat_id=chat_id)
 
         game.current_player_index = 1
         self._round_rate.round_pre_flop_rate_before_first_turn(game)
-        self._process_playing(chat_id=chat_id, game=game)
+        await self._process_playing(chat_id=chat_id, game=game)
         self._round_rate.round_pre_flop_rate_after_first_turn(game)
 
         context.chat_data[KEY_OLD_PLAYERS] = list(
             map(lambda p: p.user_id, game.players),
         )
 
-    def bonus(self, update: Update, context: CallbackContext) -> None:
+    async def bonus(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         wallet = WalletManagerModel(
             update.effective_message.from_user.id, self._kv)
         money = wallet.value()
@@ -231,53 +253,54 @@ class PokerBotModel:
         message_id = update.effective_message.message_id
 
         if wallet.has_daily_bonus():
-            return self._view.send_message_reply(
+            await self._view.send_message_reply(
                 chat_id=chat_id,
-                message_id=update.effective_message.message_id,
+                message_id=message_id,
                 text=f"Your money: *{money}$*\n",
             )
-
-        icon: str
-        dice_msg: Message
-        bonus: Money
+            return
 
         SATURDAY = 5
         if datetime.datetime.today().weekday() == SATURDAY:
-            dice_msg = self._view.send_dice_reply(
+            dice_msg = await self._view.send_dice_reply(
                 chat_id=chat_id,
                 message_id=message_id,
                 emoji='🎰'
             )
             icon = '🎰'
-            bonus = dice_msg.dice.value * 20
+            bonus_amount = dice_msg.dice.value * 20
         else:
-            dice_msg = self._view.send_dice_reply(
+            dice_msg = await self._view.send_dice_reply(
                 chat_id=chat_id,
                 message_id=message_id,
             )
             icon = DICES[dice_msg.dice.value-1]
-            bonus = BONUSES[dice_msg.dice.value - 1]
+            bonus_amount = BONUSES[dice_msg.dice.value - 1]
 
         message_id = dice_msg.message_id
-        money = wallet.add_daily(amount=bonus)
+        money = wallet.add_daily(amount=bonus_amount)
 
-        def print_bonus() -> None:
-            self._view.send_message_reply(
+        async def print_bonus() -> None:
+            await asyncio.sleep(DICE_DELAY_SEC)
+            await self._view.send_message_reply(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=f"Bonus: *{bonus}$* {icon}\n" +
-                f"Your money: *{money}$*\n",
+                text=(
+                    f"Bonus: *{bonus_amount}$* {icon}\n"
+                    f"Your money: *{money}$*\n"
+                ),
             )
 
-        Timer(DICE_DELAY_SEC, print_bonus).start()
+        self._application.create_task(print_bonus())
 
-    def send_cards_to_user(
+    async def send_cards_to_user(
         self,
         update: Update,
-        context: CallbackContext,
+        context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         game = self._game_from_context(context)
 
+        current_player: Optional[Player] = None
         for player in game.players:
             if player.user_id == update.effective_user.id:
                 current_player = player
@@ -286,21 +309,21 @@ class PokerBotModel:
         if current_player is None or not current_player.cards:
             return
 
-        self._view.send_cards(
+        await self._view.send_cards(
             chat_id=update.effective_message.chat_id,
             cards=current_player.cards,
             mention_markdown=current_player.mention_markdown,
             ready_message_id=update.effective_message.message_id,
         )
 
-    def _check_access(self, chat_id: ChatId, user_id: UserId) -> bool:
-        chat_admins = self._bot.get_chat_administrators(chat_id)
+    async def _check_access(self, chat_id: ChatId, user_id: UserId) -> bool:
+        chat_admins = await self._bot.get_chat_administrators(chat_id)
         for m in chat_admins:
             if m.user.id == user_id:
                 return True
         return False
 
-    def _send_cards_private(self, player: Player, cards: Cards) -> None:
+    async def _send_cards_private(self, player: Player, cards: Cards) -> None:
         user_chat_model = UserPrivateChatModel(
             user_id=player.user_id,
             kv=self._kv,
@@ -310,23 +333,24 @@ class PokerBotModel:
         if private_chat_id is None:
             raise ValueError("private chat not found")
 
-        private_chat_id = private_chat_id.decode('utf-8')
+        private_chat_id_str = private_chat_id.decode('utf-8')
 
-        message_id = self._view.send_desk_cards_img(
-            chat_id=private_chat_id,
+        message = await self._view.send_desk_cards_img(
+            chat_id=private_chat_id_str,
             cards=cards,
             caption="Your cards",
             disable_notification=False,
-        ).message_id
+        )
+        message_id = message.message_id
 
         try:
             rm_msg_id = user_chat_model.pop_message()
             while rm_msg_id is not None:
                 try:
-                    rm_msg_id = rm_msg_id.decode('utf-8')
-                    self._view.remove_message(
-                        chat_id=private_chat_id,
-                        message_id=rm_msg_id,
+                    rm_msg_id_str = rm_msg_id.decode('utf-8')
+                    await self._view.remove_message(
+                        chat_id=private_chat_id_str,
+                        message_id=rm_msg_id_str,
                     )
                 except Exception as ex:
                     print("remove_message", ex)
@@ -338,7 +362,7 @@ class PokerBotModel:
             print("bulk_remove_message", ex)
             traceback.print_exc()
 
-    def _divide_cards(self, game: Game, chat_id: ChatId) -> None:
+    async def _divide_cards(self, game: Game, chat_id: ChatId) -> None:
         for player in game.players:
             cards = player.cards = [
                 game.remain_cards.pop(),
@@ -346,21 +370,19 @@ class PokerBotModel:
             ]
 
             try:
-                self._send_cards_private(player=player, cards=cards)
-
+                await self._send_cards_private(player=player, cards=cards)
                 continue
             except Exception as ex:
                 print(ex)
-                pass
 
-            self._view.send_cards(
+            await self._view.send_cards(
                 chat_id=chat_id,
                 cards=cards,
                 mention_markdown=player.mention_markdown,
                 ready_message_id=player.ready_message_id,
             )
 
-    def _process_playing(self, chat_id: ChatId, game: Game) -> None:
+    async def _process_playing(self, chat_id: ChatId, game: Game) -> None:
         game.current_player_index += 1
         game.current_player_index %= len(game.players)
 
@@ -369,7 +391,7 @@ class PokerBotModel:
         # Process next round.
         if current_player.user_id == game.trading_end_user_id:
             self._round_rate.to_pot(game)
-            self._goto_next_round(game, chat_id)
+            await self._goto_next_round(game, chat_id)
 
             game.current_player_index = 0
 
@@ -388,7 +410,7 @@ class PokerBotModel:
 
         # Skip inactive players.
         if current_player.state != PlayerState.ACTIVE:
-            self._process_playing(chat_id, game)
+            await self._process_playing(chat_id, game)
             return
 
         # All fold except one.
@@ -396,18 +418,18 @@ class PokerBotModel:
             states=(PlayerState.ACTIVE, PlayerState.ALL_IN)
         )
         if len(all_in_active_players) == 1:
-            self._finish(game, chat_id)
+            await self._finish(game, chat_id)
             return
 
         game.last_turn_time = datetime.datetime.now()
-        self._view.send_turn_actions(
+        await self._view.send_turn_actions(
             chat_id=chat_id,
             game=game,
             player=current_player,
             money=current_player_money,
         )
 
-    def add_cards_to_table(
+    async def add_cards_to_table(
         self,
         count: int,
         game: Game,
@@ -416,13 +438,13 @@ class PokerBotModel:
         for _ in range(count):
             game.cards_table.append(game.remain_cards.pop())
 
-        self._view.send_desk_cards_img(
+        await self._view.send_desk_cards_img(
             chat_id=chat_id,
             cards=game.cards_table,
             caption=f"Current pot: {game.pot}$",
         )
 
-    def _finish(
+    async def _finish(
         self,
         game: Game,
         chat_id: ChatId,
@@ -463,14 +485,14 @@ class PokerBotModel:
                     f"{win_hand}\n\n"
                 )
         text += "/ready to continue"
-        self._view.send_message(chat_id=chat_id, text=text)
+        await self._view.send_message(chat_id=chat_id, text=text)
 
         for player in game.players:
             player.wallet.approve(game.id)
 
         game.reset()
 
-    def _goto_next_round(self, game: Game, chat_id: ChatId) -> bool:
+    async def _goto_next_round(self, game: Game, chat_id: ChatId) -> bool:
         # The state of the last player becomes ALL_IN at end of the round .
         active_players = game.players_by(
             states=(PlayerState.ACTIVE,)
@@ -478,14 +500,14 @@ class PokerBotModel:
         if len(active_players) == 1:
             active_players[0].state = PlayerState.ALL_IN
             if len(game.cards_table) == 5:
-                self._finish(game, chat_id)
+                await self._finish(game, chat_id)
                 return
 
-        def add_cards(cards_count):
-            return self.add_cards_to_table(
+        async def add_cards(cards_count):
+            await self.add_cards_to_table(
                 count=cards_count,
                 game=game,
-                chat_id=chat_id
+                chat_id=chat_id,
             )
 
         state_transitions = {
@@ -512,12 +534,18 @@ class PokerBotModel:
 
         transation = state_transitions[game.state]
         game.state = transation["next_state"]
-        transation["processor"]()
+        await transation["processor"]()
 
-    def middleware_user_turn(self, fn: Handler) -> Handler:
-        def m(update, context):
+    def middleware_user_turn(
+        self,
+        fn: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[None]],
+    ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[None]]:
+        async def m(update: Update, context: ContextTypes.DEFAULT_TYPE):
             game = self._game_from_context(context)
             if game.state == GameState.INITIAL:
+                return
+
+            if update.callback_query is None:
                 return
 
             current_player = self._current_turn_player(game)
@@ -525,15 +553,17 @@ class PokerBotModel:
             if current_user_id != current_player.user_id:
                 return
 
-            fn(update, context)
-            self._view.remove_markup(
+            await fn(update, context)
+            await self._view.remove_markup(
                 chat_id=update.effective_message.chat_id,
                 message_id=update.effective_message.message_id,
             )
 
         return m
 
-    def ban_player(self, update: Update, context: CallbackContext) -> None:
+    async def ban_player(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
 
@@ -542,38 +572,40 @@ class PokerBotModel:
 
         diff = datetime.datetime.now() - game.last_turn_time
         if diff < MAX_TIME_FOR_TURN:
-            self._view.send_message(
+            await self._view.send_message(
                 chat_id=chat_id,
                 text="You can't ban. Max turn time is 2 minutes",
             )
             return
 
-        self._view.send_message(
+        await self._view.send_message(
             chat_id=chat_id,
             text="Time is over!",
         )
-        self.fold(update, context)
+        await self.fold(update, context)
 
-    def fold(self, update: Update, context: CallbackContext) -> None:
+    async def fold(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         game = self._game_from_context(context)
         player = self._current_turn_player(game)
 
         player.state = PlayerState.FOLD
 
-        self._view.send_message(
+        await self._view.send_message(
             chat_id=update.effective_message.chat_id,
             text=f"{player.mention_markdown} {PlayerAction.FOLD.value}"
         )
 
-        self._process_playing(
+        await self._process_playing(
             chat_id=update.effective_message.chat_id,
             game=game,
         )
 
-    def call_check(
+    async def call_check(
         self,
         update: Update,
-        context: CallbackContext,
+        context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
@@ -586,28 +618,29 @@ class PokerBotModel:
         try:
             amount = game.max_round_rate - player.round_rate
             if player.wallet.value() <= amount:
-                return self.all_in(update=update, context=context)
+                await self.all_in(update=update, context=context)
+                return
 
             mention_markdown = self._current_turn_player(game).mention_markdown
-            self._view.send_message(
+            await self._view.send_message(
                 chat_id=chat_id,
                 text=f"{mention_markdown} {action}"
             )
 
             self._round_rate.call_check(game, player)
         except UserException as e:
-            self._view.send_message(chat_id=chat_id, text=str(e))
+            await self._view.send_message(chat_id=chat_id, text=str(e))
             return
 
-        self._process_playing(
+        await self._process_playing(
             chat_id=chat_id,
             game=game,
         )
 
-    def raise_rate_bet(
+    async def raise_rate_bet(
         self,
         update: Update,
-        context: CallbackContext,
+        context: ContextTypes.DEFAULT_TYPE,
         raise_bet_rate: PlayerAction
     ) -> None:
         game = self._game_from_context(context)
@@ -620,9 +653,10 @@ class PokerBotModel:
                 action = PlayerAction.BET
 
             if player.wallet.value() < raise_bet_rate.value:
-                return self.all_in(update=update, context=context)
+                await self.all_in(update=update, context=context)
+                return
 
-            self._view.send_message(
+            await self._view.send_message(
                 chat_id=chat_id,
                 text=player.mention_markdown +
                 f" {action.value} {raise_bet_rate.value}$"
@@ -630,23 +664,25 @@ class PokerBotModel:
 
             self._round_rate.raise_rate_bet(game, player, raise_bet_rate.value)
         except UserException as e:
-            self._view.send_message(chat_id=chat_id, text=str(e))
+            await self._view.send_message(chat_id=chat_id, text=str(e))
             return
 
-        self._process_playing(chat_id=chat_id, game=game)
+        await self._process_playing(chat_id=chat_id, game=game)
 
-    def all_in(self, update: Update, context: CallbackContext) -> None:
+    async def all_in(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
         mention = player.mention_markdown
         amount = self._round_rate.all_in(game, player)
-        self._view.send_message(
+        await self._view.send_message(
             chat_id=chat_id,
             text=f"{mention} {PlayerAction.ALL_IN.value} {amount}$"
         )
         player.state = PlayerState.ALL_IN
-        self._process_playing(chat_id=chat_id, game=game)
+        await self._process_playing(chat_id=chat_id, game=game)
 
 
 class WalletManagerModel(Wallet):

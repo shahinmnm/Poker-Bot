@@ -29,13 +29,13 @@ class PokerBotViewer:
         self._bot = bot
         self._desk_generator = DeskImageGenerator()
 
-    def send_message(
+    async def send_message(
         self,
         chat_id: ChatId,
         text: str,
         reply_markup: ReplyKeyboardMarkup = None,
     ) -> None:
-        self._bot.send_message(
+        await self._bot.send_message(
             chat_id=chat_id,
             parse_mode=ParseMode.MARKDOWN,
             text=text,
@@ -44,35 +44,36 @@ class PokerBotViewer:
             disable_web_page_preview=True,
         )
 
-    def send_photo(self, chat_id: ChatId) -> None:
+    async def send_photo(self, chat_id: ChatId) -> None:
         # TODO: photo to args.
-        self._bot.send_photo(
-            chat_id=chat_id,
-            photo=open("./assets/poker_hand.jpg", 'rb'),
-            parse_mode=ParseMode.MARKDOWN,
-            disable_notification=True,
-        )
+        with open("./assets/poker_hand.jpg", 'rb') as photo:
+            await self._bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                parse_mode=ParseMode.MARKDOWN,
+                disable_notification=True,
+            )
 
-    def send_dice_reply(
+    async def send_dice_reply(
         self,
         chat_id: ChatId,
         message_id: MessageId,
         emoji='🎲',
     ) -> Message:
-        return self._bot.send_dice(
+        return await self._bot.send_dice(
             reply_to_message_id=message_id,
             chat_id=chat_id,
             disable_notification=True,
             emoji=emoji,
         )
 
-    def send_message_reply(
+    async def send_message_reply(
         self,
         chat_id: ChatId,
         message_id: MessageId,
         text: str,
     ) -> None:
-        self._bot.send_message(
+        await self._bot.send_message(
             reply_to_message_id=message_id,
             chat_id=chat_id,
             parse_mode=ParseMode.MARKDOWN,
@@ -80,19 +81,19 @@ class PokerBotViewer:
             disable_notification=True,
         )
 
-    def send_desk_cards_img(
+    async def send_desk_cards_img(
         self,
         chat_id: ChatId,
         cards: Cards,
         caption: str = "",
         disable_notification: bool = True,
-    ) -> MessageId:
+    ) -> Message:
         im_cards = self._desk_generator.generate_desk(cards)
         bio = BytesIO()
         bio.name = 'desk.png'
         im_cards.save(bio, 'PNG')
         bio.seek(0)
-        return self._bot.send_media_group(
+        return await self._bot.send_media_group(
             chat_id=chat_id,
             media=[
                 InputMediaPhoto(
@@ -147,7 +148,7 @@ class PokerBotViewer:
             inline_keyboard=keyboard
         )
 
-    def send_cards(
+    async def send_cards(
             self,
             chat_id: ChatId,
             cards: Cards,
@@ -155,7 +156,7 @@ class PokerBotViewer:
             ready_message_id: str,
     ) -> None:
         markup = PokerBotViewer._get_cards_markup(cards)
-        self._bot.send_message(
+        await self._bot.send_message(
             chat_id=chat_id,
             text="Showing cards to " + mention_markdown,
             reply_markup=markup,
@@ -173,7 +174,7 @@ class PokerBotViewer:
             return PlayerAction.CHECK
         return PlayerAction.CALL
 
-    def send_turn_actions(
+    async def send_turn_actions(
             self,
             chat_id: ChatId,
             game: Game,
@@ -199,7 +200,7 @@ class PokerBotViewer:
             game, player
         )
         markup = PokerBotViewer._get_turns_markup(check_call_action)
-        self._bot.send_message(
+        await self._bot.send_message(
             chat_id=chat_id,
             text=text,
             reply_markup=markup,
@@ -207,22 +208,22 @@ class PokerBotViewer:
             disable_notification=True,
         )
 
-    def remove_markup(
+    async def remove_markup(
         self,
         chat_id: ChatId,
         message_id: MessageId,
     ) -> None:
-        self._bot.edit_message_reply_markup(
+        await self._bot.edit_message_reply_markup(
             chat_id=chat_id,
             message_id=message_id,
         )
 
-    def remove_message(
+    async def remove_message(
         self,
         chat_id: ChatId,
         message_id: MessageId,
     ) -> None:
-        self._bot.delete_message(
+        await self._bot.delete_message(
             chat_id=chat_id,
             message_id=message_id,
         )
