@@ -1,19 +1,77 @@
+#!/usr/bin/env python3
+"""Configuration management for Poker Telegram Bot."""
+
 import os
-from typing import Optional
 
 
 class Config:
+    """Load and validate configuration from environment variables."""
+
     def __init__(self) -> None:
-        self.TOKEN: str = os.getenv("POKERBOT_TOKEN", "")
-        self.REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+        # Existing Redis configuration
+        self.REDIS_HOST: str = os.getenv("REDIS_HOST", "redis")
         self.REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
         self.REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
-        self.REDIS_PASS: Optional[str] = os.getenv("REDIS_PASSWORD", None)
+        self.REDIS_PASS: str = os.getenv("REDIS_PASS", "")
+
+        # Debug mode
         self.DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
-        # PTB 20+ specific settings
+        # PTB 21.x Connection Settings
         self.CONCURRENT_UPDATES: int = int(
             os.getenv("CONCURRENT_UPDATES", "256")
         )
-        self.CONNECT_TIMEOUT: int = int(os.getenv("CONNECT_TIMEOUT", "30"))
-        self.POOL_TIMEOUT: int = int(os.getenv("POOL_TIMEOUT", "30"))
+        self.CONNECT_TIMEOUT: int = int(
+            os.getenv("CONNECT_TIMEOUT", "30")
+        )
+        self.POOL_TIMEOUT: int = int(
+            os.getenv("POOL_TIMEOUT", "30")
+        )
+        self.READ_TIMEOUT: int = int(
+            os.getenv("READ_TIMEOUT", "30")
+        )
+        self.WRITE_TIMEOUT: int = int(
+            os.getenv("WRITE_TIMEOUT", "30")
+        )
+
+        # Webhook Settings (from your .env.example)
+        self.WEBHOOK_LISTEN: str = os.getenv(
+            "POKERBOT_WEBHOOK_LISTEN", "0.0.0.0"
+        )
+        self.WEBHOOK_PORT: int = int(
+            os.getenv("POKERBOT_WEBHOOK_PORT", "8443")
+        )
+        self.WEBHOOK_PATH: str = os.getenv(
+            "POKERBOT_WEBHOOK_PATH", "/telegram/webhook"
+        )
+        self.WEBHOOK_PUBLIC_URL: str = os.getenv(
+            "POKERBOT_WEBHOOK_PUBLIC_URL", ""
+        )
+        self.WEBHOOK_SECRET: str = os.getenv(
+            "POKERBOT_WEBHOOK_SECRET", ""
+        )
+
+        # Rate Limiting Settings
+        self.RATE_LIMIT_PER_MINUTE: int = int(
+            os.getenv("POKERBOT_RATE_LIMIT_PER_MINUTE", "500")
+        )
+        self.RATE_LIMIT_PER_SECOND: int = int(
+            os.getenv("POKERBOT_RATE_LIMIT_PER_SECOND", "10")
+        )
+
+    @property
+    def use_webhook(self) -> bool:
+        """Check if webhook mode is enabled."""
+        return bool(self.WEBHOOK_PUBLIC_URL)
+
+    def validate(self) -> None:
+        """Validate configuration and raise if invalid."""
+        if self.use_webhook:
+            if not self.WEBHOOK_PUBLIC_URL:
+                raise ValueError(
+                    "POKERBOT_WEBHOOK_PUBLIC_URL required for webhook mode"
+                )
+            if self.WEBHOOK_PORT < 1 or self.WEBHOOK_PORT > 65535:
+                raise ValueError(
+                    f"Invalid webhook port: {self.WEBHOOK_PORT}"
+                )

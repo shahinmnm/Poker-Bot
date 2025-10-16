@@ -1,50 +1,44 @@
 #!/usr/bin/env python3
+"""Main entry point for Poker Telegram Bot."""
 
 import asyncio
 import logging
-
-from dotenv import load_dotenv
+import os
+import sys
 
 from pokerapp.config import Config
 from pokerapp.pokerbot import PokerBot
 
-
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
-
 logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
-    """Main entry point for the poker bot."""
-    load_dotenv()
+    """Initialize and run the poker bot."""
+    token = os.getenv("POKERBOT_TOKEN")
+    if not token:
+        logger.error("POKERBOT_TOKEN environment variable not set")
+        sys.exit(1)
 
     cfg = Config()
 
-    if cfg.TOKEN == "":
-        logger.error("Environment variable POKERBOT_TOKEN is not set")
-        return
+    mode = "webhook" if cfg.use_webhook else "polling"
+    logger.info("Starting Poker Bot in %s mode", mode)
+    logger.info("Debug mode: %s", cfg.DEBUG)
 
-    logger.info("Starting Poker Bot...")
-    bot = PokerBot(token=cfg.TOKEN, cfg=cfg)
+    bot = PokerBot(token=token, cfg=cfg)
 
     try:
         await bot.run()
     except KeyboardInterrupt:
         logger.info("Received interrupt signal, shutting down...")
-        await bot.shutdown()
     except Exception as exc:  # pragma: no cover - safety net
         logger.exception("Fatal error: %s", exc)
-        await bot.shutdown()
-        raise
-    finally:
-        logger.info("Bot stopped")
+        sys.exit(1)
 
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Shutdown complete")
+if __name__ == '__main__':
+    asyncio.run(main())
