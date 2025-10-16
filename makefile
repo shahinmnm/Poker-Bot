@@ -19,7 +19,7 @@ test:
 	python3 -m unittest discover -s ./tests
 
 lint:
-	python3 -m flake8 .
+	python3 -m tools.run_flake8 .
 
 install:
 	python3 -m pip install --upgrade pip
