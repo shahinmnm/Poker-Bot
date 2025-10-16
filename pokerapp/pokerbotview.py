@@ -2,13 +2,13 @@
 
 from telegram import (
     Message,
-    ParseMode,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
     Bot,
     InputMediaPhoto,
 )
+from telegram.constants import ParseMode
 from io import BytesIO
 
 from pokerapp.desk import DeskImageGenerator

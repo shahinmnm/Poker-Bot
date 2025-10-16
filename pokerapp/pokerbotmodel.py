@@ -27,6 +27,7 @@ from pokerapp.entities import (
     Wallet,
 )
 from pokerapp.pokerbotview import PokerBotViewer
+from pokerapp.kvstore import ensure_kv
 
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ class PokerBotModel:
         self._view: PokerBotViewer = view
         self._bot: Bot = bot
         self._winner_determine: WinnerDetermination = WinnerDetermination()
-        self._kv = kv
+        self._kv = ensure_kv(kv)
         self._cfg: Config = cfg
         self._round_rate: RoundRateModel = RoundRateModel()
         self._application = application
@@ -514,7 +515,8 @@ class PokerBotModel:
         for (player, best_hand, money) in winners_hand_money:
             win_hand = " ".join(best_hand)
             text += (
-                f"{player.mention_markdown}:\n" +
+                f"{player.mention_markdown}" +
+                ":\n" +
                 f"GOT: *{money} $*\n"
             )
             if not only_one_player:
@@ -724,9 +726,9 @@ class PokerBotModel:
 
 
 class WalletManagerModel(Wallet):
-    def __init__(self, user_id: UserId, kv: redis.Redis):
+    def __init__(self, user_id: UserId, kv: Optional[redis.Redis]):
         self.user_id = user_id
-        self._kv = kv
+        self._kv = ensure_kv(kv)
 
         key = self._prefix(self.user_id)
         if self._kv.get(key) is None:
