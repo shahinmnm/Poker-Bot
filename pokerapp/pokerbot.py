@@ -5,7 +5,13 @@ import logging
 import redis
 from telegram import Update
 from telegram.error import TelegramError
-from telegram.ext import Application, AIORateLimiter, CallbackContext, MessageHandler, filters
+from telegram.ext import (
+    AIORateLimiter,
+    Application,
+    CallbackContext,
+    MessageHandler,
+    filters,
+)
 
 from pokerapp.config import Config
 from pokerapp.middleware import AnalyticsMiddleware, UserRateLimiter
