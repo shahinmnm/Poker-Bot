@@ -3,95 +3,175 @@
 import logging
 
 import redis
-from telegram.ext import Application, AIORateLimiter, ContextTypes
+from telegram import Update
+from telegram.error import TelegramError
+from telegram.ext import Application, AIORateLimiter, CallbackContext, MessageHandler, filters
 
 from pokerapp.config import Config
-from pokerapp.pokerbotcontrol import PokerBotCotroller
+from pokerapp.middleware import AnalyticsMiddleware, UserRateLimiter
+from pokerapp.pokerbotcontrol import PokerBotController
 from pokerapp.pokerbotmodel import PokerBotModel
 from pokerapp.pokerbotview import PokerBotViewer
 
-
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 
 class PokerBot:
+    """Main Poker Bot application with webhook/polling support."""
+
     def __init__(
         self,
         token: str,
         cfg: Config,
     ) -> None:
+        """
+        Initialize PokerBot with modern PTB 21.x features.
+
+        Args:
+            token: Telegram bot token
+            cfg: Configuration object with all settings
+        """
+        cfg.validate()
+
         self._application: Application = (
             Application.builder()
             .token(token)
-            .rate_limiter(AIORateLimiter())
+            .rate_limiter(
+                AIORateLimiter(
+                    max_retries=3,
+                    overall_max_rate=cfg.RATE_LIMIT_PER_SECOND,
+                    group_max_rate=cfg.RATE_LIMIT_PER_MINUTE / 60,
+                )
+            )
+            .connect_timeout(cfg.CONNECT_TIMEOUT)
+            .pool_timeout(cfg.POOL_TIMEOUT)
+            .read_timeout(cfg.READ_TIMEOUT)
+            .write_timeout(cfg.WRITE_TIMEOUT)
+            .concurrent_updates(cfg.CONCURRENT_UPDATES)
             .build()
         )
 
-        kv = redis.Redis(
+        self._kv = redis.Redis(
             host=cfg.REDIS_HOST,
             port=cfg.REDIS_PORT,
             db=cfg.REDIS_DB,
-            password=cfg.REDIS_PASS if cfg.REDIS_PASS else None,
+            password=cfg.REDIS_PASS or None,
+            decode_responses=False,
+        )
+
+        self._analytics = AnalyticsMiddleware()
+        self._rate_limiter = UserRateLimiter(
+            max_requests=cfg.RATE_LIMIT_PER_MINUTE,
+            window_seconds=60,
         )
 
         self._view = PokerBotViewer(bot=self._application.bot)
         self._model = PokerBotModel(
             view=self._view,
             bot=self._application.bot,
-            kv=kv,
+            kv=self._kv,
             cfg=cfg,
             application=self._application,
         )
-        self._controller = PokerBotCotroller(self._model, self._application)
-        self._is_shutdown: bool = False
+        self._controller = PokerBotController(
+            model=self._model,
+            application=self._application,
+        )
+
+        self._cfg = cfg
+
+        logger.info("PokerBot initialized successfully")
+
+    async def _error_handler(
+        self,
+        update: object,
+        context: CallbackContext,
+    ) -> None:
+        """Global error handler for all bot operations."""
+        logger.error(
+            "Exception while handling update %s:",
+            update,
+            exc_info=context.error,
+        )
+
+        if update and isinstance(update, Update) and update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "❌ An error occurred. Please try again later.",
+                )
+            except TelegramError:
+                pass
 
     async def run(self) -> None:
-        """Start the bot with polling."""
+        """Start the bot in polling or webhook mode based on config."""
+        self._application.add_handler(
+            MessageHandler(filters.ALL, self._analytics.track_command),
+            group=-100,
+        )
+        self._application.add_handler(
+            MessageHandler(filters.ALL, self._rate_limiter.check_rate_limit),
+            group=-50,
+        )
+
         self._application.add_error_handler(self._error_handler)
 
         try:
             await self._application.initialize()
             await self._application.start()
-            await self._application.updater.start_polling()
-            await self._application.updater.wait()
+
+            if self._cfg.use_webhook:
+                logger.info(
+                    "Starting webhook mode on %s:%s",
+                    self._cfg.WEBHOOK_LISTEN,
+                    self._cfg.WEBHOOK_PORT,
+                )
+
+                webhook_url = (
+                    f"{self._cfg.WEBHOOK_PUBLIC_URL}{self._cfg.WEBHOOK_PATH}"
+                )
+
+                await self._application.updater.start_webhook(
+                    listen=self._cfg.WEBHOOK_LISTEN,
+                    port=self._cfg.WEBHOOK_PORT,
+                    url_path=self._cfg.WEBHOOK_PATH,
+                    webhook_url=webhook_url,
+                    secret_token=self._cfg.WEBHOOK_SECRET or None,
+                    drop_pending_updates=True,
+                )
+
+                logger.info("Webhook set to: %s", webhook_url)
+            else:
+                logger.info("Starting polling mode")
+                await self._application.updater.start_polling(
+                    drop_pending_updates=True,
+                    allowed_updates=Update.ALL_TYPES,
+                )
+
+            await self._application.updater.idle()
+
         except Exception as exc:  # pragma: no cover - safety net
             logger.exception("Fatal error during bot execution: %s", exc)
             raise
         finally:
             await self.shutdown()
 
-    async def _error_handler(
-        self, update: object, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        """Log errors caused by updates."""
-        del update  # update is unused but kept for signature compatibility
-        exception = context.error
-        if isinstance(exception, BaseException):
-            logger.error(
-                "Exception while handling an update: %s",
-                exception,
-                exc_info=(
-                    type(exception),
-                    exception,
-                    exception.__traceback__,
-                ),
-            )
-        else:
-            logger.error("Exception while handling an update with unknown error")
-
     async def shutdown(self) -> None:
         """Gracefully shutdown the bot."""
-        if self._is_shutdown:
-            logger.info("Bot shutdown already completed")
-            return
+        logger.info("Shutting down bot...")
 
         try:
-            if self._application.updater.running:
-                await self._application.updater.stop()
-            if self._application.running:
-                await self._application.stop()
+            await self._application.updater.stop()
+            await self._application.stop()
             await self._application.shutdown()
-            logger.info("Bot shutdown completed")
-            self._is_shutdown = True
+
+            stats = self._analytics.get_stats()
+            logger.info("Final stats: %s", stats)
+
         except Exception as exc:  # pragma: no cover - safety net
-            logger.exception("Error during shutdown: %s", exc)
+            logger.error("Error during shutdown: %s", exc)
+
+        logger.info("Bot shut down complete")

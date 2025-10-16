@@ -2,12 +2,12 @@
 
 import asyncio
 import datetime
-import traceback
-from typing import List, Tuple, Dict, Optional, Callable, Awaitable
+import logging
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 import redis
-from telegram import ReplyKeyboardMarkup, Update, Bot
-from telegram.ext import ContextTypes, Application
+from telegram import Bot, ReplyKeyboardMarkup, Update
+from telegram.ext import Application, ContextTypes
 
 from pokerapp.config import Config
 from pokerapp.privatechatmodel import UserPrivateChatModel
@@ -27,6 +27,9 @@ from pokerapp.entities import (
     Wallet,
 )
 from pokerapp.pokerbotview import PokerBotViewer
+
+
+logger = logging.getLogger(__name__)
 
 
 DICE_MULT = 10
@@ -323,64 +326,93 @@ class PokerBotModel:
                 return True
         return False
 
-    async def _send_cards_private(self, player: Player, cards: Cards) -> None:
-        user_chat_model = UserPrivateChatModel(
-            user_id=player.user_id,
-            kv=self._kv,
-        )
-        private_chat_id = user_chat_model.get_chat_id()
+    async def _send_cards_batch(
+        self,
+        players: List[Player],
+        chat_id: ChatId,
+    ) -> None:
+        """Send cards to multiple players concurrently for performance."""
 
-        if private_chat_id is None:
-            raise ValueError("private chat not found")
+        async def send_to_player(player: Player) -> None:
+            try:
+                private_chat = UserPrivateChatModel(
+                    user_id=player.user_id,
+                    kv=self._kv,
+                )
+                private_chat_id = private_chat.get_chat_id()
 
-        private_chat_id_str = private_chat_id.decode('utf-8')
+                if private_chat_id:
+                    if isinstance(private_chat_id, bytes):
+                        private_chat_id = private_chat_id.decode('utf-8')
 
-        message = await self._view.send_desk_cards_img(
-            chat_id=private_chat_id_str,
-            cards=cards,
-            caption="Your cards",
-            disable_notification=False,
-        )
-        message_id = message.message_id
-
-        try:
-            rm_msg_id = user_chat_model.pop_message()
-            while rm_msg_id is not None:
-                try:
-                    rm_msg_id_str = rm_msg_id.decode('utf-8')
-                    await self._view.remove_message(
-                        chat_id=private_chat_id_str,
-                        message_id=rm_msg_id_str,
+                    message = await self._view.send_desk_cards_img(
+                        chat_id=private_chat_id,
+                        cards=player.cards,
+                        caption="Your cards",
+                        disable_notification=False,
                     )
-                except Exception as ex:
-                    print("remove_message", ex)
-                    traceback.print_exc()
-                rm_msg_id = user_chat_model.pop_message()
 
-            user_chat_model.push_message(message_id=message_id)
-        except Exception as ex:
-            print("bulk_remove_message", ex)
-            traceback.print_exc()
+                    try:
+                        rm_msg_id = private_chat.pop_message()
+                        while rm_msg_id is not None:
+                            try:
+                                rm_msg_id_str = (
+                                    rm_msg_id
+                                    if isinstance(rm_msg_id, str)
+                                    else rm_msg_id.decode('utf-8')
+                                )
+                                await self._view.remove_message(
+                                    chat_id=private_chat_id,
+                                    message_id=rm_msg_id_str,
+                                )
+                            except Exception as exc:
+                                logger.debug(
+                                    "Failed to remove old card message for %s: %s",
+                                    player.user_id,
+                                    exc,
+                                )
+                            rm_msg_id = private_chat.pop_message()
+
+                        private_chat.push_message(message_id=message.message_id)
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to update private chat cache for %s: %s",
+                            player.user_id,
+                            exc,
+                        )
+                    return
+            except Exception as exc:
+                logger.warning(
+                    "Failed to send cards privately to %s: %s",
+                    player.user_id,
+                    exc,
+                )
+
+            await self._view.send_cards(
+                chat_id=chat_id,
+                cards=player.cards,
+                mention_markdown=player.mention_markdown,
+                ready_message_id=player.ready_message_id,
+            )
+
+        await asyncio.gather(
+            *[send_to_player(player) for player in players],
+            return_exceptions=True,
+        )
 
     async def _divide_cards(self, game: Game, chat_id: ChatId) -> None:
         for player in game.players:
-            cards = player.cards = [
+            player.cards = [
                 game.remain_cards.pop(),
                 game.remain_cards.pop(),
             ]
 
-            try:
-                await self._send_cards_private(player=player, cards=cards)
-                continue
-            except Exception as ex:
-                print(ex)
+        await self._send_cards_batch(game.players, chat_id)
 
-            await self._view.send_cards(
-                chat_id=chat_id,
-                cards=cards,
-                mention_markdown=player.mention_markdown,
-                ready_message_id=player.ready_message_id,
-            )
+        logger.info(
+            "Cards distributed to %s players concurrently",
+            len(game.players),
+        )
 
     async def _process_playing(self, chat_id: ChatId, game: Game) -> None:
         game.current_player_index += 1
