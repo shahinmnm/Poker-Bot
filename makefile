@@ -14,7 +14,8 @@ test:
 lint:
 	python3 -m flake8 .
 install:
-	pip3 install -r requirements.txt
+        python3 -m pip install --upgrade pip
+        python3 -m pip install -r requirements.txt
 .env:
 ifeq ($(POKERBOT_TOKEN),)
 	@printf "Usage:\n\n\tmake .env POKERBOT_TOKEN=<your telegram token>\n\n"
