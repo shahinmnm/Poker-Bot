@@ -3,7 +3,7 @@
 import asyncio
 import datetime
 import logging
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
@@ -196,7 +196,8 @@ class PokerBotModel:
         except FileNotFoundError:
             text = (
                 "Welcome to Poker Bot!\n"
-                "Use /ready to join the next game and /money to claim your daily bonus."
+                "Use /ready to join the next game and "
+                "/money to claim your daily bonus."
             )
 
         await self._view.send_message(
@@ -277,8 +278,9 @@ class PokerBotModel:
                 chat_id=chat_id,
                 message_id=message_id,
             )
-            icon = DICES[dice_msg.dice.value-1]
-            bonus_amount = BONUSES[dice_msg.dice.value - 1]
+            dice_value = dice_msg.dice.value
+            icon = DICES[dice_value - 1]
+            bonus_amount = BONUSES[dice_value - 1]
 
         message_id = dice_msg.message_id
         money = wallet.add_daily(amount=bonus_amount)
@@ -367,16 +369,20 @@ class PokerBotModel:
                                 )
                             except Exception as exc:
                                 logger.debug(
-                                    "Failed to remove old card message for %s: %s",
+                                    "Failed to remove old card message "
+                                    "for %s: %s",
                                     player.user_id,
                                     exc,
                                 )
                             rm_msg_id = private_chat.pop_message()
 
-                        private_chat.push_message(message_id=message.message_id)
+                        private_chat.push_message(
+                            message_id=message.message_id
+                        )
                     except Exception as exc:
                         logger.warning(
-                            "Failed to update private chat cache for %s: %s",
+                            "Failed to update private chat cache "
+                            "for %s: %s",
                             player.user_id,
                             exc,
                         )

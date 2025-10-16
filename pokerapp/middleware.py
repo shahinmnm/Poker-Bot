@@ -112,7 +112,10 @@ class UserRateLimiter:
 
             if update.effective_message:
                 await update.effective_message.reply_text(
-                    "⚠️ Too many requests. Please slow down and try again later.",
+                    (
+                        "⚠️ Too many requests. Please slow down and "
+                        "try again later."
+                    ),
                     disable_notification=True,
                 )
 
