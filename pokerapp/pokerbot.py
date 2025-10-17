@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import asyncio
 import logging
 
 import redis
@@ -112,7 +113,7 @@ class PokerBot:
             except TelegramError:
                 pass
 
-    async def run(self) -> None:
+    def run(self) -> None:
         """Start the bot in polling or webhook mode based on config."""
         self._application.add_handler(
             MessageHandler(filters.ALL, self._analytics.track_command),
@@ -137,7 +138,7 @@ class PokerBot:
                     f"{self._cfg.WEBHOOK_PUBLIC_URL}{self._cfg.WEBHOOK_PATH}"
                 )
 
-                await self._application.run_webhook(
+                self._application.run_webhook(
                     listen=self._cfg.WEBHOOK_LISTEN,
                     port=self._cfg.WEBHOOK_PORT,
                     url_path=self._cfg.WEBHOOK_PATH,
@@ -150,7 +151,7 @@ class PokerBot:
                 logger.info("Webhook set to: %s", webhook_url)
             else:
                 logger.info("Starting polling mode")
-                await self._application.run_polling(
+                self._application.run_polling(
                     drop_pending_updates=True,
                     allowed_updates=Update.ALL_TYPES,
                 )
@@ -159,7 +160,7 @@ class PokerBot:
             logger.exception("Fatal error during bot execution: %s", exc)
             raise
         finally:
-            await self.shutdown()
+            asyncio.run(self.shutdown())
 
     async def shutdown(self) -> None:
         """Gracefully shutdown the bot."""

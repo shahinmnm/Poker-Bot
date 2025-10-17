@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Main entry point for Poker Telegram Bot."""
 
-import asyncio
 import logging
 import os
 import sys
@@ -16,7 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def main() -> None:
+def main() -> None:
     """Initialize and run the poker bot."""
     token = os.getenv("POKERBOT_TOKEN")
     if not token:
@@ -32,7 +31,7 @@ async def main() -> None:
     bot = PokerBot(token=token, cfg=cfg)
 
     try:
-        await bot.run()
+        bot.run()
     except KeyboardInterrupt:
         logger.info("Received interrupt signal, shutting down...")
     except Exception as exc:  # pragma: no cover - safety net
@@ -41,4 +40,4 @@ async def main() -> None:
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
