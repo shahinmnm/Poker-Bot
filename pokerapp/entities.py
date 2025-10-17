@@ -3,7 +3,8 @@
 from abc import abstractmethod
 import enum
 import datetime
-from typing import Tuple, List
+from typing import Tuple, List, Optional
+from enum import Enum
 from uuid import uuid4
 from pokerapp.cards import get_cards
 
@@ -73,6 +74,12 @@ class PlayerState(enum.Enum):
     ALL_IN = 10
 
 
+class GameMode(Enum):
+    """Game mode: group chat vs private chat."""
+    GROUP = "group"
+    PRIVATE = "private"
+
+
 class Game:
     def __init__(self):
         self.reset()
@@ -89,6 +96,9 @@ class Game:
         self.trading_end_user_id = 0
         self.ready_users = set()
         self.last_turn_time = datetime.datetime.now()
+        # Game mode (Phase 2)
+        self.mode: GameMode = GameMode.GROUP
+        self.stake_config: Optional[StakeConfig] = None
 
     def players_by(self, states: Tuple[PlayerState]) -> List[Player]:
         return list(filter(lambda p: p.state in states, self.players))
