@@ -1,28 +1,39 @@
 #!/usr/bin/env python3
 
 import unittest
-from typing import Tuple
+from typing import Dict, Tuple
 
 import redis
 
 from pokerapp.cards import Cards, Card
 from pokerapp.config import Config
-from pokerapp.entities import Money, Player, Game
-from pokerapp.pokerbotmodel import RoundRateModel, WalletManagerModel
-
-
-HANDS_FILE = "./tests/hands.txt"
+from pokerapp.entities import Money, Player, Game, Score
+from pokerapp.game_coordinator import GameCoordinator
+from pokerapp.pokerbotmodel import WalletManagerModel
 
 
 def with_cards(p: Player) -> Tuple[Player, Cards]:
     return (p, [Card("6♥"), Card("A♥"), Card("A♣"), Card("A♠")])
 
 
-class TestRoundRateModel(unittest.TestCase):
+class DummyWinnerDetermination:
+    def __init__(self):
+        self._scores: Dict[Score, Tuple[Tuple[Player, Cards], ...]] = {}
+
+    def set_scores(self, scores: Dict[Score, Tuple[Tuple[Player, Cards], ...]]) -> None:
+        self._scores = scores
+
+    def determinate_scores(self, players, cards_table):
+        return {score: list(pairs) for score, pairs in self._scores.items()}
+
+
+class TestGameCoordinatorPayouts(unittest.TestCase):
     def __init__(self, *args, **kwargs):
-        super(TestRoundRateModel, self).__init__(*args, **kwargs)
+        super(TestGameCoordinatorPayouts, self).__init__(*args, **kwargs)
         self._user_id = 0
-        self._round_rate = RoundRateModel()
+        self._coordinator = GameCoordinator()
+        self._winner_stub = DummyWinnerDetermination()
+        self._coordinator.winner_determine = self._winner_stub
         cfg: Config = Config()
         self._kv = redis.Redis(
             host=cfg.REDIS_HOST,
@@ -62,10 +73,12 @@ class TestRoundRateModel(unittest.TestCase):
         winner = self._next_player(g, 50)
         loser = self._next_player(g, 50)
 
-        self._round_rate.finish_rate(g, player_scores={
-            1: [with_cards(winner)],
-            0: [with_cards(loser)],
+        self._winner_stub.set_scores({
+            1: (with_cards(winner),),
+            0: (with_cards(loser),),
         })
+
+        self._coordinator.finish_game_with_winners(g)
         self._approve_all(g)
 
         self.assertAlmostEqual(100, winner.wallet.value(), places=1)
@@ -78,15 +91,17 @@ class TestRoundRateModel(unittest.TestCase):
         second_winner = self._next_player(g, 50)
         loser = self._next_player(g, 100)
 
-        self._round_rate.finish_rate(g, player_scores={
-            1: [with_cards(first_winner), with_cards(second_winner)],
-            0: [with_cards(loser)],
+        self._winner_stub.set_scores({
+            1: (with_cards(first_winner), with_cards(second_winner)),
+            0: (with_cards(loser),),
         })
+
+        self._coordinator.finish_game_with_winners(g)
         self._approve_all(g)
 
-        self.assertAlmostEqual(100, first_winner.wallet.value(), places=1)
-        self.assertAlmostEqual(100, second_winner.wallet.value(), places=1)
-        self.assertAlmostEqual(0, loser.wallet.value(), places=1)
+        self.assertAlmostEqual(75, first_winner.wallet.value(), places=1)
+        self.assertAlmostEqual(75, second_winner.wallet.value(), places=1)
+        self.assertAlmostEqual(50, loser.wallet.value(), places=1)
         self.assert_authorized_money_zero(
             g.id,
             first_winner,
@@ -101,19 +116,19 @@ class TestRoundRateModel(unittest.TestCase):
         extra_winner = self._next_player(g, 90)  # All in.
         loser = self._next_player(g, 90)  # Call.
 
-        self._round_rate.finish_rate(g, player_scores={
-            2: [with_cards(first_winner), with_cards(second_winner)],
-            1: [with_cards(extra_winner)],
-            0: [with_cards(loser)],
+        self._winner_stub.set_scores({
+            2: (with_cards(first_winner), with_cards(second_winner)),
+            1: (with_cards(extra_winner),),
+            0: (with_cards(loser),),
         })
+
+        self._coordinator.finish_game_with_winners(g)
         self._approve_all(g)
 
-        # authorized * len(players)
-        self.assertAlmostEqual(60, first_winner.wallet.value(), places=1)
-        # authorized * len(players)
-        self.assertAlmostEqual(20, second_winner.wallet.value(), places=1)
-        # pot - winners
-        self.assertAlmostEqual(120, extra_winner.wallet.value(), places=1)
+        # Winners split matching pots; remaining unmatched chips return to bigger stack
+        self.assertAlmostEqual(40, first_winner.wallet.value(), places=1)
+        self.assertAlmostEqual(10, second_winner.wallet.value(), places=1)
+        self.assertAlmostEqual(150, extra_winner.wallet.value(), places=1)
 
         self.assertAlmostEqual(0, loser.wallet.value(), places=1)
 
@@ -127,13 +142,15 @@ class TestRoundRateModel(unittest.TestCase):
         second_winner = self._next_player(g, 100)
         third_winner = self._next_player(g, 150)
 
-        self._round_rate.finish_rate(g, player_scores={
-            1: [
+        self._winner_stub.set_scores({
+            1: (
                 with_cards(first_winner),
                 with_cards(second_winner),
                 with_cards(third_winner),
-            ],
+            ),
         })
+
+        self._coordinator.finish_game_with_winners(g)
         self._approve_all(g)
 
         self.assertAlmostEqual(50, first_winner.wallet.value(), places=1)
@@ -152,16 +169,18 @@ class TestRoundRateModel(unittest.TestCase):
         third_loser = self._next_player(g, 10)  # All in.
         fourth_loser = self._next_player(g, 10)  # All in.
 
-        self._round_rate.finish_rate(g, player_scores={
-            3: [with_cards(first_winner), with_cards(second_winner)],
-            2: [with_cards(third_loser)],
-            1: [with_cards(fourth_loser)],
+        self._winner_stub.set_scores({
+            3: (with_cards(first_winner), with_cards(second_winner)),
+            2: (with_cards(third_loser),),
+            1: (with_cards(fourth_loser),),
         })
+
+        self._coordinator.finish_game_with_winners(g)
         self._approve_all(g)
 
-        # pot * (autorized / winners_authorized)
-        self.assertAlmostEqual(4, first_winner.wallet.value(), places=1)
-        self.assertAlmostEqual(79, second_winner.wallet.value(), places=1)
+        # Winners share only eligible side pots
+        self.assertAlmostEqual(6, first_winner.wallet.value(), places=1)
+        self.assertAlmostEqual(77, second_winner.wallet.value(), places=1)
 
         self.assertAlmostEqual(0, third_loser.wallet.value(), places=1)
         self.assertAlmostEqual(0, fourth_loser.wallet.value(), places=1)

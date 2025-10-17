@@ -11,7 +11,6 @@ from telegram.ext import Application, ContextTypes
 
 from pokerapp.config import Config
 from pokerapp.privatechatmodel import UserPrivateChatModel
-from pokerapp.winnerdetermination import WinnerDetermination
 from pokerapp.cards import Cards
 from pokerapp.entities import (
     Game,
@@ -23,9 +22,12 @@ from pokerapp.entities import (
     Money,
     PlayerAction,
     PlayerState,
-    Score,
     Wallet,
+    STAKE_PRESETS,
+    BalanceValidator,
 )
+from pokerapp.game_coordinator import GameCoordinator
+from pokerapp.game_engine import TurnResult
 from pokerapp.pokerbotview import PokerBotViewer
 from pokerapp.kvstore import ensure_kv
 
@@ -45,7 +47,6 @@ KEY_NOW_TIME_ADD_MONEY = "now_time"
 
 MAX_PLAYERS = 8
 MIN_PLAYERS = 2
-SMALL_BLIND = 5
 ONE_DAY = 86400
 DEFAULT_MONEY = 1000
 MAX_TIME_FOR_TURN = datetime.timedelta(minutes=2)
@@ -63,11 +64,13 @@ class PokerBotModel:
     ):
         self._view: PokerBotViewer = view
         self._bot: Bot = bot
-        self._winner_determine: WinnerDetermination = WinnerDetermination()
         self._kv = ensure_kv(kv)
         self._cfg: Config = cfg
-        self._round_rate: RoundRateModel = RoundRateModel()
         self._application = application
+
+        # NEW: Replace old logic with coordinator
+        self._coordinator = GameCoordinator()
+        self._stake_config = STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL]
 
         self._readyMessages = {}
 
@@ -128,11 +131,14 @@ class PokerBotModel:
             ready_message_id=update.effective_message.message_id,
         )
 
-        if player.wallet.value() < 2 * SMALL_BLIND:
+        if not BalanceValidator.can_afford_table(
+            balance=player.wallet.value(),
+            stake_config=STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL]
+        ):
             await self._view.send_message_reply(
                 chat_id=chat_id,
                 message_id=update.effective_message.message_id,
-                text="You don't have enough money",
+                text="You don't have enough money for this table",
             )
             return
 
@@ -239,9 +245,15 @@ class PokerBotModel:
         await self._divide_cards(game=game, chat_id=chat_id)
 
         game.current_player_index = 1
-        self._round_rate.round_pre_flop_rate_before_first_turn(game)
-        await self._process_playing(chat_id=chat_id, game=game)
-        self._round_rate.round_pre_flop_rate_after_first_turn(game)
+        self._coordinator.apply_pre_flop_blinds(
+            game=game,
+            small_blind=self._stake_config.small_blind,
+        )
+
+        dealer = 2 % len(game.players)
+        game.trading_end_user_id = game.players[dealer].user_id
+
+        await self._start_betting_round(game, chat_id)
 
         context.chat_data[KEY_OLD_PLAYERS] = list(
             map(lambda p: p.user_id, game.players),
@@ -421,52 +433,43 @@ class PokerBotModel:
             len(game.players),
         )
 
-    async def _process_playing(self, chat_id: ChatId, game: Game) -> None:
-        game.current_player_index += 1
-        game.current_player_index %= len(game.players)
+    async def _start_betting_round(self, game: Game, chat_id: int) -> None:
+        """Start new betting round using coordinator (REPLACES _process_playing)"""
 
-        current_player = self._current_turn_player(game)
+        while True:
+            result, next_player = self._coordinator.process_game_turn(game)
 
-        # Process next round.
-        if current_player.user_id == game.trading_end_user_id:
-            self._round_rate.to_pot(game)
-            await self._goto_next_round(game, chat_id)
+            if result == TurnResult.END_GAME:
+                await self._finish_game(game, chat_id)
+                return
 
-            game.current_player_index = 0
+            if result == TurnResult.END_ROUND:
+                self._coordinator.commit_round_bets(game)
 
-        # Game finished.
-        if game.state == GameState.INITIAL:
-            return
+                if game.state == GameState.ROUND_RIVER:
+                    await self._finish_game(game, chat_id)
+                    return
 
-        # Player could be changed.
-        current_player = self._current_turn_player(game)
+                new_state, cards_count = self._coordinator.advance_game_street(game)
 
-        current_player_money = current_player.wallet.value()
+                if cards_count > 0:
+                    await self.add_cards_to_table(cards_count, game, chat_id)
 
-        # Player do not have monery so make it ALL_IN.
-        if current_player_money <= 0:
-            current_player.state = PlayerState.ALL_IN
+                if new_state == GameState.FINISHED:
+                    await self._finish_game(game, chat_id)
+                    return
 
-        # Skip inactive players.
-        if current_player.state != PlayerState.ACTIVE:
-            await self._process_playing(chat_id, game)
-            return
+                continue
 
-        # All fold except one.
-        all_in_active_players = game.players_by(
-            states=(PlayerState.ACTIVE, PlayerState.ALL_IN)
-        )
-        if len(all_in_active_players) == 1:
-            await self._finish(game, chat_id)
-            return
-
-        game.last_turn_time = datetime.datetime.now()
-        await self._view.send_turn_actions(
-            chat_id=chat_id,
-            game=game,
-            player=current_player,
-            money=current_player_money,
-        )
+            if result == TurnResult.CONTINUE_ROUND and next_player:
+                game.last_turn_time = datetime.datetime.now()
+                await self._view.send_turn_actions(
+                    chat_id=chat_id,
+                    game=game,
+                    player=next_player,
+                    money=next_player.wallet.value(),
+                )
+                return
 
     async def add_cards_to_table(
         self,
@@ -483,98 +486,32 @@ class PokerBotModel:
             caption=f"Current pot: {game.pot}$",
         )
 
-    async def _finish(
-        self,
-        game: Game,
-        chat_id: ChatId,
-    ) -> None:
-        self._round_rate.to_pot(game)
+    async def _finish_game(self, game: Game, chat_id: int) -> None:
+        """Finish game using coordinator (REPLACES old _finish)"""
 
-        print(
-            f"game finished: {game.id}, " +
-            f"players count: {len(game.players)}, " +
-            f"pot: {game.pot}"
-        )
+        print(f"game finished: {game.id}, players: {len(game.players)}, pot: {game.pot}")
 
-        active_players = game.players_by(
-            states=(PlayerState.ACTIVE, PlayerState.ALL_IN)
-        )
+        winners_results = self._coordinator.finish_game_with_winners(game)
 
-        player_scores = self._winner_determine.determinate_scores(
-            players=active_players,
-            cards_table=game.cards_table,
-        )
-
-        winners_hand_money = self._round_rate.finish_rate(
-            game=game,
-            player_scores=player_scores,
-        )
-
+        active_players = game.players_by(states=(PlayerState.ACTIVE, PlayerState.ALL_IN))
         only_one_player = len(active_players) == 1
+
         text = "Game is finished with result:\n\n"
-        for (player, best_hand, money) in winners_hand_money:
+        for player, best_hand, money in winners_results:
             win_hand = " ".join(best_hand)
-            text += (
-                f"{player.mention_markdown}" +
-                ":\n" +
-                f"GOT: *{money} $*\n"
-            )
+            text += f"{player.mention_markdown}:\nGOT: *{money} $*\n"
             if not only_one_player:
-                text += (
-                    "With combination of cards:\n" +
-                    f"{win_hand}\n\n"
-                )
+                text += f"With combination of cards:\n{win_hand}\n\n"
+
         text += "/ready to continue"
         await self._view.send_message(chat_id=chat_id, text=text)
 
+        # Approve wallet transactions
         for player in game.players:
             player.wallet.approve(game.id)
 
         game.reset()
 
-    async def _goto_next_round(self, game: Game, chat_id: ChatId) -> bool:
-        # The state of the last player becomes ALL_IN at end of the round .
-        active_players = game.players_by(
-            states=(PlayerState.ACTIVE,)
-        )
-        if len(active_players) == 1:
-            active_players[0].state = PlayerState.ALL_IN
-            if len(game.cards_table) == 5:
-                await self._finish(game, chat_id)
-                return
-
-        async def add_cards(cards_count):
-            await self.add_cards_to_table(
-                count=cards_count,
-                game=game,
-                chat_id=chat_id,
-            )
-
-        state_transitions = {
-            GameState.ROUND_PRE_FLOP: {
-                "next_state": GameState.ROUND_FLOP,
-                "processor": lambda: add_cards(3),
-            },
-            GameState.ROUND_FLOP: {
-                "next_state": GameState.ROUND_TURN,
-                "processor": lambda: add_cards(1),
-            },
-            GameState.ROUND_TURN: {
-                "next_state": GameState.ROUND_RIVER,
-                "processor": lambda: add_cards(1),
-            },
-            GameState.ROUND_RIVER: {
-                "next_state": GameState.FINISHED,
-                "processor": lambda: self._finish(game, chat_id),
-            }
-        }
-
-        if game.state not in state_transitions:
-            raise Exception("unexpected state: " + game.state.value)
-
-        transation = state_transitions[game.state]
-        game.state = transation["next_state"]
-        await transation["processor"]()
 
     def middleware_user_turn(
         self,
@@ -637,10 +574,7 @@ class PokerBotModel:
             text=f"{player.mention_markdown} {PlayerAction.FOLD.value}"
         )
 
-        await self._process_playing(
-            chat_id=update.effective_message.chat_id,
-            game=game,
-        )
+        await self._start_betting_round(game, update.effective_message.chat_id)
 
     async def call_check(
         self,
@@ -667,15 +601,12 @@ class PokerBotModel:
                 text=f"{mention_markdown} {action}"
             )
 
-            self._round_rate.call_check(game, player)
+            self._coordinator.player_call_or_check(game, player)
         except UserException as e:
             await self._view.send_message(chat_id=chat_id, text=str(e))
             return
 
-        await self._process_playing(
-            chat_id=chat_id,
-            game=game,
-        )
+        await self._start_betting_round(game, chat_id)
 
     async def raise_rate_bet(
         self,
@@ -702,12 +633,16 @@ class PokerBotModel:
                 f" {action.value} {raise_bet_rate.value}$"
             )
 
-            self._round_rate.raise_rate_bet(game, player, raise_bet_rate.value)
+            self._coordinator.player_raise_bet(
+                game=game,
+                player=player,
+                amount=raise_bet_rate.value,
+            )
         except UserException as e:
             await self._view.send_message(chat_id=chat_id, text=str(e))
             return
 
-        await self._process_playing(chat_id=chat_id, game=game)
+        await self._start_betting_round(game, chat_id)
 
     async def all_in(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -716,13 +651,13 @@ class PokerBotModel:
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
         mention = player.mention_markdown
-        amount = self._round_rate.all_in(game, player)
+        amount = self._coordinator.player_all_in(game, player)
         await self._view.send_message(
             chat_id=chat_id,
             text=f"{mention} {PlayerAction.ALL_IN.value} {amount}$"
         )
         player.state = PlayerState.ALL_IN
-        await self._process_playing(chat_id=chat_id, game=game)
+        await self._start_betting_round(game, chat_id)
 
 
 class WalletManagerModel(Wallet):
@@ -807,107 +742,3 @@ class WalletManagerModel(Wallet):
     def approve(self, game_id: str) -> None:
         key_authorized_money = self._prefix(self.user_id, ":" + game_id)
         self._kv.delete(key_authorized_money)
-
-
-class RoundRateModel:
-
-    def round_pre_flop_rate_before_first_turn(self, game: Game) -> None:
-        self.raise_rate_bet(game, game.players[0], SMALL_BLIND)
-        self.raise_rate_bet(game, game.players[1], SMALL_BLIND)
-
-    def round_pre_flop_rate_after_first_turn(self, game: Game) -> None:
-        dealer = 2 % len(game.players)
-        game.trading_end_user_id = game.players[dealer].user_id
-
-    def raise_rate_bet(self, game: Game, player: Player, amount: int) -> None:
-        amount += game.max_round_rate - player.round_rate
-
-        player.wallet.authorize(
-            game_id=game.id,
-            amount=amount,
-        )
-        player.round_rate += amount
-
-        game.max_round_rate = player.round_rate
-        game.trading_end_user_id = player.user_id
-
-    def call_check(self, game, player) -> None:
-        amount = game.max_round_rate - player.round_rate
-
-        player.wallet.authorize(
-            game_id=game.id,
-            amount=amount,
-        )
-        player.round_rate += amount
-
-    def all_in(self, game, player) -> Money:
-        amount = player.wallet.authorize_all(
-            game_id=game.id,
-        )
-        player.round_rate += amount
-        if game.max_round_rate < player.round_rate:
-            game.max_round_rate = player.round_rate
-            game.trading_end_user_id = player.user_id
-        return amount
-
-    def _sum_authorized_money(
-        self,
-        game: Game,
-        players: List[Tuple[Player, Cards]],
-    ) -> int:
-        sum_authorized_money = 0
-        for player in players:
-            sum_authorized_money += player[0].wallet.authorized_money(
-                game_id=game.id,
-            )
-        return sum_authorized_money
-
-    def finish_rate(
-        self,
-        game: Game,
-        player_scores: Dict[Score, List[Tuple[Player, Cards]]],
-    ) -> List[Tuple[Player, Cards, Money]]:
-        sorted_player_scores_items = sorted(
-            player_scores.items(),
-            reverse=True,
-            key=lambda x: x[0],
-        )
-        player_scores_values = list(
-            map(lambda x: x[1], sorted_player_scores_items))
-
-        res = []
-        for win_players in player_scores_values:
-            players_authorized = self._sum_authorized_money(
-                game=game,
-                players=win_players,
-            )
-            if players_authorized <= 0:
-                continue
-
-            game_pot = game.pot
-            for win_player, best_hand in win_players:
-                if game.pot <= 0:
-                    break
-
-                authorized = win_player.wallet.authorized_money(
-                    game_id=game.id,
-                )
-
-                win_money_real = game_pot * (authorized / players_authorized)
-                win_money_real = round(win_money_real)
-
-                win_money_can_get = authorized * len(game.players)
-                win_money = min(win_money_real, win_money_can_get)
-
-                win_player.wallet.inc(win_money)
-                game.pot -= win_money
-                res.append((win_player, best_hand, win_money))
-
-        return res
-
-    def to_pot(self, game) -> None:
-        for p in game.players:
-            game.pot += p.round_rate
-            p.round_rate = 0
-        game.max_round_rate = 0
-        game.trading_end_user_id = game.players[0].user_id
