@@ -250,9 +250,6 @@ class PokerBotModel:
             small_blind=self._stake_config.small_blind,
         )
 
-        dealer = 2 % len(game.players)
-        game.trading_end_user_id = game.players[dealer].user_id
-
         await self._start_betting_round(game, chat_id)
 
         context.chat_data[KEY_OLD_PLAYERS] = list(
@@ -435,6 +432,27 @@ class PokerBotModel:
 
     async def _start_betting_round(self, game: Game, chat_id: int) -> None:
         """Start new betting round using coordinator (REPLACES _process_playing)"""
+
+        if game.players:
+            if game.state == GameState.ROUND_PRE_FLOP:
+                first_actor_index = (game.dealer_index + 3) % len(game.players)
+            else:
+                first_actor_index = (game.dealer_index + 1) % len(game.players)
+
+            for offset in range(len(game.players)):
+                idx = (first_actor_index + offset) % len(game.players)
+                if game.players[idx].state == PlayerState.ACTIVE:
+                    first_actor_index = idx
+                    break
+            else:
+                first_actor_index = game.dealer_index % len(game.players)
+
+            game.trading_end_user_id = game.players[first_actor_index].user_id
+            logger.info(
+                "Round initiator set to player %s (index %d)",
+                game.trading_end_user_id,
+                first_actor_index,
+            )
 
         while True:
             result, next_player = self._coordinator.process_game_turn(game)
