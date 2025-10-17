@@ -34,7 +34,10 @@ class TestConfig(ConfigEnvTestCase):
 
         cfg = Config()
 
-        self.assertEqual(cfg.webhook_url, "https://example.com/telegram/webhook")
+        self.assertEqual(
+            cfg.webhook_url,
+            "https://example.com/telegram/webhook",
+        )
         self.assertTrue(cfg.use_webhook)
 
     def test_webhook_url_respects_existing_path(self) -> None:
@@ -45,7 +48,8 @@ class TestConfig(ConfigEnvTestCase):
         cfg = Config()
 
         self.assertEqual(
-            cfg.webhook_url, "https://shahin8n.sbs/telegram/webhook"
+            cfg.webhook_url,
+            "https://shahin8n.sbs/telegram/webhook",
         )
 
     def test_webhook_path_normalised(self) -> None:
@@ -55,7 +59,10 @@ class TestConfig(ConfigEnvTestCase):
         cfg = Config()
 
         self.assertEqual(cfg.WEBHOOK_PATH, "/telegram/webhook")
-        self.assertEqual(cfg.webhook_url, "https://example.com/telegram/webhook")
+        self.assertEqual(
+            cfg.webhook_url,
+            "https://example.com/telegram/webhook",
+        )
 
     def test_webhook_url_handles_nested_base_path(self) -> None:
         os.environ["POKERBOT_WEBHOOK_PUBLIC_URL"] = "https://example.com/bot"
@@ -63,7 +70,8 @@ class TestConfig(ConfigEnvTestCase):
         cfg = Config()
 
         self.assertEqual(
-            cfg.webhook_url, "https://example.com/bot/telegram/webhook"
+            cfg.webhook_url,
+            "https://example.com/bot/telegram/webhook",
         )
 
     def test_webhook_url_preserves_query_string(self) -> None:
