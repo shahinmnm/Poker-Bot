@@ -40,6 +40,12 @@ class PokerBotController:
         application.add_handler(CommandHandler('ban', self._handle_ban))
         application.add_handler(CommandHandler('cards', self._handle_cards))
         application.add_handler(CommandHandler('help', self._handle_help))
+        application.add_handler(CommandHandler('private', self._handle_private))
+        application.add_handler(CommandHandler('join', self._handle_join_private))
+        application.add_handler(CommandHandler('invite', self._handle_invite))
+        application.add_handler(CommandHandler('accept', self._handle_accept_invite))
+        application.add_handler(CommandHandler('decline', self._handle_decline_invite))
+        application.add_handler(CommandHandler('leave', self._handle_leave_private))
         application.add_handler(
             CallbackQueryHandler(
                 self._model.middleware_user_turn(
@@ -55,13 +61,19 @@ class PokerBotController:
     async def _post_init(self, application: Application) -> None:
         """Set up bot command descriptions in Telegram UI."""
         commands = [
-            BotCommand("start", "Start a new poker game"),
-            BotCommand("ready", "Join the next round"),
-            BotCommand("money", "Claim daily bonus (dice roll)"),
-            BotCommand("cards", "Show your cards again"),
-            BotCommand("ban", "Force AFK player to fold (2min+)"),
-            BotCommand("stop", "Leave current game"),
-            BotCommand("help", "Show game rules and commands"),
+            BotCommand("start", "🎰 Start a new poker game"),
+            BotCommand("ready", "✋ Join the next round"),
+            BotCommand("private", "🔒 Create private game"),
+            BotCommand("join", "🚪 Join private game by code"),
+            BotCommand("invite", "📨 Invite user to private game"),
+            BotCommand("accept", "✅ Accept private game invitation"),
+            BotCommand("decline", "❌ Decline private game invitation"),
+            BotCommand("leave", "🚶 Leave private game"),
+            BotCommand("money", "💰 Claim daily bonus (dice roll)"),
+            BotCommand("cards", "🃏 Show your cards again"),
+            BotCommand("ban", "⛔ Force AFK player to fold (2min+)"),
+            BotCommand("stop", "🛑 Leave current game"),
+            BotCommand("help", "❓ Show game rules and commands"),
         ]
 
         try:
@@ -127,38 +139,95 @@ class PokerBotController:
     ) -> None:
         """Handle /help command with game rules."""
         help_text = """
-🎰 **Texas Hold'em Poker Bot**
+🎰 TEXAS HOLD’EM POKER BOT 🎰
 
-**Commands:**
-/start - Start a new game
-/ready - Join the next round
-/money - Get daily bonus
-/cards - Show your cards
-/ban - Force AFK player out (admin)
-/help - Show this message
+🎮 GAME MODES:
 
-**How to Play:**
-1. Add bot to group chat
-2. Everyone sends /ready
-3. Use /start when enough players ready
-4. Game starts with 2 private cards each
-5. Bet, check, raise, or fold each round
-6. Best 5-card hand wins the pot!
+🏛️ Group Games - Play in group chats with friends
+🔒 Private Games - Exclusive invite-only tables
 
-**Betting Rounds:**
-• Pre-flop (2 cards each)
-• Flop (3 community cards)
-• Turn (4th community card)
-• River (5th community card)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-**Daily Bonus:** Send /money once per day for free chips!
+🏛️ GROUP GAME COMMANDS:
 
-Good luck! 🍀
+🎰 /start - Start a new game
+✋ /ready - Join the next round
+🛑 /stop - Leave current game
+
+🔒 PRIVATE GAME COMMANDS:
+
+🔒 /private - Create private game lobby
+🚪 /join <code> - Join game by secret code
+📨 /invite @username - Invite specific user
+✅ /accept - Accept invitation
+❌ /decline - Decline invitation
+🚶 /leave - Leave private game
+
+💎 GENERAL COMMANDS:
+
+💰 /money - Get daily bonus chips
+🃏 /cards - Show your cards again
+⛔ /ban - Force AFK player out (admin only)
+❓ /help - Show this help message
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 HOW TO PLAY:
+
+🏛️ Group Mode:
+
+1️⃣ Add bot to your group chat
+2️⃣ Everyone sends ✋ /ready
+3️⃣ Host sends 🎰 /start when ready
+4️⃣ Game begins automatically!
+
+🔒 Private Mode:
+
+1️⃣ Send 🔒 /private to create lobby
+2️⃣ Share code OR 📨 /invite friends
+3️⃣ Wait for players to join/accept
+4️⃣ Game starts when minimum met!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🃏 POKER BASICS:
+
+🎴 Each player gets 2 private cards
+🃏 5 community cards revealed in stages
+💰 Best 5-card hand wins the pot!
+
+🎲 BETTING ROUNDS:
+
+🌅 Pre-flop - Only your 2 cards
+🌄 Flop - 3 community cards revealed
+🌇 Turn - 4th community card
+🌃 River - Final 5th card
+
+🎯 ACTIONS:
+
+✅ Check - Pass (no bet required)
+💵 Call - Match current bet
+📈 Raise - Increase the bet
+🚀 All-in - Bet everything!
+❌ Fold - Give up this hand
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎁 DAILY BONUS:
+
+Send 💰 /money once per day for free chips!
+
+🎲 Bonus amounts:
+
+⚀ = 5 chips   ⚁ = 20 chips   ⚂ = 40 chips
+⚃ = 80 chips  ⚄ = 160 chips  ⚅ = 320 chips
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🍀 Good luck at the tables! 🍀
+
 """
-        await update.effective_message.reply_text(
-            help_text,
-            parse_mode='Markdown'
-        )
+        await update.effective_message.reply_text(help_text)
 
     async def _handle_button_clicked(
         self,
@@ -188,3 +257,57 @@ Good luck! 🍀
             )
         elif query_data == PlayerAction.ALL_IN.value:
             await self._model.all_in(update, context)
+
+    async def _handle_private(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle /private command to create private game."""
+
+        await self._model.create_private_game(update, context)
+
+    async def _handle_join_private(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle /join command to join private game by code."""
+
+        await self._model.join_private_game(update, context)
+
+    async def _handle_invite(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle /invite command to invite user to private game."""
+
+        await self._model.invite_to_private_game(update, context)
+
+    async def _handle_accept_invite(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle /accept command to accept private game invitation."""
+
+        await self._model.accept_private_invite(update, context)
+
+    async def _handle_decline_invite(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle /decline command to decline private game invitation."""
+
+        await self._model.decline_private_invite(update, context)
+
+    async def _handle_leave_private(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle /leave command to leave private game."""
+
+        await self._model.leave_private_game(update, context)
