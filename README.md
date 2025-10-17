@@ -45,6 +45,11 @@ The winner is determinated by various combinations of Poker hands rank from five
 1. Ensure you have `docker`, `docker-compose`, and `make` installed.
 2. Create a token file `make .env POKERBOT_TOKEN="POKERBOT_TOKEN"`.
 
+   *If you deploy behind a public HTTPS endpoint, also set*
+   `POKERBOT_PREFERRED_MODE=webhook` *and*
+   `POKERBOT_WEBHOOK_PUBLIC_URL="https://your.domain/telegram/webhook"`
+   *inside the `.env` file so the bot starts in webhook mode by default.*
+
     > Get token from [@BotFather](https://telegram.me/BotFather).
 3. Start the bot `make up`.
 
