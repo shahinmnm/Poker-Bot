@@ -153,14 +153,17 @@ class PokerBot:
                     return
                 except Exception as exc:
                     logger.exception(
-                        "Webhook mode failed to start, falling back to polling: %s",
+                        "Webhook mode failed to start, falling back to "
+                        "polling: %s",
                         exc,
                     )
 
-                    # When run_webhook() fails, PTB closes the current event loop which
-                    # would make the subsequent run_polling() call fail with
-                    # "Event loop is closed". Ensure a fresh loop is available for the
-                    # polling fallback so that the bot can recover gracefully.
+                    # When run_webhook() fails, PTB closes the
+                    # current event loop, which would make the
+                    # subsequent run_polling() call fail with
+                    # "Event loop is closed".
+                    # Ensure a fresh loop for the polling fallback so
+                    # the bot can recover gracefully.
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
 

@@ -18,10 +18,15 @@ class Config:
         # Debug mode
         self.DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
-        preferred_mode = os.getenv("POKERBOT_PREFERRED_MODE", "auto").strip().lower()
+        preferred_mode = (
+            os.getenv("POKERBOT_PREFERRED_MODE", "auto")
+            .strip()
+            .lower()
+        )
         if preferred_mode not in {"auto", "webhook", "polling"}:
             raise ValueError(
-                "POKERBOT_PREFERRED_MODE must be one of: 'auto', 'webhook', 'polling'"
+                "POKERBOT_PREFERRED_MODE must be one of: "
+                "'auto', 'webhook', 'polling'"
             )
         self.PREFERRED_MODE: Literal["auto", "webhook", "polling"] = cast(
             Literal["auto", "webhook", "polling"], preferred_mode
@@ -87,7 +92,8 @@ class Config:
         """Validate configuration and raise if invalid."""
         if self.PREFERRED_MODE == "webhook" and not self.WEBHOOK_PUBLIC_URL:
             raise ValueError(
-                "POKERBOT_WEBHOOK_PUBLIC_URL required when POKERBOT_PREFERRED_MODE=webhook"
+                "POKERBOT_WEBHOOK_PUBLIC_URL required when "
+                "POKERBOT_PREFERRED_MODE=webhook"
             )
 
         if self.use_webhook:
