@@ -24,8 +24,12 @@ def main() -> None:
 
     cfg = Config()
 
+    logger.info("Configured startup mode: %s", cfg.preferred_mode)
     mode = "webhook" if cfg.use_webhook else "polling"
-    logger.info("Starting Poker Bot in %s mode", mode)
+    if cfg.preferred_mode == "auto":
+        logger.info("Auto mode resolved to %s", mode)
+    else:
+        logger.info("Starting Poker Bot in %s mode", mode)
     logger.info("Debug mode: %s", cfg.DEBUG)
 
     bot = PokerBot(token=token, cfg=cfg)

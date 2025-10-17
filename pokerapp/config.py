@@ -2,6 +2,7 @@
 """Configuration management for Poker Telegram Bot."""
 
 import os
+from typing import Literal, cast
 
 
 class Config:
@@ -16,6 +17,15 @@ class Config:
 
         # Debug mode
         self.DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+
+        preferred_mode = os.getenv("POKERBOT_PREFERRED_MODE", "auto").strip().lower()
+        if preferred_mode not in {"auto", "webhook", "polling"}:
+            raise ValueError(
+                "POKERBOT_PREFERRED_MODE must be one of: 'auto', 'webhook', 'polling'"
+            )
+        self.PREFERRED_MODE: Literal["auto", "webhook", "polling"] = cast(
+            Literal["auto", "webhook", "polling"], preferred_mode
+        )
 
         # PTB 21.x Connection Settings
         self.CONCURRENT_UPDATES: int = int(
@@ -62,10 +72,24 @@ class Config:
     @property
     def use_webhook(self) -> bool:
         """Check if webhook mode is enabled."""
+        if self.PREFERRED_MODE == "webhook":
+            return True
+        if self.PREFERRED_MODE == "polling":
+            return False
         return bool(self.WEBHOOK_PUBLIC_URL)
+
+    @property
+    def preferred_mode(self) -> Literal["auto", "webhook", "polling"]:
+        """Return the configured startup preference."""
+        return self.PREFERRED_MODE
 
     def validate(self) -> None:
         """Validate configuration and raise if invalid."""
+        if self.PREFERRED_MODE == "webhook" and not self.WEBHOOK_PUBLIC_URL:
+            raise ValueError(
+                "POKERBOT_WEBHOOK_PUBLIC_URL required when POKERBOT_PREFERRED_MODE=webhook"
+            )
+
         if self.use_webhook:
             if not self.WEBHOOK_PUBLIC_URL:
                 raise ValueError(
