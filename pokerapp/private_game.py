@@ -144,6 +144,14 @@ class PrivateGameSession:
             logger.warning("Private game %s is full", self.chat_id)
             return False
 
+        if user_id == self.host_user_id:
+            logger.warning(
+                "Host %s cannot invite themselves to private game %s",
+                user_id,
+                self.chat_id,
+            )
+            return False
+
         if user_id in self.invited_players:
             logger.debug("Player %s already invited to %s", user_id, self.chat_id)
             return False
@@ -190,8 +198,10 @@ class PrivateGameSession:
         if self.stake_config is None:
             return False
 
-        accepted_count = sum(1 for inv in self.invited_players.values() if inv.accepted)
-        total_players = accepted_count + 1  # +1 for host
+        accepted_players = {
+            invite.user_id for invite in self.invited_players.values() if invite.accepted
+        }
+        total_players = len(accepted_players | {self.host_user_id})
 
         return total_players >= self.min_players
 
