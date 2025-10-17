@@ -126,9 +126,6 @@ class PokerBot:
         self._application.add_error_handler(self._error_handler)
 
         try:
-            await self._application.initialize()
-            await self._application.start()
-
             if self._cfg.use_webhook:
                 logger.info(
                     "Starting webhook mode on %s:%s",
@@ -140,24 +137,23 @@ class PokerBot:
                     f"{self._cfg.WEBHOOK_PUBLIC_URL}{self._cfg.WEBHOOK_PATH}"
                 )
 
-                await self._application.updater.start_webhook(
+                await self._application.run_webhook(
                     listen=self._cfg.WEBHOOK_LISTEN,
                     port=self._cfg.WEBHOOK_PORT,
                     url_path=self._cfg.WEBHOOK_PATH,
                     webhook_url=webhook_url,
                     secret_token=self._cfg.WEBHOOK_SECRET or None,
                     drop_pending_updates=True,
+                    allowed_updates=Update.ALL_TYPES,
                 )
 
                 logger.info("Webhook set to: %s", webhook_url)
             else:
                 logger.info("Starting polling mode")
-                await self._application.updater.start_polling(
+                await self._application.run_polling(
                     drop_pending_updates=True,
                     allowed_updates=Update.ALL_TYPES,
                 )
-
-            await self._application.updater.idle()
 
         except Exception as exc:  # pragma: no cover - safety net
             logger.exception("Fatal error during bot execution: %s", exc)
@@ -170,13 +166,17 @@ class PokerBot:
         logger.info("Shutting down bot...")
 
         try:
-            await self._application.updater.stop()
-            await self._application.stop()
-            await self._application.shutdown()
+            if self._application.running:
+                await self._application.stop()
+
+            if getattr(self._application, "_initialized", False):
+                await self._application.shutdown()
 
             stats = self._analytics.get_stats()
             logger.info("Final stats: %s", stats)
 
+        except RuntimeError as exc:  # pragma: no cover - compatibility guard
+            logger.debug("Application already shut down: %s", exc)
         except Exception as exc:  # pragma: no cover - safety net
             logger.error("Error during shutdown: %s", exc)
 
