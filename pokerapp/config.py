@@ -113,6 +113,18 @@ class Config:
             os.getenv("POKERBOT_RATE_LIMIT_PER_SECOND", "10")
         )
 
+        # Q9: Private game stake configurations
+        self.DEFAULT_STAKE_LEVEL: str = "micro"
+        self.ALLOW_CUSTOM_STAKES: bool = True
+
+        # Q7: Balance validation settings
+        self.MINIMUM_BALANCE_MULTIPLIER: int = 20
+        self.ENFORCE_BALANCE_CHECK: bool = True
+
+        # Q8: Re-buy settings
+        self.ALLOW_REBUY_BETWEEN_GAMES: bool = True
+        self.REBUY_COOLDOWN_SECONDS: int = 30
+
     @property
     def webhook_url(self) -> str:
         """Return the absolute webhook URL if configured."""
