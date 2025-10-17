@@ -3,6 +3,7 @@
 
 import os
 from typing import Iterable, Literal, Optional, cast
+from urllib.parse import urlparse, urlunparse
 
 
 def _first_env(names: Iterable[str], default: Optional[str] = None) -> Optional[str]:
@@ -88,18 +89,21 @@ class Config:
         self.WEBHOOK_PORT: int = int(
             _first_env(("POKERBOT_WEBHOOK_PORT", "WEBHOOK_PORT"), default="8443")
         )
-        self.WEBHOOK_PATH: str = _first_env(
+        raw_path = (_first_env(
             ("POKERBOT_WEBHOOK_PATH", "WEBHOOK_PATH"),
             default="/telegram/webhook",
-        ) or "/telegram/webhook"
+        ) or "/telegram/webhook").strip()
+        if not raw_path.startswith("/"):
+            raw_path = f"/{raw_path.lstrip('/')}"
+        self.WEBHOOK_PATH: str = raw_path
         self.WEBHOOK_PUBLIC_URL: str = (
             _first_env(("POKERBOT_WEBHOOK_PUBLIC_URL", "WEBHOOK_PUBLIC_URL"), default="")
             or ""
-        )
+        ).strip()
         self.WEBHOOK_SECRET: str = (
             _first_env(("POKERBOT_WEBHOOK_SECRET", "WEBHOOK_SECRET"), default="")
             or ""
-        )
+        ).strip()
 
         # Rate Limiting Settings
         self.RATE_LIMIT_PER_MINUTE: int = int(
@@ -110,13 +114,33 @@ class Config:
         )
 
     @property
+    def webhook_url(self) -> str:
+        """Return the absolute webhook URL if configured."""
+
+        if not self.WEBHOOK_PUBLIC_URL:
+            return ""
+
+        parsed = urlparse(self.WEBHOOK_PUBLIC_URL)
+        current_path = parsed.path.rstrip("/")
+
+        if current_path.endswith(self.WEBHOOK_PATH):
+            new_path = current_path
+        elif current_path:
+            new_path = f"{current_path}{self.WEBHOOK_PATH}"
+        else:
+            new_path = self.WEBHOOK_PATH
+
+        rebuilt = parsed._replace(path=new_path or "/")
+        return urlunparse(rebuilt)
+
+    @property
     def use_webhook(self) -> bool:
         """Check if webhook mode is enabled."""
         if self.PREFERRED_MODE == "webhook":
             return True
         if self.PREFERRED_MODE == "polling":
             return False
-        return bool(self.WEBHOOK_PUBLIC_URL)
+        return bool(self.webhook_url)
 
     @property
     def preferred_mode(self) -> Literal["auto", "webhook", "polling"]:
@@ -136,6 +160,8 @@ class Config:
                 raise ValueError(
                     "POKERBOT_WEBHOOK_PUBLIC_URL required for webhook mode"
                 )
+            if not self.webhook_url:
+                raise ValueError("Webhook URL could not be constructed")
             if not self.WEBHOOK_SECRET:
                 raise ValueError(
                     "POKERBOT_WEBHOOK_SECRET required for webhook mode"
