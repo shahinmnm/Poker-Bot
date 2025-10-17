@@ -4,7 +4,7 @@ RUN apk add make jpeg-dev zlib-dev alpine-sdk \
     && python -m pip install --no-cache-dir --upgrade pip
 
 COPY requirements.txt makefile ./
-RUN pip install --no-cache-dir "python-telegram-bot[job-queue,webhooks]>=20" && \
+RUN pip install --no-cache-dir "python-telegram-bot[rate-limiter,job-queue,webhooks]==21.2" && \
     make install
 
 WORKDIR /app

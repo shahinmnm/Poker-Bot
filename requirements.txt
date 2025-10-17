@@ -1,4 +1,4 @@
-python-telegram-bot[rate-limiter]==21.2
+python-telegram-bot[rate-limiter,job-queue,webhooks]==21.2
 flake8==4.0.1
 pillow==9.3.0
 PySocks==1.7.1
