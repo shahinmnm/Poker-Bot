@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import asyncio
 import logging
 
 import redis
@@ -155,6 +156,13 @@ class PokerBot:
                         "Webhook mode failed to start, falling back to polling: %s",
                         exc,
                     )
+
+                    # When run_webhook() fails, PTB closes the current event loop which
+                    # would make the subsequent run_polling() call fail with
+                    # "Event loop is closed". Ensure a fresh loop is available for the
+                    # polling fallback so that the bot can recover gracefully.
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
 
             logger.info("Starting polling mode")
             self._application.run_polling(
