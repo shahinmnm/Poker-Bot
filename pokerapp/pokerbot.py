@@ -137,23 +137,30 @@ class PokerBot:
                     f"{self._cfg.WEBHOOK_PUBLIC_URL}{self._cfg.WEBHOOK_PATH}"
                 )
 
-                self._application.run_webhook(
-                    listen=self._cfg.WEBHOOK_LISTEN,
-                    port=self._cfg.WEBHOOK_PORT,
-                    url_path=self._cfg.WEBHOOK_PATH,
-                    webhook_url=webhook_url,
-                    secret_token=self._cfg.WEBHOOK_SECRET or None,
-                    drop_pending_updates=True,
-                    allowed_updates=Update.ALL_TYPES,
-                )
+                try:
+                    self._application.run_webhook(
+                        listen=self._cfg.WEBHOOK_LISTEN,
+                        port=self._cfg.WEBHOOK_PORT,
+                        url_path=self._cfg.WEBHOOK_PATH,
+                        webhook_url=webhook_url,
+                        secret_token=self._cfg.WEBHOOK_SECRET or None,
+                        drop_pending_updates=True,
+                        allowed_updates=Update.ALL_TYPES,
+                    )
 
-                logger.info("Webhook set to: %s", webhook_url)
-            else:
-                logger.info("Starting polling mode")
-                self._application.run_polling(
-                    drop_pending_updates=True,
-                    allowed_updates=Update.ALL_TYPES,
-                )
+                    logger.info("Webhook set to: %s", webhook_url)
+                    return
+                except Exception as exc:
+                    logger.exception(
+                        "Webhook mode failed to start, falling back to polling: %s",
+                        exc,
+                    )
+
+            logger.info("Starting polling mode")
+            self._application.run_polling(
+                drop_pending_updates=True,
+                allowed_updates=Update.ALL_TYPES,
+            )
 
         except Exception as exc:  # pragma: no cover - safety net
             logger.exception("Fatal error during bot execution: %s", exc)
