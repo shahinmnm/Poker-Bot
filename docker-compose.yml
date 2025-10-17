@@ -13,6 +13,8 @@ services:
   bot:
     build: .
     restart: always
+    ports:
+      - "127.0.0.1:8443:8443"
     environment:
       - POKERBOT_TOKEN=$POKERBOT_TOKEN
       - POKERBOT_REDIS_HOST=redis
