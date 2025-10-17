@@ -135,14 +135,14 @@ class PokerBot:
                 )
 
                 webhook_url = (
-                    f"{self._cfg.WEBHOOK_PUBLIC_URL}{self._cfg.webhook_path}"
+                    f"{self._cfg.WEBHOOK_PUBLIC_URL}{self._cfg.WEBHOOK_PATH}"
                 )
 
                 try:
                     self._application.run_webhook(
                         listen=self._cfg.WEBHOOK_LISTEN,
                         port=self._cfg.WEBHOOK_PORT,
-                        url_path=self._cfg.webhook_url_path,
+                        url_path=self._cfg.WEBHOOK_PATH,
                         webhook_url=webhook_url,
                         secret_token=self._cfg.WEBHOOK_SECRET or None,
                         drop_pending_updates=True,

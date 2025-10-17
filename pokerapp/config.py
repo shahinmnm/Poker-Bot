@@ -58,7 +58,7 @@ class Config:
         )
         self.WEBHOOK_PATH: str = os.getenv(
             "POKERBOT_WEBHOOK_PATH", "/telegram/webhook"
-        ).strip() or "/telegram/webhook"
+        )
         self.WEBHOOK_PUBLIC_URL: str = os.getenv(
             "POKERBOT_WEBHOOK_PUBLIC_URL", ""
         )
@@ -105,16 +105,3 @@ class Config:
                 raise ValueError(
                     f"Invalid webhook port: {self.WEBHOOK_PORT}"
                 )
-
-    @property
-    def webhook_path(self) -> str:
-        """Return the webhook path with a single leading slash."""
-        path = self.WEBHOOK_PATH.strip()
-        if not path.startswith("/"):
-            path = f"/{path}"
-        return path
-
-    @property
-    def webhook_url_path(self) -> str:
-        """Return the webhook path without a leading slash for PTB server."""
-        return self.webhook_path.lstrip("/")
