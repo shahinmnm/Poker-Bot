@@ -2,7 +2,26 @@
 """Configuration management for Poker Telegram Bot."""
 
 import os
-from typing import Literal, cast
+from typing import Iterable, Literal, Optional, cast
+from urllib.parse import urlparse, urlunparse
+
+
+def _first_env(names: Iterable[str], default: Optional[str] = None) -> Optional[str]:
+    """Return the first environment variable that is set from ``names``."""
+
+    for name in names:
+        value = os.getenv(name)
+        if value is not None:
+            return value
+    return default
+
+
+def _parse_bool(value: Optional[str], default: bool = False) -> bool:
+    """Parse a boolean environment variable value."""
+
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class Config:
@@ -10,16 +29,29 @@ class Config:
 
     def __init__(self) -> None:
         # Existing Redis configuration
-        self.REDIS_HOST: str = os.getenv("REDIS_HOST", "redis")
-        self.REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
-        self.REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
-        self.REDIS_PASS: str = os.getenv("REDIS_PASS", "")
+        self.REDIS_HOST: str = _first_env(
+            ("POKERBOT_REDIS_HOST", "REDIS_HOST"),
+            default="redis",
+        )
+        self.REDIS_PORT: int = int(
+            _first_env(("POKERBOT_REDIS_PORT", "REDIS_PORT"), default="6379")
+        )
+        self.REDIS_DB: int = int(
+            _first_env(("POKERBOT_REDIS_DB", "REDIS_DB"), default="0")
+        )
+        self.REDIS_PASS: str = _first_env(
+            ("POKERBOT_REDIS_PASS", "REDIS_PASS"),
+            default="",
+        ) or ""
 
         # Debug mode
-        self.DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+        self.DEBUG: bool = _parse_bool(
+            _first_env(("POKERBOT_DEBUG", "DEBUG")),
+            default=False,
+        )
 
         preferred_mode = (
-            os.getenv("POKERBOT_PREFERRED_MODE", "auto")
+            _first_env(("POKERBOT_PREFERRED_MODE", "PREFERRED_MODE"), "auto")
             .strip()
             .lower()
         )
@@ -50,21 +82,28 @@ class Config:
         )
 
         # Webhook Settings (from your .env.example)
-        self.WEBHOOK_LISTEN: str = os.getenv(
-            "POKERBOT_WEBHOOK_LISTEN", "0.0.0.0"
-        )
+        self.WEBHOOK_LISTEN: str = _first_env(
+            ("POKERBOT_WEBHOOK_LISTEN", "WEBHOOK_LISTEN"),
+            default="0.0.0.0",
+        ) or "0.0.0.0"
         self.WEBHOOK_PORT: int = int(
-            os.getenv("POKERBOT_WEBHOOK_PORT", "8443")
+            _first_env(("POKERBOT_WEBHOOK_PORT", "WEBHOOK_PORT"), default="8443")
         )
-        self.WEBHOOK_PATH: str = os.getenv(
-            "POKERBOT_WEBHOOK_PATH", "/telegram/webhook"
-        )
-        self.WEBHOOK_PUBLIC_URL: str = os.getenv(
-            "POKERBOT_WEBHOOK_PUBLIC_URL", ""
-        )
-        self.WEBHOOK_SECRET: str = os.getenv(
-            "POKERBOT_WEBHOOK_SECRET", ""
-        )
+        raw_path = (_first_env(
+            ("POKERBOT_WEBHOOK_PATH", "WEBHOOK_PATH"),
+            default="/telegram/webhook",
+        ) or "/telegram/webhook").strip()
+        if not raw_path.startswith("/"):
+            raw_path = f"/{raw_path.lstrip('/')}"
+        self.WEBHOOK_PATH: str = raw_path
+        self.WEBHOOK_PUBLIC_URL: str = (
+            _first_env(("POKERBOT_WEBHOOK_PUBLIC_URL", "WEBHOOK_PUBLIC_URL"), default="")
+            or ""
+        ).strip()
+        self.WEBHOOK_SECRET: str = (
+            _first_env(("POKERBOT_WEBHOOK_SECRET", "WEBHOOK_SECRET"), default="")
+            or ""
+        ).strip()
 
         # Rate Limiting Settings
         self.RATE_LIMIT_PER_MINUTE: int = int(
@@ -75,13 +114,33 @@ class Config:
         )
 
     @property
+    def webhook_url(self) -> str:
+        """Return the absolute webhook URL if configured."""
+
+        if not self.WEBHOOK_PUBLIC_URL:
+            return ""
+
+        parsed = urlparse(self.WEBHOOK_PUBLIC_URL)
+        current_path = parsed.path.rstrip("/")
+
+        if current_path.endswith(self.WEBHOOK_PATH):
+            new_path = current_path
+        elif current_path:
+            new_path = f"{current_path}{self.WEBHOOK_PATH}"
+        else:
+            new_path = self.WEBHOOK_PATH
+
+        rebuilt = parsed._replace(path=new_path or "/")
+        return urlunparse(rebuilt)
+
+    @property
     def use_webhook(self) -> bool:
         """Check if webhook mode is enabled."""
         if self.PREFERRED_MODE == "webhook":
             return True
         if self.PREFERRED_MODE == "polling":
             return False
-        return bool(self.WEBHOOK_PUBLIC_URL)
+        return bool(self.webhook_url)
 
     @property
     def preferred_mode(self) -> Literal["auto", "webhook", "polling"]:
@@ -100,6 +159,12 @@ class Config:
             if not self.WEBHOOK_PUBLIC_URL:
                 raise ValueError(
                     "POKERBOT_WEBHOOK_PUBLIC_URL required for webhook mode"
+                )
+            if not self.webhook_url:
+                raise ValueError("Webhook URL could not be constructed")
+            if not self.WEBHOOK_SECRET:
+                raise ValueError(
+                    "POKERBOT_WEBHOOK_SECRET required for webhook mode"
                 )
             if self.WEBHOOK_PORT < 1 or self.WEBHOOK_PORT > 65535:
                 raise ValueError(

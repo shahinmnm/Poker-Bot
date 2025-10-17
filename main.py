@@ -5,6 +5,8 @@ import logging
 import os
 import sys
 
+from dotenv import load_dotenv
+
 from pokerapp.config import Config
 from pokerapp.pokerbot import PokerBot
 
@@ -17,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     """Initialize and run the poker bot."""
+    # Load variables from a .env file when present so that local development
+    # environments and containerized deployments receive the expected
+    # configuration without additional setup.
+    load_dotenv()
+
     token = os.getenv("POKERBOT_TOKEN")
     if not token:
         logger.error("POKERBOT_TOKEN environment variable not set")

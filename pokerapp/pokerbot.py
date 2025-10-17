@@ -134,9 +134,7 @@ class PokerBot:
                     self._cfg.WEBHOOK_PORT,
                 )
 
-                webhook_url = (
-                    f"{self._cfg.WEBHOOK_PUBLIC_URL}{self._cfg.WEBHOOK_PATH}"
-                )
+                webhook_url = self._cfg.webhook_url
 
                 try:
                     self._application.run_webhook(
