@@ -132,7 +132,11 @@ class StakeConfig:
         self.min_buy_in = min_buy_in  # 20 big blinds
 
     def __repr__(self):
-        return f"StakeConfig({self.name}: {self.small_blind}/{self.big_blind}, min: {self.min_buy_in})"
+        return (
+            "StakeConfig("
+            f"{self.name}: {self.small_blind}/{self.big_blind}, "
+            f"min: {self.min_buy_in})"
+        )
 
 
 class BalanceValidator:
@@ -151,9 +155,29 @@ class BalanceValidator:
 
 # Q9: Predefined stake levels for private games
 STAKE_PRESETS = {
-    "micro": StakeConfig(small_blind=5, name="Micro (5/10)", min_buy_in=200),
-    "low": StakeConfig(small_blind=10, name="Low (10/20)", min_buy_in=400),
-    "medium": StakeConfig(small_blind=25, name="Medium (25/50)", min_buy_in=1000),
-    "high": StakeConfig(small_blind=50, name="High (50/100)", min_buy_in=2000),
-    "premium": StakeConfig(small_blind=100, name="Premium (100/200)", min_buy_in=4000),
+    "micro": StakeConfig(
+        small_blind=5,
+        name="Micro (5/10)",
+        min_buy_in=200,
+    ),
+    "low": StakeConfig(
+        small_blind=10,
+        name="Low (10/20)",
+        min_buy_in=400,
+    ),
+    "medium": StakeConfig(
+        small_blind=25,
+        name="Medium (25/50)",
+        min_buy_in=1000,
+    ),
+    "high": StakeConfig(
+        small_blind=50,
+        name="High (50/100)",
+        min_buy_in=2000,
+    ),
+    "premium": StakeConfig(
+        small_blind=100,
+        name="Premium (100/200)",
+        min_buy_in=4000,
+    ),
 }

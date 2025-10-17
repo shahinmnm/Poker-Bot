@@ -3,7 +3,7 @@
 import asyncio
 import datetime
 import logging
-from typing import Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Awaitable, Callable, List, Optional
 
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
@@ -11,7 +11,6 @@ from telegram.ext import Application, ContextTypes
 
 from pokerapp.config import Config
 from pokerapp.privatechatmodel import UserPrivateChatModel
-from pokerapp.cards import Cards
 from pokerapp.entities import (
     Game,
     GameState,
@@ -434,7 +433,10 @@ class PokerBotModel:
         )
 
     async def _start_betting_round(self, game: Game, chat_id: int) -> None:
-        """Start new betting round using coordinator (REPLACES _process_playing)"""
+        """
+        Start new betting round using coordinator.
+        Replaces legacy _process_playing loop.
+        """
 
         while True:
             result, next_player = self._coordinator.process_game_turn(game)
@@ -450,7 +452,9 @@ class PokerBotModel:
                     await self._finish_game(game, chat_id)
                     return
 
-                new_state, cards_count = self._coordinator.advance_game_street(game)
+                new_state, cards_count = (
+                    self._coordinator.advance_game_street(game)
+                )
 
                 if cards_count > 0:
                     await self.add_cards_to_table(cards_count, game, chat_id)
@@ -489,19 +493,24 @@ class PokerBotModel:
     async def _finish_game(self, game: Game, chat_id: int) -> None:
         """Finish game using coordinator (REPLACES old _finish)"""
 
-        print(f"game finished: {game.id}, players: {len(game.players)}, pot: {game.pot}")
+        print(
+            "game finished: "
+            f"{game.id}, players: {len(game.players)}, pot: {game.pot}"
+        )
 
         winners_results = self._coordinator.finish_game_with_winners(game)
 
-        active_players = game.players_by(states=(PlayerState.ACTIVE, PlayerState.ALL_IN))
+        active_players = game.players_by(
+            states=(PlayerState.ACTIVE, PlayerState.ALL_IN)
+        )
         only_one_player = len(active_players) == 1
 
         text = "Game is finished with result:\n\n"
         for player, best_hand, money in winners_results:
             win_hand = " ".join(best_hand)
-            text += f"{player.mention_markdown}:\nGOT: *{money} $*\n"
+            text += f"{player.mention_markdown}\nGOT: *{money} $*\n"
             if not only_one_player:
-                text += f"With combination of cards:\n{win_hand}\n\n"
+                text += f"With combination of cards\n{win_hand}\n\n"
 
         text += "/ready to continue"
         await self._view.send_message(chat_id=chat_id, text=text)
@@ -511,7 +520,6 @@ class PokerBotModel:
             player.wallet.approve(game.id)
 
         game.reset()
-
 
     def middleware_user_turn(
         self,

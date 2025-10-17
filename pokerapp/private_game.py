@@ -44,7 +44,9 @@ class PrivateGameSession:
 
     host_user_id: UserId
     chat_id: ChatId
-    created_at: datetime.datetime = field(default_factory=datetime.datetime.now)
+    created_at: datetime.datetime = field(
+        default_factory=datetime.datetime.now
+    )
     state: PrivateGameState = PrivateGameState.WAITING_FOR_STAKE
 
     # Stake configuration
@@ -91,7 +93,12 @@ class PrivateGameSession:
         )
         return True
 
-    def set_custom_stake(self, small_blind: int, big_blind: int, min_buy_in: int) -> bool:
+    def set_custom_stake(
+        self,
+        small_blind: int,
+        big_blind: int,
+        min_buy_in: int,
+    ) -> bool:
         """
         Set custom stake amounts.
 
@@ -108,7 +115,9 @@ class PrivateGameSession:
             return False
 
         if min_buy_in < 20 * big_blind:
-            logger.warning("Min buy-in too low: should be at least 20x big blind")
+            logger.warning(
+                "Min buy-in too low: should be at least 20x big blind",
+            )
             return False
 
         stake = StakeConfig(
@@ -145,7 +154,11 @@ class PrivateGameSession:
             return False
 
         if user_id in self.invited_players:
-            logger.debug("Player %s already invited to %s", user_id, self.chat_id)
+            logger.debug(
+                "Player %s already invited to %s",
+                user_id,
+                self.chat_id,
+            )
             return False
 
         self.invited_players[user_id] = PlayerInvite(
@@ -153,7 +166,11 @@ class PrivateGameSession:
             username=username,
             invited_at=datetime.datetime.now(),
         )
-        logger.info("Player %s invited to private game %s", user_id, self.chat_id)
+        logger.info(
+            "Player %s invited to private game %s",
+            user_id,
+            self.chat_id,
+        )
         return True
 
     def accept_invite(self, user_id: UserId) -> bool:
@@ -167,12 +184,20 @@ class PrivateGameSession:
             True if acceptance was successful
         """
         if user_id not in self.invited_players:
-            logger.warning("No invite found for user %s in game %s", user_id, self.chat_id)
+            logger.warning(
+                "No invite found for user %s in game %s",
+                user_id,
+                self.chat_id,
+            )
             return False
 
         invite = self.invited_players[user_id]
         if invite.accepted:
-            logger.debug("User %s already accepted invite to %s", user_id, self.chat_id)
+            logger.debug(
+                "User %s already accepted invite to %s",
+                user_id,
+                self.chat_id,
+            )
             return False
 
         invite.accepted = True
@@ -182,7 +207,11 @@ class PrivateGameSession:
         if self.can_start():
             self.state = PrivateGameState.READY_TO_START
 
-        logger.info("User %s accepted invite to private game %s", user_id, self.chat_id)
+        logger.info(
+            "User %s accepted invite to private game %s",
+            user_id,
+            self.chat_id,
+        )
         return True
 
     def can_start(self) -> bool:
@@ -190,7 +219,11 @@ class PrivateGameSession:
         if self.stake_config is None:
             return False
 
-        accepted_count = sum(1 for inv in self.invited_players.values() if inv.accepted)
+        accepted_count = sum(
+            1
+            for inv in self.invited_players.values()
+            if inv.accepted
+        )
         total_players = accepted_count + 1  # +1 for host
 
         return total_players >= self.min_players
@@ -211,7 +244,10 @@ class PrivateGameSession:
             True if game started successfully
         """
         if not self.can_start():
-            logger.warning("Cannot start private game %s: not ready", self.chat_id)
+            logger.warning(
+                "Cannot start private game %s: not ready",
+                self.chat_id,
+            )
             return False
 
         self.state = PrivateGameState.IN_PROGRESS
@@ -229,14 +265,22 @@ class PrivateGameManager:
         self._sessions: Dict[ChatId, PrivateGameSession] = {}
         logger.info("PrivateGameManager initialized")
 
-    def create_session(self, host_user_id: UserId, chat_id: ChatId) -> PrivateGameSession:
+    def create_session(
+        self,
+        host_user_id: UserId,
+        chat_id: ChatId,
+    ) -> PrivateGameSession:
         """Create new private game session."""
         session = PrivateGameSession(
             host_user_id=host_user_id,
             chat_id=chat_id,
         )
         self._sessions[chat_id] = session
-        logger.info("Created private game session for host %s in chat %s", host_user_id, chat_id)
+        logger.info(
+            "Created private game session for host %s in chat %s",
+            host_user_id,
+            chat_id,
+        )
         return session
 
     def get_session(self, chat_id: ChatId) -> Optional[PrivateGameSession]:
@@ -253,6 +297,9 @@ class PrivateGameManager:
         """Get all sessions where user is host or invited."""
         sessions = []
         for session in self._sessions.values():
-            if session.host_user_id == user_id or user_id in session.invited_players:
+            if (
+                session.host_user_id == user_id
+                or user_id in session.invited_players
+            ):
                 sessions.append(session)
         return sessions

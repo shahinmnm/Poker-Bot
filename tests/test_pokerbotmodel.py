@@ -20,7 +20,10 @@ class DummyWinnerDetermination:
     def __init__(self):
         self._scores: Dict[Score, Tuple[Tuple[Player, Cards], ...]] = {}
 
-    def set_scores(self, scores: Dict[Score, Tuple[Tuple[Player, Cards], ...]]) -> None:
+    def set_scores(
+        self,
+        scores: Dict[Score, Tuple[Tuple[Player, Cards], ...]],
+    ) -> None:
         self._scores = scores
 
     def determinate_scores(self, players, cards_table):
@@ -35,11 +38,12 @@ class TestGameCoordinatorPayouts(unittest.TestCase):
         self._winner_stub = DummyWinnerDetermination()
         self._coordinator.winner_determine = self._winner_stub
         cfg: Config = Config()
+        password = cfg.REDIS_PASS or None
         self._kv = redis.Redis(
             host=cfg.REDIS_HOST,
             port=cfg.REDIS_PORT,
             db=cfg.REDIS_DB,
-            password=cfg.REDIS_PASS if cfg.REDIS_PASS != "" else None
+            password=password,
         )
 
     def _next_player(self, game: Game, autorized: Money) -> Player:
@@ -66,7 +70,7 @@ class TestGameCoordinatorPayouts(unittest.TestCase):
     def assert_authorized_money_zero(self, game_id: str, *players: Player):
         for (i, p) in enumerate(players):
             authorized = p.wallet.authorized_money(game_id=game_id)
-            self.assertEqual(0, authorized, "player[" + str(i) + "]")
+            self.assertEqual(0, authorized, f"player[{i}]")
 
     def test_finish_rate_single_winner(self):
         g = Game()
@@ -92,7 +96,10 @@ class TestGameCoordinatorPayouts(unittest.TestCase):
         loser = self._next_player(g, 100)
 
         self._winner_stub.set_scores({
-            1: (with_cards(first_winner), with_cards(second_winner)),
+            1: (
+                with_cards(first_winner),
+                with_cards(second_winner),
+            ),
             0: (with_cards(loser),),
         })
 
@@ -117,7 +124,10 @@ class TestGameCoordinatorPayouts(unittest.TestCase):
         loser = self._next_player(g, 90)  # Call.
 
         self._winner_stub.set_scores({
-            2: (with_cards(first_winner), with_cards(second_winner)),
+            2: (
+                with_cards(first_winner),
+                with_cards(second_winner),
+            ),
             1: (with_cards(extra_winner),),
             0: (with_cards(loser),),
         })
@@ -125,7 +135,8 @@ class TestGameCoordinatorPayouts(unittest.TestCase):
         self._coordinator.finish_game_with_winners(g)
         self._approve_all(g)
 
-        # Winners split matching pots; remaining unmatched chips return to bigger stack
+        # Winners split matching pots.
+        # Remaining unmatched chips return to the bigger stack.
         self.assertAlmostEqual(40, first_winner.wallet.value(), places=1)
         self.assertAlmostEqual(10, second_winner.wallet.value(), places=1)
         self.assertAlmostEqual(150, extra_winner.wallet.value(), places=1)
@@ -133,7 +144,11 @@ class TestGameCoordinatorPayouts(unittest.TestCase):
         self.assertAlmostEqual(0, loser.wallet.value(), places=1)
 
         self.assert_authorized_money_zero(
-            g.id, first_winner, second_winner, extra_winner, loser,
+            g.id,
+            first_winner,
+            second_winner,
+            extra_winner,
+            loser,
         )
 
     def test_finish_rate_all_winners(self):
@@ -155,10 +170,16 @@ class TestGameCoordinatorPayouts(unittest.TestCase):
 
         self.assertAlmostEqual(50, first_winner.wallet.value(), places=1)
         self.assertAlmostEqual(
-            100, second_winner.wallet.value(), places=1)
+            100,
+            second_winner.wallet.value(),
+            places=1,
+        )
         self.assertAlmostEqual(150, third_winner.wallet.value(), places=1)
         self.assert_authorized_money_zero(
-            g.id, first_winner, second_winner, third_winner,
+            g.id,
+            first_winner,
+            second_winner,
+            third_winner,
         )
 
     def test_finish_rate_all_in_all(self):
@@ -170,7 +191,10 @@ class TestGameCoordinatorPayouts(unittest.TestCase):
         fourth_loser = self._next_player(g, 10)  # All in.
 
         self._winner_stub.set_scores({
-            3: (with_cards(first_winner), with_cards(second_winner)),
+            3: (
+                with_cards(first_winner),
+                with_cards(second_winner),
+            ),
             2: (with_cards(third_loser),),
             1: (with_cards(fourth_loser),),
         })
@@ -186,7 +210,11 @@ class TestGameCoordinatorPayouts(unittest.TestCase):
         self.assertAlmostEqual(0, fourth_loser.wallet.value(), places=1)
 
         self.assert_authorized_money_zero(
-            g.id, first_winner, second_winner, third_loser, fourth_loser
+            g.id,
+            first_winner,
+            second_winner,
+            third_loser,
+            fourth_loser,
         )
 
 
