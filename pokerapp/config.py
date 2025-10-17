@@ -5,6 +5,8 @@ import os
 from typing import Iterable, Literal, Optional, cast
 from urllib.parse import urlparse, urlunparse
 
+from pokerapp.entities import STAKE_PRESETS
+
 
 def _first_env(names: Iterable[str], default: Optional[str] = None) -> Optional[str]:
     """Return the first environment variable that is set from ``names``."""
@@ -112,6 +114,17 @@ class Config:
         self.RATE_LIMIT_PER_SECOND: int = int(
             os.getenv("POKERBOT_RATE_LIMIT_PER_SECOND", "10")
         )
+
+        default_stake = (
+            _first_env(
+                ("POKERBOT_DEFAULT_STAKE_LEVEL", "DEFAULT_STAKE_LEVEL"),
+                default="micro",
+            )
+            or "micro"
+        ).strip().lower()
+        if default_stake not in STAKE_PRESETS:
+            default_stake = "micro"
+        self.DEFAULT_STAKE_LEVEL: str = default_stake
 
     @property
     def webhook_url(self) -> str:

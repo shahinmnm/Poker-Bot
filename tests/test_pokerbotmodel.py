@@ -8,7 +8,8 @@ import redis
 from pokerapp.cards import Cards, Card
 from pokerapp.config import Config
 from pokerapp.entities import Money, Player, Game
-from pokerapp.pokerbotmodel import RoundRateModel, WalletManagerModel
+from pokerapp.game_coordinator import GameCoordinator
+from pokerapp.pokerbotmodel import WalletManagerModel
 
 
 HANDS_FILE = "./tests/hands.txt"
@@ -18,11 +19,11 @@ def with_cards(p: Player) -> Tuple[Player, Cards]:
     return (p, [Card("6♥"), Card("A♥"), Card("A♣"), Card("A♠")])
 
 
-class TestRoundRateModel(unittest.TestCase):
+class TestGameCoordinator(unittest.TestCase):
     def __init__(self, *args, **kwargs):
-        super(TestRoundRateModel, self).__init__(*args, **kwargs)
+        super(TestGameCoordinator, self).__init__(*args, **kwargs)
         self._user_id = 0
-        self._round_rate = RoundRateModel()
+        self._coordinator = GameCoordinator()
         cfg: Config = Config()
         self._kv = redis.Redis(
             host=cfg.REDIS_HOST,
@@ -62,7 +63,7 @@ class TestRoundRateModel(unittest.TestCase):
         winner = self._next_player(g, 50)
         loser = self._next_player(g, 50)
 
-        self._round_rate.finish_rate(g, player_scores={
+        self._coordinator.calculate_payouts(g, player_scores={
             1: [with_cards(winner)],
             0: [with_cards(loser)],
         })
@@ -78,7 +79,7 @@ class TestRoundRateModel(unittest.TestCase):
         second_winner = self._next_player(g, 50)
         loser = self._next_player(g, 100)
 
-        self._round_rate.finish_rate(g, player_scores={
+        self._coordinator.calculate_payouts(g, player_scores={
             1: [with_cards(first_winner), with_cards(second_winner)],
             0: [with_cards(loser)],
         })
@@ -101,7 +102,7 @@ class TestRoundRateModel(unittest.TestCase):
         extra_winner = self._next_player(g, 90)  # All in.
         loser = self._next_player(g, 90)  # Call.
 
-        self._round_rate.finish_rate(g, player_scores={
+        self._coordinator.calculate_payouts(g, player_scores={
             2: [with_cards(first_winner), with_cards(second_winner)],
             1: [with_cards(extra_winner)],
             0: [with_cards(loser)],
@@ -127,7 +128,7 @@ class TestRoundRateModel(unittest.TestCase):
         second_winner = self._next_player(g, 100)
         third_winner = self._next_player(g, 150)
 
-        self._round_rate.finish_rate(g, player_scores={
+        self._coordinator.calculate_payouts(g, player_scores={
             1: [
                 with_cards(first_winner),
                 with_cards(second_winner),
@@ -152,7 +153,7 @@ class TestRoundRateModel(unittest.TestCase):
         third_loser = self._next_player(g, 10)  # All in.
         fourth_loser = self._next_player(g, 10)  # All in.
 
-        self._round_rate.finish_rate(g, player_scores={
+        self._coordinator.calculate_payouts(g, player_scores={
             3: [with_cards(first_winner), with_cards(second_winner)],
             2: [with_cards(third_loser)],
             1: [with_cards(fourth_loser)],

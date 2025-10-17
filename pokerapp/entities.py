@@ -3,8 +3,10 @@
 from abc import abstractmethod
 import enum
 import datetime
-from typing import Tuple, List
+from dataclasses import dataclass
+from typing import Dict, Tuple, List
 from uuid import uuid4
+
 from pokerapp.cards import get_cards
 
 
@@ -120,3 +122,37 @@ class PlayerAction(enum.Enum):
 
 class UserException(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class StakeConfig:
+    """Configuration describing stake amounts for a table."""
+
+    name: str
+    small_blind: int
+    big_blind: int
+    minimum_buy_in: int
+
+
+STAKE_PRESETS: Dict[str, StakeConfig] = {
+    "micro": StakeConfig(
+        name="Micro Stakes",
+        small_blind=5,
+        big_blind=10,
+        minimum_buy_in=10,
+    ),
+    "low": StakeConfig(
+        name="Low Stakes",
+        small_blind=10,
+        big_blind=20,
+        minimum_buy_in=20,
+    ),
+}
+
+
+class BalanceValidator:
+    """Validate whether a player can afford to join a stake table."""
+
+    @staticmethod
+    def can_afford_table(balance: Money, stake_config: StakeConfig) -> bool:
+        return balance >= stake_config.minimum_buy_in
