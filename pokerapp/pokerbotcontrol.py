@@ -256,39 +256,27 @@ Send 💰 /money once per day for free chips!
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /private command - placeholder until model ready."""
+        """Handle /private command to create private game."""
 
-        await update.effective_message.reply_text(
-            "🔒 Private Games - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "Stay tuned for invite-only poker tables! 🎰"
-        )
+        await self._model.create_private_game(update, context)
 
     async def _handle_join_private(
         self,
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /join command - placeholder until model ready."""
+        """Handle /join command to join private game by code."""
 
-        await update.effective_message.reply_text(
-            "🚪 Join Private Game - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "You'll soon be able to join games with secret codes! 🎲"
-        )
+        await self._model.join_private_game(update, context)
 
     async def _handle_invite(
         self,
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /invite command - placeholder until model ready."""
+        """Handle /invite command to invite player to private game."""
 
-        await update.effective_message.reply_text(
-            "📨 Invite Players - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "You'll soon be able to invite specific users! 🃏"
-        )
+        await self._model.invite_player(update, context)
 
     async def _handle_accept_invite(
         self,
@@ -321,10 +309,6 @@ Send 💰 /money once per day for free chips!
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /leave command - placeholder until model ready."""
+        """Handle /leave command to leave private game lobby."""
 
-        await update.effective_message.reply_text(
-            "🚶 Leave Private Game - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "You'll soon be able to leave lobbies! 🚪"
-        )
+        await self._model.leave_private_game(update, context)
