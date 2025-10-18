@@ -47,11 +47,7 @@ class PokerBotController:
         application.add_handler(CommandHandler('decline', self._handle_decline_invite))
         application.add_handler(CommandHandler('leave', self._handle_leave_private))
         application.add_handler(
-            CallbackQueryHandler(
-                self._model.middleware_user_turn(
-                    self._handle_button_clicked,
-                ),
-            )
+            CallbackQueryHandler(self._handle_callback_query)
         )
 
         application.post_init = self._post_init
@@ -312,3 +308,106 @@ Send 💰 /money once per day for free chips!
         """Handle /leave command to leave private game lobby."""
 
         await self._model.leave_private_game(update, context)
+
+    async def _handle_callback_query(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Route callback queries from inline keyboard buttons."""
+        query = update.callback_query
+
+        if not query or not query.data:
+            return
+
+        # Acknowledge the callback immediately
+        await query.answer()
+
+        callback_data = query.data
+
+        # Route to appropriate handler based on callback data prefix
+        if callback_data.startswith("stake:"):
+            await self._handle_stake_selection(update, context)
+        elif callback_data.startswith("invite_accept:"):
+            await self._handle_invite_accept(update, context)
+        elif callback_data.startswith("invite_decline:"):
+            await self._handle_invite_decline(update, context)
+        elif callback_data.startswith("private_start:"):
+            await self._model.start_private_game(update, context)
+        elif callback_data.startswith("private_leave:"):
+            await self._model.leave_private_game(update, context)
+        else:
+            player_action_callbacks = {
+                PlayerAction.CHECK.value,
+                PlayerAction.CALL.value,
+                PlayerAction.FOLD.value,
+                PlayerAction.ALL_IN.value,
+                str(PlayerAction.SMALL.value),
+                str(PlayerAction.NORMAL.value),
+                str(PlayerAction.BIG.value),
+            }
+
+            if callback_data in player_action_callbacks:
+                await self._model.middleware_user_turn(
+                    self._handle_button_clicked
+                )(update, context)
+            else:
+                # Unknown callback - ignore silently
+                logger.warning("Unknown callback data: %s", callback_data)
+
+    async def _handle_stake_selection(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle stake level selection from inline keyboard."""
+        query = update.callback_query
+
+        if not query or not query.data:
+            return
+
+        # Parse stake level from callback data (e.g., "stake:low" → "low")
+        stake_level = query.data.split(":", 1)[1]
+
+        # Call model to create game with selected stake
+        await self._model.create_private_game_with_stake(
+            update, context, stake_level
+        )
+
+    async def _handle_invite_accept(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle invitation acceptance from inline keyboard."""
+        query = update.callback_query
+
+        if not query or not query.data:
+            return
+
+        # Parse game code from callback data (e.g., "invite_accept:ABC123")
+        game_code = query.data.split(":", 1)[1]
+
+        # Call model to accept invitation
+        await self._model.accept_private_game_invite(
+            update, context, game_code
+        )
+
+    async def _handle_invite_decline(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle invitation decline from inline keyboard."""
+        query = update.callback_query
+
+        if not query or not query.data:
+            return
+
+        # Parse game code from callback data (e.g., "invite_decline:ABC123")
+        game_code = query.data.split(":", 1)[1]
+
+        # Call model to decline invitation
+        await self._model.decline_private_game_invite(
+            update, context, game_code
+        )
