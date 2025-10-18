@@ -227,3 +227,185 @@ class PokerBotViewer:
             chat_id=chat_id,
             message_id=message_id,
         )
+
+    async def send_stake_selection(
+        self,
+        chat_id: int,
+        user_id: int,
+    ) -> None:
+        """Send stake selection menu for private game creation."""
+
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "💎 Micro (5/10) - 200 min",
+                    callback_data="stake:micro",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "🎯 Low (10/20) - 400 min",
+                    callback_data="stake:low",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "🎲 Medium (25/50) - 1K min",
+                    callback_data="stake:medium",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "💰 High (50/100) - 2K min",
+                    callback_data="stake:high",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "👑 Premium (100/200) - 4K min",
+                    callback_data="stake:premium",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "❌ Cancel",
+                    callback_data="stake:cancel",
+                ),
+            ],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await self._bot.send_message(
+            chat_id=user_id,
+            text=(
+                "🔒 CREATE PRIVATE GAME\n\n"
+                "Choose your stake level:\n\n"
+                "💎 Micro - Small stakes, great for practice\n"
+                "🎯 Low - Casual games with friends\n"
+                "🎲 Medium - Standard poker action\n"
+                "💰 High - Serious players only\n"
+                "👑 Premium - High rollers table\n\n"
+                "⚠️ All players need minimum buy-in to join!"
+            ),
+            reply_markup=reply_markup,
+        )
+
+    async def send_player_invite(
+        self,
+        inviter_id: int,
+        inviter_name: str,
+        invitee_id: int,
+        game_code: str,
+        stake_name: str,
+    ) -> None:
+        """Send invitation to specific player."""
+
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "✅ Accept Invitation",
+                    callback_data=f"invite_accept:{game_code}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "❌ Decline",
+                    callback_data=f"invite_decline:{game_code}",
+                ),
+            ],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await self._bot.send_message(
+            chat_id=invitee_id,
+            text=(
+                "🎰 PRIVATE GAME INVITATION\n\n"
+                f"{inviter_name} invited you to a private poker game!\n\n"
+                f"🎲 Stakes: {stake_name}\n"
+                f"🔑 Game Code: {game_code}\n\n"
+                "Will you join?"
+            ),
+            reply_markup=reply_markup,
+        )
+
+    async def send_private_game_status(
+        self,
+        chat_id: int,
+        host_name: str,
+        stake_name: str,
+        game_code: str,
+        current_players: int,
+        max_players: int,
+        min_players: int,
+        player_names: list,
+        can_start: bool,
+    ) -> None:
+        """Send current status of private game lobby."""
+
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        player_list = "\n".join([f" • {name}" for name in player_names])
+
+        keyboard = []
+        if can_start:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "🎰 START GAME",
+                    callback_data=f"private_start:{game_code}",
+                ),
+            ])
+
+        keyboard.append([
+            InlineKeyboardButton(
+                "📨 Invite Player",
+                callback_data=f"private_invite:{game_code}",
+            ),
+        ])
+        keyboard.append([
+            InlineKeyboardButton(
+                "🚪 Leave Lobby",
+                callback_data=f"private_leave:{game_code}",
+            ),
+        ])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        status_emoji = "✅" if can_start else "⏳"
+        min_indicator = f"(min {min_players})" if current_players < min_players else ""
+
+        await self._bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "🔒 PRIVATE GAME LOBBY\n\n"
+                f"🎯 Host: {host_name}\n"
+                f"🎲 Stakes: {stake_name}\n"
+                f"🔑 Code: {game_code}\n\n"
+                f"{status_emoji} Players: {current_players}/{max_players} {min_indicator}\n\n"
+                f"{player_list}\n\n"
+                f"{'✅ Ready to start!' if can_start else '⏳ Waiting for more players…'}"
+            ),
+            reply_markup=reply_markup,
+        )
+
+    async def send_insufficient_balance_error(
+        self,
+        chat_id: int,
+        user_id: int,
+        required: int,
+        current: int,
+    ) -> None:
+        """Notify user they don't have enough chips."""
+
+        await self._bot.send_message(
+            chat_id=user_id,
+            text=(
+                "❌ INSUFFICIENT BALANCE\n\n"
+                f"Required: {required} chips\n"
+                f"Your balance: {current} chips\n"
+                f"Needed: {required - current} more\n\n"
+                "💰 Get free chips with /money command!"
+            ),
+        )
