@@ -667,6 +667,81 @@ class PokerBotModel:
         player.state = PlayerState.ALL_IN
         await self._start_betting_round(game, chat_id)
 
+    async def create_private_game(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Begin flow for creating a private game."""
+
+        user = update.effective_user
+
+        await self._view.send_stake_selection(
+            chat_id=update.effective_chat.id,
+            user_id=user.id,
+        )
+
+    async def join_private_game(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Join a private game by using a game code."""
+
+        await self._view.send_private_game_status(
+            chat_id=update.effective_chat.id,
+            host_name="Host TBD",
+            stake_name="Stake TBD",
+            game_code="CODE123",
+            current_players=1,
+            max_players=5,
+            min_players=2,
+            player_names=["PlaceholderUser"],
+            can_start=False,
+        )
+
+    async def invite_player(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Send invitation to another player."""
+
+        inviter = update.effective_user
+
+        await self._view.send_player_invite(
+            inviter_id=inviter.id,
+            inviter_name=inviter.full_name,
+            invitee_id=inviter.id,
+            game_code="CODE123",
+            stake_name="Medium (25/50)",
+        )
+
+    async def leave_private_game(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Handle user leaving lobby."""
+
+        await update.effective_message.reply_text("🚪 You left the private lobby.")
+
+    async def start_private_game(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Start private game if conditions met."""
+
+        await update.effective_message.reply_text("🎰 Starting private game…")
+
+    async def show_private_game_status(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Show current lobby for caller."""
+
+        await self._view.send_private_game_status(
+            chat_id=update.effective_chat.id,
+            host_name="You",
+            stake_name="Medium (25/50)",
+            game_code="CODE123",
+            current_players=3,
+            max_players=6,
+            min_players=2,
+            player_names=["Alice", "Bob", "You"],
+            can_start=False,
+        )
+
 
 class WalletManagerModel(Wallet):
     def __init__(self, user_id: UserId, kv: Optional[redis.Redis]):
