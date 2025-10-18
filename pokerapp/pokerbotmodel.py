@@ -11,6 +11,7 @@ from telegram.ext import Application, ContextTypes
 
 from pokerapp.config import Config
 from pokerapp.privatechatmodel import UserPrivateChatModel
+from pokerapp.private_game import PrivateGameManager
 from pokerapp.entities import (
     Game,
     GameState,
@@ -72,6 +73,7 @@ class PokerBotModel:
         self._stake_config = STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL]
 
         self._readyMessages = {}
+        self._private_games = PrivateGameManager()
 
     @property
     def _min_players(self):
@@ -666,6 +668,84 @@ class PokerBotModel:
         )
         player.state = PlayerState.ALL_IN
         await self._start_betting_round(game, chat_id)
+
+    async def create_private_game(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Placeholder handler for creating private game lobbies."""
+
+        del context  # Unused until private games are fully implemented.
+
+        chat_id = update.effective_message.chat_id
+        await self._view.send_message(
+            chat_id=chat_id,
+            text="Private games are coming soon!",
+        )
+
+    async def join_private_game(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Placeholder handler for joining a private game by code."""
+
+        del context
+
+        chat_id = update.effective_message.chat_id
+        await self._view.send_message(
+            chat_id=chat_id,
+            text="Joining private games will be available soon!",
+        )
+
+    async def invite_to_private_game(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Placeholder handler for inviting players to a private game."""
+
+        del context
+
+        chat_id = update.effective_message.chat_id
+        await self._view.send_message(
+            chat_id=chat_id,
+            text="Inviting friends to private games is coming soon!",
+        )
+
+    async def accept_private_invite(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Placeholder handler for accepting a private game invite."""
+
+        del context
+
+        chat_id = update.effective_message.chat_id
+        await self._view.send_message(
+            chat_id=chat_id,
+            text="Accepting private game invites is coming soon!",
+        )
+
+    async def decline_private_invite(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Placeholder handler for declining a private game invite."""
+
+        del context
+
+        chat_id = update.effective_message.chat_id
+        await self._view.send_message(
+            chat_id=chat_id,
+            text="Declining private game invites is coming soon!",
+        )
+
+    async def leave_private_game(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Placeholder handler for leaving a private game."""
+
+        del context
+
+        chat_id = update.effective_message.chat_id
+        await self._view.send_message(
+            chat_id=chat_id,
+            text="Leaving private games will be available soon!",
+        )
 
 
 class WalletManagerModel(Wallet):
