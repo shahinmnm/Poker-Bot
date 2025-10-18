@@ -704,9 +704,8 @@ class PokerBotModel:
         inviter = update.effective_user
 
         await self._view.send_player_invite(
-            inviter_id=inviter.id,
+            chat_id=update.effective_chat.id,
             inviter_name=inviter.full_name,
-            invitee_id=inviter.id,
             game_code="CODE123",
             stake_name="Medium (25/50)",
         )

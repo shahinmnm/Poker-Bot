@@ -278,7 +278,7 @@ class PokerBotViewer:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await self._bot.send_message(
-            chat_id=user_id,
+            chat_id=chat_id,
             text=(
                 "🔒 CREATE PRIVATE GAME\n\n"
                 "Choose your stake level:\n\n"
@@ -294,13 +294,12 @@ class PokerBotViewer:
 
     async def send_player_invite(
         self,
-        inviter_id: int,
+        chat_id: int,
         inviter_name: str,
-        invitee_id: int,
         game_code: str,
         stake_name: str,
     ) -> None:
-        """Send invitation to specific player."""
+        """Send invitation notification in the originating chat."""
 
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -321,7 +320,7 @@ class PokerBotViewer:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await self._bot.send_message(
-            chat_id=invitee_id,
+            chat_id=chat_id,
             text=(
                 "🎰 PRIVATE GAME INVITATION\n\n"
                 f"{inviter_name} invited you to a private poker game!\n\n"
@@ -393,14 +392,13 @@ class PokerBotViewer:
     async def send_insufficient_balance_error(
         self,
         chat_id: int,
-        user_id: int,
         required: int,
         current: int,
     ) -> None:
         """Notify user they don't have enough chips."""
 
         await self._bot.send_message(
-            chat_id=user_id,
+            chat_id=chat_id,
             text=(
                 "❌ INSUFFICIENT BALANCE\n\n"
                 f"Required: {required} chips\n"
