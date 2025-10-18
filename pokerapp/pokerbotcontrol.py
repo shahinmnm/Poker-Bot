@@ -259,9 +259,11 @@ Send 💰 /money once per day for free chips!
         """Handle /private command - placeholder until model ready."""
 
         await update.effective_message.reply_text(
-            "🔒 Private Games - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "Stay tuned for invite-only poker tables! 🎰"
+            (
+                "🔒 Private Games - Coming Soon!\n\n"
+                "This feature is under development.\n"
+                "Stay tuned for invite-only poker tables! 🎰"
+            )
         )
 
     async def _handle_join_private(
@@ -272,9 +274,11 @@ Send 💰 /money once per day for free chips!
         """Handle /join command - placeholder until model ready."""
 
         await update.effective_message.reply_text(
-            "🚪 Join Private Game - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "You'll soon be able to join games with secret codes! 🎲"
+            (
+                "🚪 Join Private Game - Coming Soon!\n\n"
+                "This feature is under development.\n"
+                "You'll soon be able to join games with secret codes! 🎲"
+            )
         )
 
     async def _handle_invite(
@@ -285,9 +289,11 @@ Send 💰 /money once per day for free chips!
         """Handle /invite command - placeholder until model ready."""
 
         await update.effective_message.reply_text(
-            "📨 Invite Players - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "You'll soon be able to invite specific users! 🃏"
+            (
+                "📨 Invite Players - Coming Soon!\n\n"
+                "This feature is under development.\n"
+                "You'll soon be able to invite specific users! 🃏"
+            )
         )
 
     async def _handle_accept_invite(
@@ -298,9 +304,11 @@ Send 💰 /money once per day for free chips!
         """Handle /accept command - placeholder until model ready."""
 
         await update.effective_message.reply_text(
-            "✅ Accept Invitation - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "You'll soon be able to accept game invites! 🎉"
+            (
+                "✅ Accept Invitation - Coming Soon!\n\n"
+                "This feature is under development.\n"
+                "You'll soon be able to accept game invites! 🎉"
+            )
         )
 
     async def _handle_decline_invite(
@@ -311,9 +319,11 @@ Send 💰 /money once per day for free chips!
         """Handle /decline command - placeholder until model ready."""
 
         await update.effective_message.reply_text(
-            "❌ Decline Invitation - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "You'll soon be able to decline invites! 👋"
+            (
+                "❌ Decline Invitation - Coming Soon!\n\n"
+                "This feature is under development.\n"
+                "You'll soon be able to decline invites! 👋"
+            )
         )
 
     async def _handle_leave_private(
@@ -324,7 +334,9 @@ Send 💰 /money once per day for free chips!
         """Handle /leave command - placeholder until model ready."""
 
         await update.effective_message.reply_text(
-            "🚶 Leave Private Game - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "You'll soon be able to leave lobbies! 🚪"
+            (
+                "🚶 Leave Private Game - Coming Soon!\n\n"
+                "This feature is under development.\n"
+                "You'll soon be able to leave lobbies! 🚪"
+            )
         )
