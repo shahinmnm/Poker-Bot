@@ -63,12 +63,12 @@ class PokerBotController:
         commands = [
             BotCommand("start", "🎰 Start a new poker game"),
             BotCommand("ready", "✋ Join the next round"),
-            BotCommand("private", "🔒 Create private game"),
-            BotCommand("join", "🚪 Join private game by code"),
-            BotCommand("invite", "📨 Invite user to private game"),
-            BotCommand("accept", "✅ Accept private game invitation"),
-            BotCommand("decline", "❌ Decline private game invitation"),
-            BotCommand("leave", "🚶 Leave private game"),
+            BotCommand("private", "🔒 Create private game (Coming Soon)"),
+            BotCommand("join", "🚪 Join private game by code (Coming Soon)"),
+            BotCommand("invite", "📨 Invite user to private game (Coming Soon)"),
+            BotCommand("accept", "✅ Accept private game invitation (Coming Soon)"),
+            BotCommand("decline", "❌ Decline private game invitation (Coming Soon)"),
+            BotCommand("leave", "🚶 Leave private game (Coming Soon)"),
             BotCommand("money", "💰 Claim daily bonus (dice roll)"),
             BotCommand("cards", "🃏 Show your cards again"),
             BotCommand("ban", "⛔ Force AFK player to fold (2min+)"),
@@ -144,7 +144,7 @@ class PokerBotController:
 🎮 GAME MODES:
 
 🏛️ Group Games - Play in group chats with friends
-🔒 Private Games - Exclusive invite-only tables
+🔒 Private Games - Exclusive invite-only tables (Coming Soon!)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -154,7 +154,7 @@ class PokerBotController:
 ✋ /ready - Join the next round
 🛑 /stop - Leave current game
 
-🔒 PRIVATE GAME COMMANDS:
+🔒 PRIVATE GAME COMMANDS (Coming Soon):
 
 🔒 /private - Create private game lobby
 🚪 /join <code> - Join game by secret code
@@ -180,13 +180,6 @@ class PokerBotController:
 2️⃣ Everyone sends ✋ /ready
 3️⃣ Host sends 🎰 /start when ready
 4️⃣ Game begins automatically!
-
-🔒 Private Mode:
-
-1️⃣ Send 🔒 /private to create lobby
-2️⃣ Share code OR 📨 /invite friends
-3️⃣ Wait for players to join/accept
-4️⃣ Game starts when minimum met!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -263,51 +256,75 @@ Send 💰 /money once per day for free chips!
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /private command to create private game."""
+        """Handle /private command - placeholder until model ready."""
 
-        await self._model.create_private_game(update, context)
+        await update.effective_message.reply_text(
+            "🔒 Private Games - Coming Soon!\n\n"
+            "This feature is under development.\n"
+            "Stay tuned for invite-only poker tables! 🎰"
+        )
 
     async def _handle_join_private(
         self,
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /join command to join private game by code."""
+        """Handle /join command - placeholder until model ready."""
 
-        await self._model.join_private_game(update, context)
+        await update.effective_message.reply_text(
+            "🚪 Join Private Game - Coming Soon!\n\n"
+            "This feature is under development.\n"
+            "You'll soon be able to join games with secret codes! 🎲"
+        )
 
     async def _handle_invite(
         self,
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /invite command to invite user to private game."""
+        """Handle /invite command - placeholder until model ready."""
 
-        await self._model.invite_to_private_game(update, context)
+        await update.effective_message.reply_text(
+            "📨 Invite Players - Coming Soon!\n\n"
+            "This feature is under development.\n"
+            "You'll soon be able to invite specific users! 🃏"
+        )
 
     async def _handle_accept_invite(
         self,
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /accept command to accept private game invitation."""
+        """Handle /accept command - placeholder until model ready."""
 
-        await self._model.accept_private_invite(update, context)
+        await update.effective_message.reply_text(
+            "✅ Accept Invitation - Coming Soon!\n\n"
+            "This feature is under development.\n"
+            "You'll soon be able to accept game invites! 🎉"
+        )
 
     async def _handle_decline_invite(
         self,
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /decline command to decline private game invitation."""
+        """Handle /decline command - placeholder until model ready."""
 
-        await self._model.decline_private_invite(update, context)
+        await update.effective_message.reply_text(
+            "❌ Decline Invitation - Coming Soon!\n\n"
+            "This feature is under development.\n"
+            "You'll soon be able to decline invites! 👋"
+        )
 
     async def _handle_leave_private(
         self,
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /leave command to leave private game."""
+        """Handle /leave command - placeholder until model ready."""
 
-        await self._model.leave_private_game(update, context)
+        await update.effective_message.reply_text(
+            "🚶 Leave Private Game - Coming Soon!\n\n"
+            "This feature is under development.\n"
+            "You'll soon be able to leave lobbies! 🚪"
+        )
