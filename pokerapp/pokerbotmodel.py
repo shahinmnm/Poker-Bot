@@ -683,7 +683,7 @@ class PokerBotModel:
         chat_id = update.effective_chat.id
 
         # Check if user already has an active private game
-        existing_game_key = f"user:{user.id}:private_game"
+        existing_game_key = ":".join(["user", str(user.id), "private_game"])
         if self._kv.exists(existing_game_key):
             await update.effective_message.reply_text(
                 "❌ You already have an active private game!\n"
@@ -732,9 +732,8 @@ class PokerBotModel:
         if user_balance < min_buyin:
             await self._view.send_insufficient_balance_error(
                 chat_id=chat_id,
-                required_amount=min_buyin,
-                current_balance=user_balance,
-                stake_name=stake_config["name"],
+                required=min_buyin,
+                current=user_balance,
             )
             return
 
@@ -750,7 +749,7 @@ class PokerBotModel:
         )
 
         # Store in Redis
-        game_key = f"private_game:{game_code}"
+        game_key = ":".join(["private_game", game_code])
         self._kv.set(
             game_key,
             private_game.to_json(),
@@ -758,18 +757,18 @@ class PokerBotModel:
         )
 
         # Link user to game
-        user_game_key = f"user:{user.id}:private_game"
+        user_game_key = ":".join(["user", str(user.id), "private_game"])
         self._kv.set(user_game_key, game_code, ex=3600)
 
         # Show game created confirmation with lobby status
         message = (
             "✅ Private game created!\n\n"
-            f"🎯 **Game Code:** `{game_code}`\n"
-            f"💰 **Stakes:** {stake_config['name']}\n"
-            f"💵 **Buy-in:** {min_buyin} - {stake_config['max_buyin']}\n\n"
+            f"🎯 **Game Code**: {game_code}\n"
+            f"💰 **Stakes**: {stake_config['name']}\n"
+            f"💵 **Buy-in**: {min_buyin} - {stake_config['max_buyin']}\n\n"
             "📨 Share this code with friends:\n"
-            f"`/join {game_code}`\n\n"
-            f"👥 **Players:** 1/{self._cfg.PRIVATE_MAX_PLAYERS}\n"
+            f"/join {game_code}\n\n"
+            f"👥 **Players**: 1/{self._cfg.PRIVATE_MAX_PLAYERS}\n"
             f"• {user.full_name} (Host)\n\n"
             "⏳ Waiting for players to join..."
         )
@@ -798,7 +797,7 @@ class PokerBotModel:
         user = query.from_user
 
         # Load game from Redis
-        game_key = f"private_game:{game_code}"
+        game_key = ":".join(["private_game", game_code])
         game_data = self._kv.get(game_key)
 
         if not game_data:
@@ -844,9 +843,8 @@ class PokerBotModel:
         if user_balance < stake_config["min_buyin"]:
             await self._view.send_insufficient_balance_error(
                 chat_id=update.effective_chat.id,
-                required_amount=stake_config["min_buyin"],
-                current_balance=user_balance,
-                stake_name=stake_config["name"],
+                required=stake_config["min_buyin"],
+                current=user_balance,
             )
             return
 
@@ -862,14 +860,14 @@ class PokerBotModel:
         )
 
         # Link user to game
-        user_game_key = f"user:{user.id}:private_game"
+        user_game_key = ":".join(["user", str(user.id), "private_game"])
         self._kv.set(user_game_key, game_code, ex=3600)
 
         # Update invitation message
         message = (
             "✅ Invitation accepted!\n\n"
-            f"🎯 **Game Code:** `{game_code}`\n"
-            f"💰 **Stakes:** {stake_config['name']}\n\n"
+            f"🎯 **Game Code**: {game_code}\n"
+            f"💰 **Stakes**: {stake_config['name']}\n\n"
             "You have joined the game lobby.\n\n"
             "Waiting for host to start the game..."
         )
@@ -904,7 +902,7 @@ class PokerBotModel:
         user = query.from_user
 
         # Load game from Redis
-        game_key = f"private_game:{game_code}"
+        game_key = ":".join(["private_game", game_code])
         game_data = self._kv.get(game_key)
 
         if not game_data:
@@ -936,7 +934,7 @@ class PokerBotModel:
         # Update invitation message
         message = (
             "❌ Invitation declined.\n\n"
-            "You can still join later with `/join " + game_code + "`"
+            f"You can still join later with /join {game_code}"
         )
         await query.edit_message_text(
             text=message,
@@ -959,7 +957,7 @@ class PokerBotModel:
         Returns:
             User balance (defaults to initial balance if not set)
         """
-        balance_key = f"user:{user_id}:balance"
+        balance_key = ":".join(["user", str(user_id), "balance"])
         balance = self._kv.get(balance_key)
 
         if balance is None:
@@ -968,7 +966,9 @@ class PokerBotModel:
         return int(balance)
 
     async def join_private_game(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         """Join a private game by using a game code."""
 
@@ -985,7 +985,9 @@ class PokerBotModel:
         )
 
     async def invite_player(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         """Send invitation to another player."""
 
@@ -999,21 +1001,29 @@ class PokerBotModel:
         )
 
     async def leave_private_game(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         """Handle user leaving lobby."""
 
-        await update.effective_message.reply_text("🚪 You left the private lobby.")
+        await update.effective_message.reply_text(
+            "🚪 You left the private lobby."
+        )
 
     async def start_private_game(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         """Start private game if conditions met."""
 
         await update.effective_message.reply_text("🎰 Starting private game…")
 
     async def show_private_game_status(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         """Show current lobby for caller."""
 

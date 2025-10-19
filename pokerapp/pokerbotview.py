@@ -373,19 +373,27 @@ class PokerBotViewer:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         status_emoji = "✅" if can_start else "⏳"
-        min_indicator = f"(min {min_players})" if current_players < min_players else ""
+        min_indicator = (
+            f"(min {min_players})" if current_players < min_players else ""
+        )
+        readiness = (
+            "✅ Ready to start!" if can_start else "⏳ Waiting for more players…"
+        )
+
+        message = (
+            "🔒 PRIVATE GAME LOBBY\n\n"
+            f"🎯 Host: {host_name}\n"
+            f"🎲 Stakes: {stake_name}\n"
+            f"🔑 Code: {game_code}\n\n"
+            f"{status_emoji} Players: {current_players}/{max_players} "
+            f"{min_indicator}\n\n"
+            f"{player_list}\n\n"
+            f"{readiness}"
+        )
 
         await self._bot.send_message(
             chat_id=chat_id,
-            text=(
-                "🔒 PRIVATE GAME LOBBY\n\n"
-                f"🎯 Host: {host_name}\n"
-                f"🎲 Stakes: {stake_name}\n"
-                f"🔑 Code: {game_code}\n\n"
-                f"{status_emoji} Players: {current_players}/{max_players} {min_indicator}\n\n"
-                f"{player_list}\n\n"
-                f"{'✅ Ready to start!' if can_start else '⏳ Waiting for more players…'}"
-            ),
+            text=message,
             reply_markup=reply_markup,
         )
 

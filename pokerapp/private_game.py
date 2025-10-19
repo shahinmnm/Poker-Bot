@@ -67,7 +67,9 @@ class PrivateGame:
     host_user_id: UserId
     stake_level: str
     state: PrivateGameState = PrivateGameState.LOBBY
-    invited_players: Dict[UserId, PrivateGameInvite] = field(default_factory=dict)
+    invited_players: Dict[UserId, PrivateGameInvite] = field(
+        default_factory=dict
+    )
     created_at: int = field(
         default_factory=lambda: int(datetime.datetime.utcnow().timestamp())
     )
@@ -90,9 +92,10 @@ class PrivateGame:
     @classmethod
     def from_json(cls, json_data: str) -> "PrivateGame":
         payload = json.loads(json_data)
+        raw_invites = payload.get("invited_players", {})
         invited_players = {
             int(user_id): PrivateGameInvite.from_dict(invite_data)
-            for user_id, invite_data in payload.get("invited_players", {}).items()
+            for user_id, invite_data in raw_invites.items()
         }
         state_value = payload.get("state", PrivateGameState.LOBBY.value)
         return cls(

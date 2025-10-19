@@ -36,19 +36,31 @@ class PokerBotController:
         """
         self._model = model
 
-        application.add_handler(CommandHandler('ready', self._handle_ready))
-        application.add_handler(CommandHandler('start', self._handle_start))
-        application.add_handler(CommandHandler('stop', self._handle_stop))
-        application.add_handler(CommandHandler('money', self._handle_money))
-        application.add_handler(CommandHandler('ban', self._handle_ban))
-        application.add_handler(CommandHandler('cards', self._handle_cards))
-        application.add_handler(CommandHandler('help', self._handle_help))
-        application.add_handler(CommandHandler('private', self._handle_private))
-        application.add_handler(CommandHandler('join', self._handle_join_private))
-        application.add_handler(CommandHandler('invite', self._handle_invite))
-        application.add_handler(CommandHandler('accept', self._handle_accept_invite))
-        application.add_handler(CommandHandler('decline', self._handle_decline_invite))
-        application.add_handler(CommandHandler('leave', self._handle_leave_private))
+        application.add_handler(CommandHandler("ready", self._handle_ready))
+        application.add_handler(CommandHandler("start", self._handle_start))
+        application.add_handler(CommandHandler("stop", self._handle_stop))
+        application.add_handler(CommandHandler("money", self._handle_money))
+        application.add_handler(CommandHandler("ban", self._handle_ban))
+        application.add_handler(CommandHandler("cards", self._handle_cards))
+        application.add_handler(CommandHandler("help", self._handle_help))
+        application.add_handler(
+            CommandHandler("private", self._handle_private)
+        )
+        application.add_handler(
+            CommandHandler("join", self._handle_join_private)
+        )
+        application.add_handler(
+            CommandHandler("invite", self._handle_invite)
+        )
+        application.add_handler(
+            CommandHandler("accept", self._handle_accept_invite)
+        )
+        application.add_handler(
+            CommandHandler("decline", self._handle_decline_invite)
+        )
+        application.add_handler(
+            CommandHandler("leave", self._handle_leave_private)
+        )
         application.add_handler(
             CallbackQueryHandler(self._handle_callback_query)
         )
@@ -62,12 +74,30 @@ class PokerBotController:
         commands = [
             BotCommand("start", "🎰 Start a new poker game"),
             BotCommand("ready", "✋ Join the next round"),
-            BotCommand("private", "🔒 Create private game (Coming Soon)"),
-            BotCommand("join", "🚪 Join private game by code (Coming Soon)"),
-            BotCommand("invite", "📨 Invite user to private game (Coming Soon)"),
-            BotCommand("accept", "✅ Accept private game invitation (Coming Soon)"),
-            BotCommand("decline", "❌ Decline private game invitation (Coming Soon)"),
-            BotCommand("leave", "🚶 Leave private game (Coming Soon)"),
+            BotCommand(
+                "private",
+                "🔒 Create private game (Coming Soon)",
+            ),
+            BotCommand(
+                "join",
+                "🚪 Join private game by code (Coming Soon)",
+            ),
+            BotCommand(
+                "invite",
+                "📨 Invite user to private game (Coming Soon)",
+            ),
+            BotCommand(
+                "accept",
+                "✅ Accept private game invitation (Coming Soon)",
+            ),
+            BotCommand(
+                "decline",
+                "❌ Decline private game invitation (Coming Soon)",
+            ),
+            BotCommand(
+                "leave",
+                "🚶 Leave private game (Coming Soon)",
+            ),
             BotCommand("money", "💰 Claim daily bonus (dice roll)"),
             BotCommand("cards", "🃏 Show your cards again"),
             BotCommand("ban", "⛔ Force AFK player to fold (2min+)"),
