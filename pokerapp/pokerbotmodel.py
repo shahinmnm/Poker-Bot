@@ -3,11 +3,12 @@
 import asyncio
 import datetime
 import logging
+import secrets
 from typing import Awaitable, Callable, List, Optional
 
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
-from telegram.ext import Application, ContextTypes
+from telegram.ext import Application, CallbackContext, ContextTypes
 
 from pokerapp.config import Config
 from pokerapp.privatechatmodel import UserPrivateChatModel
@@ -668,16 +669,290 @@ class PokerBotModel:
         await self._start_betting_round(game, chat_id)
 
     async def create_private_game(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+        self,
+        update: Update,
+        context: CallbackContext,
     ) -> None:
-        """Begin flow for creating a private game."""
+        """
+        Start private game creation flow - show stake selection menu.
 
-        user = update.effective_user
+        This is the entry point when user types /private command.
+        After stake selection, create_private_game_with_stake() is called.
+        """
+        user = update.effective_message.from_user
+        chat_id = update.effective_chat.id
 
+        # Check if user already has an active private game
+        existing_game_key = f"user:{user.id}:private_game"
+        if self._kv.exists(existing_game_key):
+            await update.effective_message.reply_text(
+                "❌ You already have an active private game!\n"
+                "Use /leave to exit your current game first."
+            )
+            return
+
+        # Show stake selection menu
         await self._view.send_stake_selection(
-            chat_id=update.effective_chat.id,
-            user_id=user.id,
+            chat_id=chat_id,
+            user_name=user.full_name
         )
+
+    async def create_private_game_with_stake(
+        self,
+        update: Update,
+        context: CallbackContext,
+        stake_level: str,
+    ) -> None:
+        """
+        Create private game after user selects stake level from button.
+
+        Args:
+            update: Telegram update from callback query
+            context: Callback context
+            stake_level: Selected stake level ("low", "medium", "high")
+        """
+        from pokerapp.private_game import PrivateGame, PrivateGameState
+
+        query = update.callback_query
+        user = query.from_user
+        chat_id = update.effective_chat.id
+
+        # Validate stake level
+        stake_config = self._cfg.PRIVATE_STAKES.get(stake_level)
+        if not stake_config:
+            await query.edit_message_text(
+                f"❌ Invalid stake level: {stake_level}"
+            )
+            return
+
+        # Check user balance
+        user_balance = await self._get_user_balance(user.id)
+        min_buyin = stake_config["min_buyin"]
+
+        if user_balance < min_buyin:
+            await self._view.send_insufficient_balance_error(
+                chat_id=chat_id,
+                required=min_buyin,
+                current=user_balance,
+            )
+            return
+
+        # Generate unique 6-character game code
+        game_code = secrets.token_urlsafe(4).upper()[:6]
+
+        # Create private game instance
+        private_game = PrivateGame(
+            game_code=game_code,
+            host_user_id=user.id,
+            stake_level=stake_level,
+            state=PrivateGameState.LOBBY
+        )
+
+        # Store in Redis
+        game_key = f"private_game:{game_code}"
+        self._kv.set(
+            game_key,
+            private_game.to_json(),
+            ex=3600  # Expire after 1 hour
+        )
+
+        # Link user to game
+        user_game_key = f"user:{user.id}:private_game"
+        self._kv.set(user_game_key, game_code, ex=3600)
+
+        # Show game created confirmation with lobby status
+        await query.edit_message_text(
+            f"✅ Private game created!\n\n"
+            f"🎯 **Game Code:** `{game_code}`\n"
+            f"💰 **Stakes:** {stake_config['name']}\n"
+            f"💵 **Buy-in:** {min_buyin} - {stake_config['max_buyin']}\n\n"
+            f"📨 Share this code with friends:\n"
+            f"`/join {game_code}`\n\n"
+            f"👥 **Players:** 1/{self._cfg.PRIVATE_MAX_PLAYERS}\n"
+            f"• {user.full_name} (Host)\n\n"
+            f"⏳ Waiting for players to join...",
+            parse_mode='Markdown'
+        )
+
+    async def accept_private_game_invite(
+        self,
+        update: Update,
+        context: CallbackContext,
+        game_code: str,
+    ) -> None:
+        """
+        Accept a private game invitation from inline button.
+
+        Args:
+            update: Telegram update from callback query
+            context: Callback context
+            game_code: Game code from callback data
+        """
+        from pokerapp.private_game import PrivateGame, PrivateGameState
+
+        query = update.callback_query
+        user = query.from_user
+
+        # Load game from Redis
+        game_key = f"private_game:{game_code}"
+        game_data = self._kv.get(game_key)
+
+        if not game_data:
+            await query.edit_message_text(
+                "❌ This game no longer exists or has expired."
+            )
+            return
+
+        private_game = PrivateGame.from_json(game_data)
+
+        # Check if user is invited
+        if user.id not in private_game.invited_players:
+            await query.edit_message_text(
+                "❌ You are not invited to this game."
+            )
+            return
+
+        # Check if already accepted
+        invite = private_game.invited_players[user.id]
+        if invite.accepted:
+            await query.edit_message_text(
+                "✅ You already accepted this invitation!"
+            )
+            return
+
+        # Check if game is still accepting players
+        if private_game.state != PrivateGameState.LOBBY:
+            await query.edit_message_text(
+                "❌ This game has already started or finished."
+            )
+            return
+
+        # Check user balance
+        stake_config = self._cfg.PRIVATE_STAKES.get(private_game.stake_level)
+        if not stake_config:
+            await query.edit_message_text(
+                "❌ Stake configuration missing for this game."
+            )
+            return
+        user_balance = await self._get_user_balance(user.id)
+
+        if user_balance < stake_config["min_buyin"]:
+            await query.edit_message_text(
+                f"❌ Insufficient balance!\n\n"
+                f"Required: {stake_config['min_buyin']}\n"
+                f"Your balance: {user_balance}"
+            )
+            return
+
+        # Accept invitation
+        invite.accepted = True
+        invite.accepted_at = int(asyncio.get_event_loop().time())
+
+        # Save updated game
+        self._kv.set(
+            game_key,
+            private_game.to_json(),
+            ex=3600
+        )
+
+        # Link user to game
+        user_game_key = f"user:{user.id}:private_game"
+        self._kv.set(user_game_key, game_code, ex=3600)
+
+        # Update invitation message
+        await query.edit_message_text(
+            f"✅ Invitation accepted!\n\n"
+            f"🎯 **Game Code:** `{game_code}`\n"
+            f"💰 **Stakes:** {stake_config['name']}\n\n"
+            f"You have joined the game lobby.\n"
+            f"Waiting for host to start the game...",
+            parse_mode='Markdown'
+        )
+
+        # Notify host
+        await context.bot.send_message(
+            chat_id=private_game.host_user_id,
+            text=f"✅ {user.full_name} accepted your invitation!"
+        )
+
+    async def decline_private_game_invite(
+        self,
+        update: Update,
+        context: CallbackContext,
+        game_code: str,
+    ) -> None:
+        """
+        Decline a private game invitation from inline button.
+
+        Args:
+            update: Telegram update from callback query
+            context: Callback context
+            game_code: Game code from callback data
+        """
+        from pokerapp.private_game import PrivateGame
+
+        query = update.callback_query
+        user = query.from_user
+
+        # Load game from Redis
+        game_key = f"private_game:{game_code}"
+        game_data = self._kv.get(game_key)
+
+        if not game_data:
+            await query.edit_message_text(
+                "❌ This game no longer exists or has expired."
+            )
+            return
+
+        private_game = PrivateGame.from_json(game_data)
+
+        # Check if user is invited
+        if user.id not in private_game.invited_players:
+            await query.edit_message_text(
+                "❌ You are not invited to this game."
+            )
+            return
+
+        # Remove invitation
+        del private_game.invited_players[user.id]
+
+        # Save updated game
+        self._kv.set(
+            game_key,
+            private_game.to_json(),
+            ex=3600
+        )
+
+        # Update invitation message
+        await query.edit_message_text(
+            "❌ Invitation declined.\n\n"
+            "You can still join later with `/join " + game_code + "`",
+            parse_mode='Markdown'
+        )
+
+        # Notify host
+        await context.bot.send_message(
+            chat_id=private_game.host_user_id,
+            text=f"❌ {user.full_name} declined your invitation."
+        )
+
+    async def _get_user_balance(self, user_id: int) -> int:
+        """
+        Get user's current balance from Redis.
+
+        Args:
+            user_id: Telegram user ID
+
+        Returns:
+            User balance (defaults to initial balance if not set)
+        """
+        balance_key = f"user:{user_id}:balance"
+        balance = self._kv.get(balance_key)
+
+        if balance is None:
+            return getattr(self._cfg, "INITIAL_MONEY", DEFAULT_MONEY)
+
+        return int(balance)
 
     async def join_private_game(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE

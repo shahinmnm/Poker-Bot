@@ -28,9 +28,12 @@ class InMemoryKV:
     def get(self, key: str):  # pragma: no cover - trivial wrapper
         return _to_bytes(self._values.get(key))
 
-    def set(self, key: str, value: Any):  # pragma: no cover - trivial wrapper
+    def set(self, key: str, value: Any, **kwargs: Any):  # pragma: no cover - trivial wrapper
         self._values[key] = value
         return True
+
+    def exists(self, key: str):  # pragma: no cover - trivial wrapper
+        return int(key in self._values or key in self._lists)
 
     def incrby(self, key: str, amount: int):
         current = int(self._values.get(key, 0))
@@ -97,8 +100,15 @@ class ResilientKV:
         self,
         key: str,
         value: Any,
+        **kwargs: Any,
     ):  # pragma: no cover - trivial wrapper
-        return self._call("set", key, value)
+        return self._call("set", key, value, **kwargs)
+
+    def exists(
+        self,
+        key: str,
+    ):
+        return self._call("exists", key)
 
     def incrby(self, key: str, amount: int):
         return self._call("incrby", key, amount)

@@ -2,8 +2,11 @@
 """Configuration management for Poker Telegram Bot."""
 
 import os
-from typing import Iterable, Literal, Optional, cast
+from typing import Dict, Iterable, Literal, Optional, cast
 from urllib.parse import urlparse, urlunparse
+
+
+from pokerapp.entities import STAKE_PRESETS
 
 
 def _first_env(
@@ -141,6 +144,22 @@ class Config:
         # Q9: Private game stake configurations
         self.DEFAULT_STAKE_LEVEL: str = "micro"
         self.ALLOW_CUSTOM_STAKES: bool = True
+        self.PRIVATE_MAX_PLAYERS: int = int(
+            os.getenv("POKERBOT_PRIVATE_MAX_PLAYERS", "6")
+        )
+        self.INITIAL_MONEY: int = int(
+            os.getenv("POKERBOT_INITIAL_MONEY", "1000")
+        )
+        self.PRIVATE_STAKES: Dict[str, Dict[str, object]] = {
+            key: {
+                "name": preset.name,
+                "min_buyin": preset.min_buy_in,
+                "max_buyin": preset.min_buy_in * 5,
+                "small_blind": preset.small_blind,
+                "big_blind": preset.big_blind,
+            }
+            for key, preset in STAKE_PRESETS.items()
+        }
 
         # Q7: Balance validation settings
         self.MINIMUM_BALANCE_MULTIPLIER: int = 20

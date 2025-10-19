@@ -231,7 +231,7 @@ class PokerBotViewer:
     async def send_stake_selection(
         self,
         chat_id: int,
-        user_id: int,
+        user_name: str,
     ) -> None:
         """Send stake selection menu for private game creation."""
 
