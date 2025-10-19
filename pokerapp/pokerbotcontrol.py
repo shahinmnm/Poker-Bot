@@ -2,7 +2,10 @@
 
 import logging
 
-from telegram import BotCommand, Update
+from telegram import (
+    BotCommand,
+    Update,
+)
 from telegram.ext import (
     Application,
     CallbackContext,
