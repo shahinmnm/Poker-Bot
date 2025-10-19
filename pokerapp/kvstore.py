@@ -28,7 +28,8 @@ class InMemoryKV:
     def get(self, key: str):  # pragma: no cover - trivial wrapper
         return _to_bytes(self._values.get(key))
 
-    def set(self, key: str, value: Any, **kwargs: Any):  # pragma: no cover - trivial wrapper
+    # pragma: no cover - trivial wrapper
+    def set(self, key: str, value: Any, **kwargs: Any):
         self._values[key] = value
         return True
 
@@ -41,10 +42,11 @@ class InMemoryKV:
         self._values[key] = current
         return current
 
+    # pragma: no cover - trivial wrapper
     def delete(
         self,
         key: str,
-    ):  # pragma: no cover - trivial wrapper
+    ):
         removed = 0
         if key in self._values:
             del self._values[key]
@@ -54,18 +56,20 @@ class InMemoryKV:
             removed += 1
         return removed
 
+    # pragma: no cover - trivial wrapper
     def rpush(
         self,
         key: str,
         value: Any,
-    ):  # pragma: no cover - trivial wrapper
+    ):
         self._lists[key].append(value)
         return len(self._lists[key])
 
+    # pragma: no cover - trivial wrapper
     def rpop(
         self,
         key: str,
-    ):  # pragma: no cover - trivial wrapper
+    ):
         if key not in self._lists or not self._lists[key]:
             return None
         value = self._lists[key].pop()
@@ -96,12 +100,13 @@ class ResilientKV:
     ):  # pragma: no cover - trivial wrapper
         return self._call("get", key)
 
+    # pragma: no cover - trivial wrapper
     def set(
         self,
         key: str,
         value: Any,
         **kwargs: Any,
-    ):  # pragma: no cover - trivial wrapper
+    ):
         return self._call("set", key, value, **kwargs)
 
     def exists(
@@ -113,23 +118,26 @@ class ResilientKV:
     def incrby(self, key: str, amount: int):
         return self._call("incrby", key, amount)
 
+    # pragma: no cover - trivial wrapper
     def delete(
         self,
         key: str,
-    ):  # pragma: no cover - trivial wrapper
+    ):
         return self._call("delete", key)
 
+    # pragma: no cover - trivial wrapper
     def rpush(
         self,
         key: str,
         value: Any,
-    ):  # pragma: no cover - trivial wrapper
+    ):
         return self._call("rpush", key, value)
 
+    # pragma: no cover - trivial wrapper
     def rpop(
         self,
         key: str,
-    ):  # pragma: no cover - trivial wrapper
+    ):
         return self._call("rpop", key)
 
 
