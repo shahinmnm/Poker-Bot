@@ -732,8 +732,9 @@ class PokerBotModel:
         if user_balance < min_buyin:
             await self._view.send_insufficient_balance_error(
                 chat_id=chat_id,
-                required=min_buyin,
-                current=user_balance,
+                required_amount=min_buyin,
+                current_balance=user_balance,
+                stake_name=stake_config["name"],
             )
             return
 
@@ -761,16 +762,19 @@ class PokerBotModel:
         self._kv.set(user_game_key, game_code, ex=3600)
 
         # Show game created confirmation with lobby status
-        await query.edit_message_text(
-            f"✅ Private game created!\n\n"
+        message = (
+            "✅ Private game created!\n\n"
             f"🎯 **Game Code:** `{game_code}`\n"
             f"💰 **Stakes:** {stake_config['name']}\n"
             f"💵 **Buy-in:** {min_buyin} - {stake_config['max_buyin']}\n\n"
-            f"📨 Share this code with friends:\n"
+            "📨 Share this code with friends:\n"
             f"`/join {game_code}`\n\n"
             f"👥 **Players:** 1/{self._cfg.PRIVATE_MAX_PLAYERS}\n"
             f"• {user.full_name} (Host)\n\n"
-            f"⏳ Waiting for players to join...",
+            "⏳ Waiting for players to join..."
+        )
+        await query.edit_message_text(
+            text=message,
             parse_mode='Markdown'
         )
 
@@ -798,10 +802,11 @@ class PokerBotModel:
         game_data = self._kv.get(game_key)
 
         if not game_data:
-            await query.edit_message_text(
-                "❌ This game no longer exists or has expired."
-            )
+            await query.answer("❌ Game not found!", show_alert=True)
             return
+
+        if isinstance(game_data, bytes):
+            game_data = game_data.decode('utf-8')
 
         private_game = PrivateGame.from_json(game_data)
 
@@ -837,10 +842,11 @@ class PokerBotModel:
         user_balance = await self._get_user_balance(user.id)
 
         if user_balance < stake_config["min_buyin"]:
-            await query.edit_message_text(
-                f"❌ Insufficient balance!\n\n"
-                f"Required: {stake_config['min_buyin']}\n"
-                f"Your balance: {user_balance}"
+            await self._view.send_insufficient_balance_error(
+                chat_id=update.effective_chat.id,
+                required_amount=stake_config["min_buyin"],
+                current_balance=user_balance,
+                stake_name=stake_config["name"],
             )
             return
 
@@ -860,12 +866,15 @@ class PokerBotModel:
         self._kv.set(user_game_key, game_code, ex=3600)
 
         # Update invitation message
-        await query.edit_message_text(
-            f"✅ Invitation accepted!\n\n"
+        message = (
+            "✅ Invitation accepted!\n\n"
             f"🎯 **Game Code:** `{game_code}`\n"
             f"💰 **Stakes:** {stake_config['name']}\n\n"
-            f"You have joined the game lobby.\n"
-            f"Waiting for host to start the game...",
+            "You have joined the game lobby.\n\n"
+            "Waiting for host to start the game..."
+        )
+        await query.edit_message_text(
+            text=message,
             parse_mode='Markdown'
         )
 
@@ -899,10 +908,11 @@ class PokerBotModel:
         game_data = self._kv.get(game_key)
 
         if not game_data:
-            await query.edit_message_text(
-                "❌ This game no longer exists or has expired."
-            )
+            await query.answer("❌ Game not found!", show_alert=True)
             return
+
+        if isinstance(game_data, bytes):
+            game_data = game_data.decode('utf-8')
 
         private_game = PrivateGame.from_json(game_data)
 
@@ -924,9 +934,12 @@ class PokerBotModel:
         )
 
         # Update invitation message
-        await query.edit_message_text(
+        message = (
             "❌ Invitation declined.\n\n"
-            "You can still join later with `/join " + game_code + "`",
+            "You can still join later with `/join " + game_code + "`"
+        )
+        await query.edit_message_text(
+            text=message,
             parse_mode='Markdown'
         )
 
@@ -950,7 +963,7 @@ class PokerBotModel:
         balance = self._kv.get(balance_key)
 
         if balance is None:
-            return getattr(self._cfg, "INITIAL_MONEY", DEFAULT_MONEY)
+            return getattr(self._cfg, "INITIAL_MONEY", 1000)
 
         return int(balance)
 
