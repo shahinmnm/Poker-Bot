@@ -732,9 +732,8 @@ class PokerBotModel:
         if user_balance < min_buyin:
             await self._view.send_insufficient_balance_error(
                 chat_id=chat_id,
-                required_amount=min_buyin,
-                current_balance=user_balance,
-                stake_name=stake_config["name"],
+                required=min_buyin,
+                current=user_balance,
             )
             return
 
@@ -844,9 +843,8 @@ class PokerBotModel:
         if user_balance < stake_config["min_buyin"]:
             await self._view.send_insufficient_balance_error(
                 chat_id=update.effective_chat.id,
-                required_amount=stake_config["min_buyin"],
-                current_balance=user_balance,
-                stake_name=stake_config["name"],
+                required=stake_config["min_buyin"],
+                current=user_balance,
             )
             return
 
