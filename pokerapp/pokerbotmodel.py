@@ -410,11 +410,32 @@ class PokerBotModel:
                     exc,
                 )
 
+            reply_to_message_id = player.ready_message_id
+
+            if isinstance(reply_to_message_id, bytes):
+                reply_to_message_id = reply_to_message_id.decode("utf-8")
+
+            if isinstance(reply_to_message_id, str):
+                reply_to_message_id = reply_to_message_id.strip()
+                if reply_to_message_id.isdigit():
+                    reply_to_message_id = int(reply_to_message_id)
+                else:
+                    reply_to_message_id = None
+
+            try:
+                reply_to_message_id = (
+                    int(reply_to_message_id)
+                    if reply_to_message_id is not None
+                    else None
+                )
+            except (TypeError, ValueError):
+                reply_to_message_id = None
+
             await self._view.send_cards(
                 chat_id=chat_id,
                 cards=player.cards,
                 mention_markdown=player.mention_markdown,
-                ready_message_id=player.ready_message_id,
+                ready_message_id=reply_to_message_id,
             )
 
         await asyncio.gather(
@@ -1101,6 +1122,9 @@ class PokerBotModel:
 
         players: List[Player] = []
         player_names: List[str] = []
+        fallback_ready_message_id = (
+            query.message.message_id if query.message else None
+        )
 
         async def resolve_display_name(player_id: int) -> str:
             invite = accepted_invites.get(player_id)
@@ -1150,7 +1174,7 @@ class PokerBotModel:
                     user_id=player_id,
                     mention_markdown=mention,
                     wallet=WalletManagerModel(player_id, self._kv),
-                    ready_message_id=f"private:{game_code}:{index}",
+                    ready_message_id=fallback_ready_message_id,
                 )
             )
             player_names.append(display_name)
