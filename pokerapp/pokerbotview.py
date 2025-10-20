@@ -11,6 +11,8 @@ from telegram import (
 from telegram.constants import ParseMode
 from io import BytesIO
 
+from typing import Optional
+
 from pokerapp.desk import DeskImageGenerator
 from pokerapp.cards import Cards
 from pokerapp.entities import (
@@ -153,17 +155,21 @@ class PokerBotViewer:
             chat_id: ChatId,
             cards: Cards,
             mention_markdown: Mention,
-            ready_message_id: str,
+            ready_message_id: Optional[MessageId] = None,
     ) -> None:
         markup = PokerBotViewer._get_cards_markup(cards)
-        await self._bot.send_message(
+        send_kwargs = dict(
             chat_id=chat_id,
             text="Showing cards to " + mention_markdown,
             reply_markup=markup,
-            reply_to_message_id=ready_message_id,
             parse_mode=ParseMode.MARKDOWN,
             disable_notification=True,
         )
+
+        if ready_message_id is not None:
+            send_kwargs["reply_to_message_id"] = ready_message_id
+
+        await self._bot.send_message(**send_kwargs)
 
     @ staticmethod
     def define_check_call_action(
