@@ -1243,9 +1243,154 @@ class PokerBotModel:
     ) -> None:
         """Handle user leaving lobby."""
 
-        await update.effective_message.reply_text(
-            "🚪 You left the private lobby."
+        user = update.effective_user
+        user_id = user.id
+        message = update.effective_message
+        response_chat_id = (
+            message.chat_id if message is not None else update.effective_chat.id
         )
+
+        async def send_response(text: str) -> None:
+            if message is not None:
+                await self._view.send_message_reply(
+                    chat_id=response_chat_id,
+                    message_id=message.message_id,
+                    text=text,
+                )
+            else:
+                await self._view.send_message(
+                    chat_id=response_chat_id,
+                    text=text,
+                )
+
+        user_game_key = f"user:{user_id}:private_game"
+        game_chat_id = self._kv.get(user_game_key)
+
+        if isinstance(game_chat_id, bytes):
+            game_chat_id = game_chat_id.decode("utf-8")
+
+        if not game_chat_id:
+            await send_response("❌ You're not in any private game.")
+            return
+
+        try:
+            game_chat_id_int = int(game_chat_id)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid private game chat id stored for user %s: %s",
+                user_id,
+                game_chat_id,
+            )
+            self._kv.delete(user_game_key)
+            await send_response("❌ Game session not found.")
+            return
+
+        chat_data = self._application.chat_data.get(game_chat_id_int, {})
+        game = chat_data.get(KEY_CHAT_DATA_GAME)
+
+        if game is None:
+            logger.warning(
+                "No game session found for chat %s when user %s tried to leave",
+                game_chat_id_int,
+                user_id,
+            )
+            self._kv.delete(user_game_key)
+            await send_response("❌ Game session not found.")
+            return
+
+        if game.state != GameState.INITIAL:
+            await send_response("❌ Cannot leave started game. Use buttons to fold.")
+            return
+
+        player_entry = next(
+            (
+                p
+                for p in game.players
+                if str(p.user_id) == str(user_id)
+            ),
+            None,
+        )
+
+        if player_entry is None:
+            self._kv.delete(user_game_key)
+            await send_response("❌ You're not in any private game.")
+            return
+
+        player_mention = player_entry.mention_markdown
+        is_host = bool(game.players) and str(game.players[0].user_id) == str(user_id)
+
+        game.players = [
+            p for p in game.players if str(p.user_id) != str(user_id)
+        ]
+        game.ready_users.discard(user_id)
+
+        self._kv.delete(user_game_key)
+
+        if not game.players:
+            self._application.chat_data.pop(game_chat_id_int, None)
+            self._kv.delete(f"game:{game_chat_id_int}")
+
+            game_code = getattr(game, "code", None)
+            if game_code:
+                self._kv.delete(f"private_game:{game_code}")
+
+            logger.info(
+                "User %s left and game %s is now empty. Game deleted.",
+                user_id,
+                game_chat_id_int,
+            )
+
+            await send_response(
+                "🚪 You left the private game.\nYour seat is now available for others."
+            )
+            return
+
+        if is_host:
+            new_host = game.players[0]
+            logger.info(
+                "Host %s left private game %s, new host is %s",
+                user_id,
+                game_chat_id_int,
+                new_host.user_id,
+            )
+        else:
+            new_host = None
+
+        self._save_game(game_chat_id_int, game)
+
+        await send_response(
+            "🚪 You left the private game.\nYour seat is now available for others."
+        )
+
+        lobby_text = f"👋 {player_mention} left the game.\n"
+
+        if new_host is not None:
+            lobby_text += f"👑 {new_host.mention_markdown} is now the host!\n\n"
+        else:
+            lobby_text += "\n"
+
+        lobby_text += (
+            f"👥 Current players ({len(game.players)}/{MAX_PLAYERS}):\n"
+        )
+
+        for idx, player in enumerate(game.players, 1):
+            lobby_text += f"{idx}. {player.mention_markdown}"
+            if idx == 1:
+                lobby_text += " 👑 (Host)"
+            lobby_text += "\n"
+
+        try:
+            await self._view.send_message(
+                chat_id=game_chat_id_int,
+                text=lobby_text,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to notify lobby %s about player %s leaving: %s",
+                game_chat_id_int,
+                user_id,
+                exc,
+            )
 
     async def start_private_game(
         self,
