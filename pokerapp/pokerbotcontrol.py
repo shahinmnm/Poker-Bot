@@ -312,12 +312,11 @@ Send 💰 /money once per day for free chips!
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /accept command - placeholder until model ready."""
+        """Handle /accept command (manual acceptance without button)."""
 
         await update.effective_message.reply_text(
-            "✅ Accept Invitation - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "You'll soon be able to accept game invites! 🎉"
+            "ℹ️ To accept an invitation, use the buttons in the invitation message.\n\n"
+            "If you lost the message, ask the host to re-invite you!"
         )
 
     async def _handle_decline_invite(
@@ -325,12 +324,11 @@ Send 💰 /money once per day for free chips!
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Handle /decline command - placeholder until model ready."""
+        """Handle /decline command (manual decline without button)."""
 
         await update.effective_message.reply_text(
-            "❌ Decline Invitation - Coming Soon!\n\n"
-            "This feature is under development.\n"
-            "You'll soon be able to decline invites! 👋"
+            "ℹ️ To decline an invitation, use the buttons in the invitation message.\n\n"
+            "If you lost the message, you can ignore it (invitations expire in 1 hour)."
         )
 
     async def _handle_leave_private(
@@ -362,9 +360,9 @@ Send 💰 /money once per day for free chips!
         if callback_data.startswith("stake:"):
             await self._handle_stake_selection(update, context)
         elif callback_data.startswith("invite_accept:"):
-            await self._handle_invite_accept(update, context)
+            await self._model.accept_invitation(update, context)
         elif callback_data.startswith("invite_decline:"):
-            await self._handle_invite_decline(update, context)
+            await self._model.decline_invitation(update, context)
         elif callback_data.startswith("private_start:"):
             await self._model.start_private_game(update, context)
         elif callback_data.startswith("private_leave:"):
@@ -407,40 +405,3 @@ Send 💰 /money once per day for free chips!
             update, context, stake_level
         )
 
-    async def _handle_invite_accept(
-        self,
-        update: Update,
-        context: CallbackContext,
-    ) -> None:
-        """Handle invitation acceptance from inline keyboard."""
-        query = update.callback_query
-
-        if not query or not query.data:
-            return
-
-        # Parse game code from callback data (e.g., "invite_accept:ABC123")
-        game_code = query.data.split(":", 1)[1]
-
-        # Call model to accept invitation
-        await self._model.accept_private_game_invite(
-            update, context, game_code
-        )
-
-    async def _handle_invite_decline(
-        self,
-        update: Update,
-        context: CallbackContext,
-    ) -> None:
-        """Handle invitation decline from inline keyboard."""
-        query = update.callback_query
-
-        if not query or not query.data:
-            return
-
-        # Parse game code from callback data (e.g., "invite_decline:ABC123")
-        game_code = query.data.split(":", 1)[1]
-
-        # Call model to decline invitation
-        await self._model.decline_private_game_invite(
-            update, context, game_code
-        )
