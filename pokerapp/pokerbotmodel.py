@@ -1704,7 +1704,31 @@ class PokerBotModel:
             len(players),
         )
 
-        # === TODO: STEP 2C - PERSIST GAME STATE TO REDIS ===
+        # === STEP 2C: PERSIST GAME STATE TO REDIS ===
+
+        # Create game snapshot for monitoring/recovery
+        game_snapshot = {
+            "id": game.id,
+            "chat_id": chat_id,
+            "mode": game.mode.value,
+            "state": game.state.name,
+            "players": accepted_players,
+            "stake_level": private_game.stake_level,
+            "small_blind": small_blind,
+            "big_blind": big_blind,
+            "game_code": game_code,
+            "created_at": int(datetime.datetime.utcnow().timestamp()),
+        }
+
+        game_key = ":".join(["game", str(chat_id)])
+        self._kv.set(game_key, json.dumps(game_snapshot), ex=3600)
+
+        logger.info(
+            "Persisted game snapshot to Redis (key=%s, ttl=3600s)",
+            game_key,
+        )
+
+        # === TODO: STEP 2D - CLEANUP LOBBY STATE ===
 
         # TODO: Game engine initialization (Step 2)
         # TODO: State cleanup (Step 3)
