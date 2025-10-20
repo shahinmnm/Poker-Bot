@@ -1264,25 +1264,132 @@ class PokerBotModel:
                 )
 
         user_game_key = f"user:{user_id}:private_game"
-        game_chat_id = self._kv.get(user_game_key)
+        game_identifier = self._kv.get(user_game_key)
 
-        if isinstance(game_chat_id, bytes):
-            game_chat_id = game_chat_id.decode("utf-8")
+        if isinstance(game_identifier, bytes):
+            game_identifier = game_identifier.decode("utf-8")
 
-        if not game_chat_id:
+        if not game_identifier:
             await send_response("❌ You're not in any private game.")
             return
 
         try:
-            game_chat_id_int = int(game_chat_id)
+            game_chat_id_int = int(game_identifier)
         except (TypeError, ValueError):
-            logger.warning(
-                "Invalid private game chat id stored for user %s: %s",
-                user_id,
-                game_chat_id,
-            )
+            from pokerapp.private_game import PrivateGame
+
+            game_code = str(game_identifier).strip().upper()
+
+            if len(game_code) != 6 or not game_code.isalnum():
+                logger.warning(
+                    "Invalid private game identifier stored for user %s: %s",
+                    user_id,
+                    game_identifier,
+                )
+                self._kv.delete(user_game_key)
+                await send_response("❌ Game session not found.")
+                return
+
+            private_game_key = f"private_game:{game_code}"
+            private_game_data = self._kv.get(private_game_key)
+
+            if isinstance(private_game_data, bytes):
+                private_game_data = private_game_data.decode("utf-8")
+
+            if not private_game_data:
+                logger.warning(
+                    "Private game %s referenced by user %s not found in Redis",
+                    game_code,
+                    user_id,
+                )
+                self._kv.delete(user_game_key)
+                await send_response("❌ Game session not found.")
+                return
+
+            private_game = PrivateGame.from_json(private_game_data)
+
+            if private_game.host_user_id == user_id:
+                logger.info(
+                    "Host %s left private game %s before lobby creation. Cleaning up.",
+                    user_id,
+                    game_code,
+                )
+
+                for invited_user_id, invite in list(
+                    private_game.invited_players.items()
+                ):
+                    invite_key = ":".join(
+                        ["private_invite", str(invited_user_id), game_code]
+                    )
+                    self._kv.delete(invite_key)
+
+                    if invite.accepted:
+                        invited_user_game_key = ":".join(
+                            ["user", str(invited_user_id), "private_game"]
+                        )
+                        self._kv.delete(invited_user_game_key)
+
+                        try:
+                            await context.bot.send_message(
+                                chat_id=invited_user_id,
+                                text=(
+                                    "❌ The private game you joined has been "
+                                    "cancelled by the host."
+                                ),
+                            )
+                        except Exception as exc:
+                            logger.debug(
+                                "Failed to notify invited user %s about cancelled "
+                                "game %s: %s",
+                                invited_user_id,
+                                game_code,
+                                exc,
+                            )
+
+                self._kv.delete(private_game_key)
+                self._kv.delete(user_game_key)
+
+                await send_response(
+                    "🚪 You left the private game lobby. The session has been cancelled."
+                )
+                return
+
+            invite = private_game.invited_players.get(user_id)
+
+            if invite is None:
+                logger.info(
+                    "User %s tried to leave private game %s but was not an invited player",
+                    user_id,
+                    game_code,
+                )
+                self._kv.delete(user_game_key)
+                await send_response("❌ You're not in any private game.")
+                return
+
+            invite.accepted = False
+            invite.accepted_at = None
+            private_game.invited_players[user_id] = invite
+
+            self._kv.set(private_game_key, private_game.to_json(), ex=3600)
             self._kv.delete(user_game_key)
-            await send_response("❌ Game session not found.")
+
+            try:
+                await context.bot.send_message(
+                    chat_id=private_game.host_user_id,
+                    text=(
+                        f"ℹ️ {user.full_name} left private game {game_code}."
+                    ),
+                )
+            except Exception as exc:
+                logger.debug(
+                    "Failed to notify host %s about player %s leaving game %s: %s",
+                    private_game.host_user_id,
+                    user_id,
+                    game_code,
+                    exc,
+                )
+
+            await send_response("🚪 You left the private game lobby.")
             return
 
         chat_data = self._application.chat_data.get(game_chat_id_int, {})
