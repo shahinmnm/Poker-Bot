@@ -13,7 +13,7 @@ from telegram.ext import Application, CallbackContext, ContextTypes
 from telegram.helpers import escape_markdown
 
 from pokerapp.config import Config
-from pokerapp.cards import get_shuffled_deck
+from pokerapp.cards import get_cards
 from pokerapp.privatechatmodel import UserPrivateChatModel
 from pokerapp.entities import (
     Game,
@@ -246,7 +246,7 @@ class PokerBotModel:
         game.players.sort(key=lambda p: index(old_players_ids, p.user_id))
 
         game.state = GameState.ROUND_PRE_FLOP
-        await self._divide_cards(game=game, chat_id=chat_id)
+        await self._divide_cards(game=game, chat_id=chat_id, context=context)
 
         game.current_player_index = 1
         self._coordinator.apply_pre_flop_blinds(
@@ -428,17 +428,16 @@ class PokerBotModel:
                 game.remain_cards.pop(),
             ]
 
-    async def _send_private_cards_to_all(
+    async def _divide_cards(
         self,
         game: Game,
         chat_id: ChatId,
+        context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
-        await self._send_cards_batch(game.players, chat_id)
-
-    async def _divide_cards(self, game: Game, chat_id: ChatId) -> None:
         self._deal_cards_to_players(game)
 
-        await self._send_private_cards_to_all(game, chat_id)
+        await self._send_cards_batch(game.players, chat_id)
+        await self._send_private_cards_to_all(game, context)
 
         logger.info(
             "Cards distributed to %s players concurrently",
@@ -1224,7 +1223,7 @@ class PokerBotModel:
     def _deal_cards_to_players(self, game: Game) -> None:
         """Deal two cards to each player and store the remaining deck."""
 
-        deck = get_shuffled_deck()
+        deck = get_cards()
 
         for player in game.players:
             player.cards.clear()
@@ -1238,9 +1237,13 @@ class PokerBotModel:
     async def _send_private_cards_to_all(
         self,
         game: Game,
-        context: CallbackContext,
+        context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         """Send private card images to all players."""
+
+        if not context or not getattr(context, "bot", None):
+            logger.warning("Cannot send private cards without a bot context")
+            return
 
         for player in game.players:
             try:
