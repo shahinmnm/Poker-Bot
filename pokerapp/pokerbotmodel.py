@@ -1062,13 +1062,16 @@ class PokerBotModel:
             )
             return
 
+        from pokerapp.private_game import (
+            PrivateGame,
+            PrivateGameInvite,
+            PrivateGameState,
+        )
+
         lobby_key = f"private_game:{game_code}"
-        game_chat_id = self._kv.get(lobby_key)
+        game_data = self._kv.get(lobby_key)
 
-        if isinstance(game_chat_id, bytes):
-            game_chat_id = game_chat_id.decode("utf-8")
-
-        if not game_chat_id:
+        if not game_data:
             await self._view.send_message_reply(
                 chat_id=chat_id,
                 text=(
@@ -1078,10 +1081,18 @@ class PokerBotModel:
                 message_id=update.effective_message.message_id,
             )
             return
+
+        if isinstance(game_data, bytes):
+            game_data = game_data.decode("utf-8")
 
         try:
-            game_chat_id = int(game_chat_id)
-        except (TypeError, ValueError):
+            private_game = PrivateGame.from_json(game_data)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "Failed to deserialize private game %s: %s",
+                game_code,
+                exc,
+            )
             await self._view.send_message_reply(
                 chat_id=chat_id,
                 text=(
@@ -1091,6 +1102,19 @@ class PokerBotModel:
                 message_id=update.effective_message.message_id,
             )
             return
+
+        if private_game.state != PrivateGameState.LOBBY:
+            await self._view.send_message_reply(
+                chat_id=chat_id,
+                text=(
+                    f"❌ Game ‘{game_code}’ has already started\n\n"
+                    "You cannot join a game in progress"
+                ),
+                message_id=update.effective_message.message_id,
+            )
+            return
+
+        game_chat_id = private_game.host_user_id
 
         game = self._game(game_chat_id)
 
@@ -1153,6 +1177,8 @@ class PokerBotModel:
             )
             return
 
+        loop_time = int(asyncio.get_event_loop().time())
+
         try:
             user_chat = await context.bot.get_chat(user_id)
             username = getattr(user_chat, "username", None)
@@ -1166,11 +1192,27 @@ class PokerBotModel:
                     user_id,
                 )
         except Exception:
+            username = None
             display_name = f"User{user_id}"
             mention = "[{}](tg://user?id={})".format(
                 escape_markdown(display_name, version=1),
                 user_id,
             )
+
+        invite = private_game.invited_players.get(user_id)
+
+        if invite is None:
+            private_game.invited_players[user_id] = PrivateGameInvite(
+                user_id=user_id,
+                username=username or display_name,
+                invited_at=loop_time,
+                accepted=True,
+                accepted_at=loop_time,
+            )
+        else:
+            invite.accepted = True
+            invite.accepted_at = loop_time
+            private_game.invited_players[user_id] = invite
 
         player = Player(
             user_id=user_id,
@@ -1182,6 +1224,12 @@ class PokerBotModel:
         game.players.append(player)
 
         self._save_game(game_chat_id, game)
+
+        self._kv.set(
+            lobby_key,
+            private_game.to_json(),
+            ex=3600,
+        )
 
         user_game_key = f"user:{user_id}:private_game"
         self._kv.set(user_game_key, game_chat_id)
