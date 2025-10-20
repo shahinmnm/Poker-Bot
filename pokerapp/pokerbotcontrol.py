@@ -315,8 +315,11 @@ Send 💰 /money once per day for free chips!
         """Handle /accept command (manual acceptance without button)."""
 
         await update.effective_message.reply_text(
-            "ℹ️ To accept an invitation, use the buttons in the invitation message.\n\n"
-            "If you lost the message, ask the host to re-invite you!"
+            (
+                "ℹ️ To accept an invitation, use the buttons in the "
+                "invitation message.\n\n"
+                "If you lost the message, ask the host to re-invite you!"
+            )
         )
 
     async def _handle_decline_invite(
@@ -327,8 +330,12 @@ Send 💰 /money once per day for free chips!
         """Handle /decline command (manual decline without button)."""
 
         await update.effective_message.reply_text(
-            "ℹ️ To decline an invitation, use the buttons in the invitation message.\n\n"
-            "If you lost the message, you can ignore it (invitations expire in 1 hour)."
+            (
+                "ℹ️ To decline an invitation, use the buttons in the "
+                "invitation message.\n\n"
+                "If you lost the message, you can ignore it (invitations "
+                "expire in 1 hour)."
+            )
         )
 
     async def _handle_leave_private(
@@ -404,4 +411,3 @@ Send 💰 /money once per day for free chips!
         await self._model.create_private_game_with_stake(
             update, context, stake_level
         )
-

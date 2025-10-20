@@ -130,16 +130,20 @@ class PokerBotModel:
         if not username:
             return
 
-        key = f"username:{username.lower()}"
+        key = "username:" + username.lower()
         try:
             self._kv.set(key, str(user_id), ex=86400 * 30)
         except Exception as exc:
-            logger.debug("Failed to cache username mapping for %s: %s", username, exc)
+            logger.debug(
+                "Failed to cache username mapping for %s: %s",
+                username,
+                exc,
+            )
 
     def _lookup_user_by_username(self, username: str) -> Optional[int]:
         """Resolve @username to user_id."""
 
-        key = f"username:{username.lstrip('@').lower()}"
+        key = "username:" + username.lstrip("@").lower()
         user_id = self._kv.get(key)
 
         if isinstance(user_id, bytes):
@@ -1331,13 +1335,16 @@ class PokerBotModel:
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Host invites player to their private game. Usage: /invite @username"""
+        """Host invites player to their private game.
+
+        Usage: /invite @username
+        """
 
         user = update.effective_user
         self._track_user(user.id, getattr(user, "username", None))
 
         # Check if user has active private game
-        user_game_key = f"user:{user.id}:private_game"
+        user_game_key = "user:" + str(user.id) + ":private_game"
         game_code = self._kv.get(user_game_key)
 
         if isinstance(game_code, bytes):
@@ -1346,7 +1353,10 @@ class PokerBotModel:
         if not game_code:
             await self._send_response(
                 update,
-                "❌ You don't have an active private game.\n\nCreate one with /private",
+                (
+                    "❌ You don't have an active private game.\n\n"
+                    "Create one with /private"
+                ),
             )
             return
 
@@ -1380,7 +1390,7 @@ class PokerBotModel:
             return
 
         # Check if already in game
-        target_game_key = f"user:{target_user_id}:private_game"
+        target_game_key = "user:" + str(target_user_id) + ":private_game"
         if self._kv.get(target_game_key):
             await self._send_response(
                 update,
@@ -1389,7 +1399,7 @@ class PokerBotModel:
             return
 
         # Load game data
-        game_key = f"private_game:{game_code}"
+        game_key = "private_game:" + str(game_code)
         game_json = self._kv.get(game_key)
 
         if isinstance(game_json, bytes):
@@ -1405,11 +1415,14 @@ class PokerBotModel:
         try:
             stake_config = self._cfg.PRIVATE_STAKES[stake_level]
         except KeyError:
-            await self._send_response(update, "❌ Game stakes are misconfigured.")
+            await self._send_response(
+                update,
+                "❌ Game stakes are misconfigured.",
+            )
             return
 
         # Store invitation
-        invite_key = f"invite:{game_code}:{target_user_id}"
+        invite_key = "invite:" + str(game_code) + ":" + str(target_user_id)
         invite_data = {
             "host_id": user.id,
             "host_name": user.first_name,
@@ -1420,7 +1433,7 @@ class PokerBotModel:
         self._kv.set(invite_key, json.dumps(invite_data), ex=3600)
 
         # Track pending invite
-        pending_key = f"user:{target_user_id}:pending_invites"
+        pending_key = "user:" + str(target_user_id) + ":pending_invites"
         try:
             self._kv.sadd(pending_key, game_code)
             self._kv.expire(pending_key, 3600)
@@ -1485,7 +1498,7 @@ class PokerBotModel:
             return
 
         # Validate invitation exists
-        invite_key = f"invite:{game_code}:{user.id}"
+        invite_key = "invite:" + str(game_code) + ":" + str(user.id)
         invite_json = self._kv.get(invite_key)
 
         if isinstance(invite_json, bytes):
@@ -1524,15 +1537,17 @@ class PokerBotModel:
             wallet,
             min_buyin,
         ):
+            required_chips = format(min_buyin, ",")
+            balance_chips = format(wallet.value(), ",")
             await query.edit_message_text(
-                "❌ Insufficient balance!\n\n"
-                f"Required: {min_buyin:,} chips\n"
-                f"Your balance: {wallet.value():,} chips",
+                "❌ Insufficient balance!\n\n",
+                f"Required: {required_chips} chips\n",
+                f"Your balance: {balance_chips} chips",
             )
             return
 
         # Load game
-        game_key = f"private_game:{game_code}"
+        game_key = "private_game:" + str(game_code)
         game_json = self._kv.get(game_key)
 
         if isinstance(game_json, bytes):
@@ -1560,7 +1575,7 @@ class PokerBotModel:
             self._kv.set(game_key, game.to_json(), ex=3600)
 
         # Link user to game
-        user_game_key = f"user:{user.id}:private_game"
+        user_game_key = "user:" + str(user.id) + ":private_game"
         self._kv.set(user_game_key, game_code, ex=3600)
 
         # Update invitation status
@@ -1568,7 +1583,7 @@ class PokerBotModel:
         self._kv.set(invite_key, json.dumps(invite_data), ex=3600)
 
         # Remove from pending
-        pending_key = f"user:{user.id}:pending_invites"
+        pending_key = "user:" + str(user.id) + ":pending_invites"
         try:
             self._kv.srem(pending_key, game_code)
         except Exception:
@@ -1619,7 +1634,7 @@ class PokerBotModel:
             return
 
         # Validate invitation
-        invite_key = f"invite:{game_code}:{user.id}"
+        invite_key = "invite:" + str(game_code) + ":" + str(user.id)
         invite_json = self._kv.get(invite_key)
 
         if isinstance(invite_json, bytes):
@@ -1638,7 +1653,7 @@ class PokerBotModel:
         self._kv.set(invite_key, json.dumps(invite_data), ex=3600)
 
         # Remove from pending
-        pending_key = f"user:{user.id}:pending_invites"
+        pending_key = "user:" + str(user.id) + ":pending_invites"
         try:
             self._kv.srem(pending_key, game_code)
         except Exception:
