@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime
+import json
 import logging
 import secrets
 from typing import Awaitable, Callable, List, Optional
@@ -9,11 +10,13 @@ from typing import Awaitable, Callable, List, Optional
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
 from telegram.ext import Application, CallbackContext, ContextTypes
+from telegram.helpers import escape_markdown
 
 from pokerapp.config import Config
 from pokerapp.privatechatmodel import UserPrivateChatModel
 from pokerapp.entities import (
     Game,
+    GameMode,
     GameState,
     Player,
     ChatId,
@@ -419,14 +422,24 @@ class PokerBotModel:
             return_exceptions=True,
         )
 
-    async def _divide_cards(self, game: Game, chat_id: ChatId) -> None:
+    def _deal_cards_to_players(self, game: Game) -> None:
         for player in game.players:
             player.cards = [
                 game.remain_cards.pop(),
                 game.remain_cards.pop(),
             ]
 
+    async def _send_private_cards_to_all(
+        self,
+        game: Game,
+        chat_id: ChatId,
+    ) -> None:
         await self._send_cards_batch(game.players, chat_id)
+
+    async def _divide_cards(self, game: Game, chat_id: ChatId) -> None:
+        self._deal_cards_to_players(game)
+
+        await self._send_private_cards_to_all(game, chat_id)
 
         logger.info(
             "Cards distributed to %s players concurrently",
@@ -1016,9 +1029,195 @@ class PokerBotModel:
         update: Update,
         context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
-        """Start private game if conditions met."""
+        """Start private game if lobby conditions met."""
 
-        await update.effective_message.reply_text("🎰 Starting private game…")
+        from pokerapp.private_game import PrivateGame, PrivateGameState
+
+        query = update.callback_query
+
+        if query is None or not query.data:
+            return
+
+        user_id = query.from_user.id
+
+        try:
+            _, game_code = query.data.split(":", 1)
+        except ValueError:
+            await query.answer("❌ Invalid start request!", show_alert=True)
+            return
+
+        redis_key = ":".join(["private_game", game_code])
+        game_data = self._kv.get(redis_key)
+
+        if not game_data:
+            await query.answer("❌ Game not found!", show_alert=True)
+            return
+
+        if isinstance(game_data, bytes):
+            game_data = game_data.decode("utf-8")
+
+        private_game = PrivateGame.from_json(game_data)
+
+        if private_game.host_user_id != user_id:
+            await query.answer(
+                "⛔ Only the host can start the game!",
+                show_alert=True,
+            )
+            return
+
+        if private_game.state != PrivateGameState.LOBBY:
+            await query.answer(
+                "❌ This game is no longer in the lobby!",
+                show_alert=True,
+            )
+            return
+
+        accepted_invites = {
+            invite.user_id: invite
+            for invite in private_game.invited_players.values()
+            if invite.accepted
+        }
+
+        player_ids = [private_game.host_user_id] + list(accepted_invites.keys())
+
+        if len(player_ids) < 2:
+            await query.answer(
+                "❌ Need at least 2 players to start!",
+                show_alert=True,
+            )
+            return
+
+        stake_config = self._cfg.PRIVATE_STAKES.get(private_game.stake_level)
+
+        if not stake_config:
+            await query.answer(
+                "❌ Stake configuration missing!",
+                show_alert=True,
+            )
+            return
+
+        small_blind = int(stake_config["small_blind"])
+        chat_id = update.effective_chat.id
+
+        players: List[Player] = []
+        player_names: List[str] = []
+
+        async def resolve_display_name(player_id: int) -> str:
+            invite = accepted_invites.get(player_id)
+
+            if player_id == query.from_user.id:
+                base_name = (
+                    query.from_user.full_name
+                    or query.from_user.username
+                    or str(player_id)
+                )
+            elif invite and invite.username:
+                base_name = invite.username
+            else:
+                base_name = ""
+
+            if not base_name:
+                try:
+                    chat = await self._bot.get_chat(player_id)
+                    base_name = (
+                        getattr(chat, "full_name", None)
+                        or getattr(chat, "username", None)
+                        or str(player_id)
+                    )
+                except Exception:
+                    base_name = str(player_id)
+
+            return base_name
+
+        for index, player_id in enumerate(player_ids):
+            display_name = await resolve_display_name(player_id)
+            balance = await self._get_user_balance(player_id)
+
+            if not self._coordinator.can_player_join(balance, small_blind):
+                await query.answer(
+                    f"❌ {display_name} has insufficient funds!",
+                    show_alert=True,
+                )
+                return
+
+            mention = "[{}](tg://user?id={})".format(
+                escape_markdown(display_name, version=1),
+                player_id,
+            )
+
+            players.append(
+                Player(
+                    user_id=player_id,
+                    mention_markdown=mention,
+                    wallet=WalletManagerModel(player_id, self._kv),
+                    ready_message_id=f"private:{game_code}:{index}",
+                )
+            )
+            player_names.append(display_name)
+
+        game = Game()
+        game.mode = GameMode.PRIVATE
+        game.players = players
+        game.state = GameState.ROUND_PRE_FLOP
+        game.current_player_index = 1 if len(players) > 1 else 0
+        game.max_round_rate = 0
+        game.trading_end_user_id = players[0].user_id
+        game.ready_users = set(player_ids)
+        game.stake_config = STAKE_PRESETS.get(private_game.stake_level)
+
+        context.chat_data[KEY_CHAT_DATA_GAME] = game
+        context.chat_data[KEY_OLD_PLAYERS] = list(player_ids)
+
+        game_snapshot = {
+            "id": game.id,
+            "chat_id": chat_id,
+            "mode": game.mode.value,
+            "state": game.state.name,
+            "players": player_ids,
+            "stake_level": private_game.stake_level,
+            "small_blind": small_blind,
+            "big_blind": int(stake_config["big_blind"]),
+            "game_code": game_code,
+            "created_at": int(datetime.datetime.utcnow().timestamp()),
+        }
+
+        game_key = ":".join(["game", str(chat_id)])
+        self._kv.set(game_key, json.dumps(game_snapshot), ex=3600)
+
+        self._kv.delete(redis_key)
+
+        for pid in player_ids:
+            invite_key = ":".join(["private_invite", str(pid), game_code])
+            self._kv.delete(invite_key)
+            user_game_key = ":".join(["user", str(pid), "private_game"])
+            self._kv.delete(user_game_key)
+
+        stake_name = escape_markdown(stake_config["name"], version=1)
+        players_block = "\n".join(
+            f"• {escape_markdown(name, version=1)}" for name in player_names
+        )
+
+        start_message = (
+            "🎰 *GAME STARTING!* 🎰\n\n"
+            f"🎯 *Stake Level:* {stake_name}\n"
+            f"💰 *Small Blind:* {small_blind}\n"
+            f"💰 *Big Blind:* {int(stake_config['big_blind'])}\n\n"
+            f"👥 *Players:* {len(players)}\n{players_block}\n\n"
+            "Cards are being dealt... 🃏"
+        )
+
+        await query.answer()
+        await query.edit_message_text(text=start_message, parse_mode="Markdown")
+
+        self._coordinator.apply_pre_flop_blinds(game, small_blind)
+
+        self._deal_cards_to_players(game)
+        await self._send_private_cards_to_all(game, chat_id)
+
+        dealer_index = 2 % len(game.players) if game.players else 0
+        game.trading_end_user_id = game.players[dealer_index].user_id
+
+        await self._start_betting_round(game, chat_id)
 
     async def show_private_game_status(
         self,
