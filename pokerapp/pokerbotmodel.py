@@ -1540,9 +1540,14 @@ class PokerBotModel:
             required_chips = format(min_buyin, ",")
             balance_chips = format(wallet.value(), ",")
             await query.edit_message_text(
-                "❌ Insufficient balance!\n\n",
-                f"Required: {required_chips} chips\n",
-                f"Your balance: {balance_chips} chips",
+                "\n".join(
+                    (
+                        "❌ Insufficient balance!",
+                        "",
+                        f"Required: {required_chips} chips",
+                        f"Your balance: {balance_chips} chips",
+                    )
+                )
             )
             return
 
