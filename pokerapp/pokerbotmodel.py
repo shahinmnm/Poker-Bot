@@ -1062,7 +1062,7 @@ class PokerBotModel:
             )
             return
 
-        lobby_key = f"private_game:{game_code}"
+        lobby_key = ":".join(["private_game", game_code])
         game_chat_id = self._kv.get(lobby_key)
 
         if isinstance(game_chat_id, bytes):
@@ -1183,7 +1183,7 @@ class PokerBotModel:
 
         self._save_game(game_chat_id, game)
 
-        user_game_key = f"user:{user_id}:private_game"
+        user_game_key = ":".join(["user", str(user_id), "private_game"])
         self._kv.set(user_game_key, game_chat_id)
 
         await self._view.send_message_reply(
@@ -1199,7 +1199,8 @@ class PokerBotModel:
 
         lobby_text = (
             f"🎉 {mention} joined the game!\n\n"
-            f"👥 Current players ({len(game.players)}/{MAX_PLAYERS}):\n"
+            f"👥 Current players ({len(game.players)}/{MAX_PLAYERS})"
+            ":\n"
         )
 
         for idx, player_entry in enumerate(game.players, 1):
@@ -1247,7 +1248,9 @@ class PokerBotModel:
         user_id = user.id
         message = update.effective_message
         response_chat_id = (
-            message.chat_id if message is not None else update.effective_chat.id
+            message.chat_id
+            if message is not None
+            else update.effective_chat.id
         )
 
         async def send_response(text: str) -> None:
@@ -1263,7 +1266,7 @@ class PokerBotModel:
                     text=text,
                 )
 
-        user_game_key = f"user:{user_id}:private_game"
+        user_game_key = ":".join(["user", str(user_id), "private_game"])
         game_chat_id = self._kv.get(user_game_key)
 
         if isinstance(game_chat_id, bytes):
@@ -1290,7 +1293,8 @@ class PokerBotModel:
 
         if game is None:
             logger.warning(
-                "No game session found for chat %s when user %s tried to leave",
+                "No game session found for chat %s when user %s "
+                "tried to leave",
                 game_chat_id_int,
                 user_id,
             )
@@ -1299,7 +1303,9 @@ class PokerBotModel:
             return
 
         if game.state != GameState.INITIAL:
-            await send_response("❌ Cannot leave started game. Use buttons to fold.")
+            await send_response(
+                "❌ Cannot leave started game. Use buttons to fold."
+            )
             return
 
         player_entry = next(
@@ -1317,7 +1323,10 @@ class PokerBotModel:
             return
 
         player_mention = player_entry.mention_markdown
-        is_host = bool(game.players) and str(game.players[0].user_id) == str(user_id)
+        is_host = (
+            bool(game.players)
+            and str(game.players[0].user_id) == str(user_id)
+        )
 
         game.players = [
             p for p in game.players if str(p.user_id) != str(user_id)
@@ -1328,11 +1337,11 @@ class PokerBotModel:
 
         if not game.players:
             self._application.chat_data.pop(game_chat_id_int, None)
-            self._kv.delete(f"game:{game_chat_id_int}")
+            self._kv.delete(":".join(["game", str(game_chat_id_int)]))
 
             game_code = getattr(game, "code", None)
             if game_code:
-                self._kv.delete(f"private_game:{game_code}")
+                self._kv.delete(":".join(["private_game", game_code]))
 
             logger.info(
                 "User %s left and game %s is now empty. Game deleted.",
@@ -1341,7 +1350,8 @@ class PokerBotModel:
             )
 
             await send_response(
-                "🚪 You left the private game.\nYour seat is now available for others."
+                "🚪 You left the private game.\n"
+                "Your seat is now available for others."
             )
             return
 
@@ -1359,7 +1369,8 @@ class PokerBotModel:
         self._save_game(game_chat_id_int, game)
 
         await send_response(
-            "🚪 You left the private game.\nYour seat is now available for others."
+            "🚪 You left the private game.\n"
+            "Your seat is now available for others."
         )
 
         lobby_text = f"👋 {player_mention} left the game.\n"
@@ -1370,7 +1381,8 @@ class PokerBotModel:
             lobby_text += "\n"
 
         lobby_text += (
-            f"👥 Current players ({len(game.players)}/{MAX_PLAYERS}):\n"
+            f"👥 Current players ({len(game.players)}/{MAX_PLAYERS})"
+            ":\n"
         )
 
         for idx, player in enumerate(game.players, 1):
