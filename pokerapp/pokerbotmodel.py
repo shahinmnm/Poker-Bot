@@ -251,10 +251,8 @@ class PokerBotModel:
         self._coordinator.apply_pre_flop_blinds(
             game=game,
             small_blind=self._stake_config.small_blind,
+            big_blind=self._stake_config.big_blind,
         )
-
-        dealer = 2 % len(game.players)
-        game.trading_end_user_id = game.players[dealer].user_id
 
         await self._start_betting_round(game, chat_id)
 
@@ -1097,6 +1095,7 @@ class PokerBotModel:
             return
 
         small_blind = int(stake_config["small_blind"])
+        big_blind = int(stake_config.get("big_blind", small_blind * 2))
         chat_id = update.effective_chat.id
 
         players: List[Player] = []
@@ -1150,7 +1149,7 @@ class PokerBotModel:
                     user_id=player_id,
                     mention_markdown=mention,
                     wallet=WalletManagerModel(player_id, self._kv),
-                    ready_message_id=f"private:{game_code}:{index}",
+                    ready_message_id=None,
                 )
             )
             player_names.append(display_name)
@@ -1161,7 +1160,6 @@ class PokerBotModel:
         game.state = GameState.ROUND_PRE_FLOP
         game.current_player_index = 1 if len(players) > 1 else 0
         game.max_round_rate = 0
-        game.trading_end_user_id = players[0].user_id
         game.ready_users = set(player_ids)
         game.stake_config = STAKE_PRESETS.get(private_game.stake_level)
 
@@ -1176,7 +1174,7 @@ class PokerBotModel:
             "players": player_ids,
             "stake_level": private_game.stake_level,
             "small_blind": small_blind,
-            "big_blind": int(stake_config["big_blind"]),
+            "big_blind": big_blind,
             "game_code": game_code,
             "created_at": int(datetime.datetime.utcnow().timestamp()),
         }
@@ -1201,7 +1199,7 @@ class PokerBotModel:
             "🎰 *GAME STARTING!* 🎰\n\n"
             f"🎯 *Stake Level:* {stake_name}\n"
             f"💰 *Small Blind:* {small_blind}\n"
-            f"💰 *Big Blind:* {int(stake_config['big_blind'])}\n\n"
+            f"💰 *Big Blind:* {big_blind}\n\n"
             f"👥 *Players:* {len(players)}\n{players_block}\n\n"
             "Cards are being dealt... 🃏"
         )
@@ -1209,13 +1207,14 @@ class PokerBotModel:
         await query.answer()
         await query.edit_message_text(text=start_message, parse_mode="Markdown")
 
-        self._coordinator.apply_pre_flop_blinds(game, small_blind)
+        self._coordinator.apply_pre_flop_blinds(
+            game,
+            small_blind,
+            big_blind,
+        )
 
         self._deal_cards_to_players(game)
         await self._send_private_cards_to_all(game, chat_id)
-
-        dealer_index = 2 % len(game.players) if game.players else 0
-        game.trading_end_user_id = game.players[dealer_index].user_id
 
         await self._start_betting_round(game, chat_id)
 

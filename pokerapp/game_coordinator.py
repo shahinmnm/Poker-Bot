@@ -82,14 +82,21 @@ class GameCoordinator:
 
         self._move_bets_to_pot(game)
 
-    def apply_pre_flop_blinds(self, game: Game, small_blind: int) -> None:
+    def apply_pre_flop_blinds(
+        self,
+        game: Game,
+        small_blind: int,
+        big_blind: Optional[int] = None,
+    ) -> None:
         """Apply small and big blinds at the start of the hand."""
 
         if len(game.players) < 2:
             return
 
+        big_blind_amount = big_blind if big_blind is not None else small_blind * 2
+
         self.player_raise_bet(game, game.players[0], small_blind)
-        self.player_raise_bet(game, game.players[1], small_blind)
+        self.player_raise_bet(game, game.players[1], big_blind_amount)
 
     def player_raise_bet(
         self,
