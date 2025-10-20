@@ -9,7 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: python:3.10.4
+    container: python:3.10.13
 
     services:
       redis:
