@@ -12,9 +12,10 @@ from telegram import Bot, ReplyKeyboardMarkup, Update
 from telegram.ext import Application, CallbackContext, ContextTypes
 from telegram.helpers import escape_markdown
 
-from pokerapp.config import Config
+from pokerapp.config import Config, STAKE_PRESETS
 from pokerapp.cards import get_shuffled_deck
 from pokerapp.privatechatmodel import UserPrivateChatModel
+from pokerapp.desk import KEY_CHAT_DATA_GAME, KEY_OLD_PLAYERS
 from pokerapp.entities import (
     Game,
     GameMode,
@@ -27,7 +28,6 @@ from pokerapp.entities import (
     PlayerAction,
     PlayerState,
     Wallet,
-    STAKE_PRESETS,
     BalanceValidator,
 )
 from pokerapp.game_coordinator import GameCoordinator
@@ -44,8 +44,6 @@ DICE_DELAY_SEC = 5
 BONUSES = (5, 20, 40, 80, 160, 320)
 DICES = "⚀⚁⚂⚃⚄⚅"
 
-KEY_CHAT_DATA_GAME = "game"
-KEY_OLD_PLAYERS = "old_players"
 KEY_LAST_TIME_ADD_MONEY = "last_time"
 KEY_NOW_TIME_ADD_MONEY = "now_time"
 
@@ -1683,7 +1681,30 @@ class PokerBotModel:
             game_code,
         )
 
-        # === TODO: STEP 2B - INITIALIZE GAME OBJECT ===
+        # === STEP 2B: INITIALIZE GAME OBJECT ===
+
+        # Create game instance
+        game = Game()
+        game.mode = GameMode.PRIVATE
+        game.players = players
+        game.state = GameState.ROUND_PRE_FLOP
+        game.current_player_index = 1 if len(players) > 1 else 0
+        game.max_round_rate = 0
+        game.ready_users = set(accepted_players)  # All players pre-ready
+        game.stake_config = STAKE_PRESETS.get(private_game.stake_level)
+
+        # Store game in context (runtime memory)
+        context.chat_data[KEY_CHAT_DATA_GAME] = game
+        context.chat_data[KEY_OLD_PLAYERS] = list(accepted_players)
+
+        logger.info(
+            "Initialized Game object for private game %s (mode=%s, players=%d)",
+            game_code,
+            game.mode.value,
+            len(players),
+        )
+
+        # === TODO: STEP 2C - PERSIST GAME STATE TO REDIS ===
 
         # TODO: Game engine initialization (Step 2)
         # TODO: State cleanup (Step 3)

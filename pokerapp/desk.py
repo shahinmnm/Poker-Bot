@@ -7,6 +7,10 @@ from pathlib import Path
 from pokerapp.cards import Cards, Card
 
 
+KEY_CHAT_DATA_GAME = "game"
+KEY_OLD_PLAYERS = "old_players"
+
+
 class DeskImageGenerator:
     def __init__(
         self,
