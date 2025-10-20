@@ -1556,7 +1556,53 @@ class PokerBotModel:
             )
             return
 
-        # TODO: Balance validation (Step 1B)
+        # Get stake configuration
+        stake_config = self._cfg.PRIVATE_STAKES.get(private_game.stake_level)
+
+        if not stake_config:
+            await self._send_response(
+                update,
+                "❌ Stake configuration missing for this game!",
+                reply_to_message_id=update.effective_message.message_id,
+            )
+            return
+
+        small_blind = int(stake_config["small_blind"])
+        min_buyin = int(stake_config["min_buyin"])
+
+        # Validate ALL players have sufficient balance
+        insufficient_players = []
+
+        for player_id in accepted_players:
+            balance = await self._get_user_balance(player_id)
+
+            # Use coordinator's validation logic
+            if not self._coordinator.can_player_join(balance, small_blind):
+                # Try to resolve player name for error message
+                username = self._lookup_user_by_username(player_id)
+                display_name = username if username else f"Player {player_id}"
+                insufficient_players.append((player_id, display_name, balance))
+
+        # If any player lacks funds, reject start
+        if insufficient_players:
+            error_lines = ["❌ Cannot start game - insufficient funds:\n"]
+
+            for player_id, name, balance in insufficient_players:
+                error_lines.append(
+                    f"• {name}: {balance}$ (need {min_buyin}$)"
+                )
+
+            error_lines.append(
+                f"\nAll players need at least {min_buyin}$ to play."
+            )
+
+            await self._send_response(
+                update,
+                "\n".join(error_lines),
+                reply_to_message_id=update.effective_message.message_id,
+            )
+            return
+
         # TODO: Game engine initialization (Step 2)
         # TODO: State cleanup (Step 3)
 
