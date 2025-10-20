@@ -54,7 +54,7 @@ class Player:
         user_id: UserId,
         mention_markdown: Mention,
         wallet: Wallet,
-        ready_message_id: str,
+        ready_message_id: Optional[MessageId],
     ):
         self.user_id = user_id
         self.mention_markdown = mention_markdown
