@@ -13,6 +13,7 @@ from telegram.ext import Application, CallbackContext, ContextTypes
 from telegram.helpers import escape_markdown
 
 from pokerapp.config import Config
+from pokerapp.cards import get_shuffled_deck
 from pokerapp.privatechatmodel import UserPrivateChatModel
 from pokerapp.entities import (
     Game,
@@ -1213,10 +1214,53 @@ class PokerBotModel:
             big_blind,
         )
 
+        game.table_stake = small_blind
+
         self._deal_cards_to_players(game)
-        await self._send_private_cards_to_all(game, chat_id)
+        await self._send_private_cards_to_all(game, context)
 
         await self._start_betting_round(game, chat_id)
+
+    def _deal_cards_to_players(self, game: Game) -> None:
+        """Deal two cards to each player and store the remaining deck."""
+
+        deck = get_shuffled_deck()
+
+        for player in game.players:
+            player.cards.clear()
+            for _ in range(2):
+                if deck:
+                    player.cards.append(deck.pop())
+
+        game.deck = deck
+        game.remain_cards = deck
+
+    async def _send_private_cards_to_all(
+        self,
+        game: Game,
+        context: CallbackContext,
+    ) -> None:
+        """Send private card images to all players."""
+
+        for player in game.players:
+            try:
+                card_image = self._view.generate_hand_image(player.cards)
+                await context.bot.send_photo(
+                    chat_id=player.user_id,
+                    photo=card_image,
+                    caption=(
+                        "🃏 **Your Cards** 🃏\n\n"
+                        "Game starting in group chat!\n"
+                        f"Table stake: {game.table_stake}"
+                    ),
+                    parse_mode="Markdown",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to send cards to %s: %s",
+                    player.user_id,
+                    exc,
+                )
 
     async def show_private_game_status(
         self,
