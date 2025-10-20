@@ -5,7 +5,7 @@ import datetime
 import json
 import logging
 import secrets
-from typing import Awaitable, Callable, List, Optional
+from typing import Awaitable, Callable, List, Optional, Union
 
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
@@ -422,18 +422,52 @@ class PokerBotModel:
         )
 
     def _deal_cards_to_players(self, game: Game) -> None:
+        """Deal two cards to each player and refresh the deck."""
+
+        deck = get_shuffled_deck()
+
         for player in game.players:
-            player.cards = [
-                game.remain_cards.pop(),
-                game.remain_cards.pop(),
-            ]
+            player.cards.clear()
+            for _ in range(2):
+                if deck:
+                    player.cards.append(deck.pop())
+
+        game.deck = deck
+        game.remain_cards = deck
 
     async def _send_private_cards_to_all(
         self,
         game: Game,
-        chat_id: ChatId,
+        destination: Union[ChatId, CallbackContext],
     ) -> None:
-        await self._send_cards_batch(game.players, chat_id)
+        """Send private cards either via chat or direct messages."""
+
+        if hasattr(destination, "bot"):
+            context = destination
+
+            for player in game.players:
+                try:
+                    card_image = self._view.generate_hand_image(player.cards)
+                    await context.bot.send_photo(
+                        chat_id=player.user_id,
+                        photo=card_image,
+                        caption=(
+                            "🃏 **Your Cards** 🃏\n\n"
+                            "Game starting in group chat!\n"
+                            f"Table stake: {game.table_stake}"
+                        ),
+                        parse_mode="Markdown",
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to send cards to %s: %s",
+                        player.user_id,
+                        exc,
+                    )
+
+            return
+
+        await self._send_cards_batch(game.players, destination)
 
     async def _divide_cards(self, game: Game, chat_id: ChatId) -> None:
         self._deal_cards_to_players(game)
@@ -1077,7 +1111,10 @@ class PokerBotModel:
             if invite.accepted
         }
 
-        player_ids = [private_game.host_user_id] + list(accepted_invites.keys())
+        player_ids = [
+            private_game.host_user_id,
+            *accepted_invites.keys(),
+        ]
 
         if len(player_ids) < 2:
             await query.answer(
@@ -1198,15 +1235,18 @@ class PokerBotModel:
 
         start_message = (
             "🎰 *GAME STARTING!* 🎰\n\n"
-            f"🎯 *Stake Level:* {stake_name}\n"
-            f"💰 *Small Blind:* {small_blind}\n"
-            f"💰 *Big Blind:* {big_blind}\n\n"
-            f"👥 *Players:* {len(players)}\n{players_block}\n\n"
+            f"🎯 *Stake Level*: {stake_name}\n"
+            f"💰 *Small Blind*: {small_blind}\n"
+            f"💰 *Big Blind*: {big_blind}\n\n"
+            f"👥 *Players*: {len(players)}\n{players_block}\n\n"
             "Cards are being dealt... 🃏"
         )
 
         await query.answer()
-        await query.edit_message_text(text=start_message, parse_mode="Markdown")
+        await query.edit_message_text(
+            text=start_message,
+            parse_mode="Markdown",
+        )
 
         self._coordinator.apply_pre_flop_blinds(
             game,
@@ -1220,47 +1260,6 @@ class PokerBotModel:
         await self._send_private_cards_to_all(game, context)
 
         await self._start_betting_round(game, chat_id)
-
-    def _deal_cards_to_players(self, game: Game) -> None:
-        """Deal two cards to each player and store the remaining deck."""
-
-        deck = get_shuffled_deck()
-
-        for player in game.players:
-            player.cards.clear()
-            for _ in range(2):
-                if deck:
-                    player.cards.append(deck.pop())
-
-        game.deck = deck
-        game.remain_cards = deck
-
-    async def _send_private_cards_to_all(
-        self,
-        game: Game,
-        context: CallbackContext,
-    ) -> None:
-        """Send private card images to all players."""
-
-        for player in game.players:
-            try:
-                card_image = self._view.generate_hand_image(player.cards)
-                await context.bot.send_photo(
-                    chat_id=player.user_id,
-                    photo=card_image,
-                    caption=(
-                        "🃏 **Your Cards** 🃏\n\n"
-                        "Game starting in group chat!\n"
-                        f"Table stake: {game.table_stake}"
-                    ),
-                    parse_mode="Markdown",
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Failed to send cards to %s: %s",
-                    player.user_id,
-                    exc,
-                )
 
     async def show_private_game_status(
         self,

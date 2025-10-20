@@ -93,7 +93,9 @@ class GameCoordinator:
         if len(game.players) < 2:
             return
 
-        big_blind_amount = big_blind if big_blind is not None else small_blind * 2
+        big_blind_amount = (
+            big_blind if big_blind is not None else small_blind * 2
+        )
 
         self.player_raise_bet(game, game.players[0], small_blind)
         self.player_raise_bet(game, game.players[1], big_blind_amount)
