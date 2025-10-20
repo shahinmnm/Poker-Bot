@@ -47,3 +47,9 @@ def get_cards() -> Cards:
     ]
     random.SystemRandom().shuffle(cards)
     return cards
+
+
+def get_shuffled_deck() -> Cards:
+    """Return a freshly shuffled deck of cards."""
+
+    return get_cards()
