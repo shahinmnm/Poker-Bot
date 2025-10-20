@@ -11,6 +11,7 @@ from telegram import (
     InputMediaPhoto,
 )
 from telegram.constants import ParseMode
+from telegram.helpers import escape_markdown
 from io import BytesIO
 
 from pokerapp.desk import DeskImageGenerator
@@ -437,9 +438,11 @@ class PokerBotViewer:
             (message_text, keyboard)
         """
 
+        host_name_safe = escape_markdown(host_name, version=1)
+
         message = (
             f"🎴 Game Invitation\n\n"
-            f"{host_name} invited you to join their private poker game!\n\n"
+            f"{host_name_safe} invited you to join their private poker game!\n\n"
             f"🎯 Game Code: {game_code}\n\n"
             f"💰 Stakes: {stake_config['name']}\n"
             f" • Small Blind: {stake_config['small_blind']:,}\n"
