@@ -103,6 +103,50 @@ class PokerBotModel:
             return False
         return True
 
+    def _validate_game_code(self, code: Optional[str]) -> tuple[bool, str]:
+        """
+        Validate game code format (6 alphanumeric characters).
+
+        Returns:
+            (is_valid, error_message)
+        """
+        if not code:
+            return False, "❌ Please provide a game code: /join <code>"
+
+        if len(code) != 6 or not code.isalnum():
+            return False, (
+                f"❌ Invalid code format: '{code}'\n\n"
+                "Game codes must be exactly 6 alphanumeric characters."
+            )
+
+        return True, ""
+
+    async def _send_response(
+        self,
+        update: Update,
+        message: str,
+        parse_mode: Optional[str] = None,
+        reply_to_message_id: Optional[int] = None,
+    ) -> None:
+        """
+        Centralized message sending with consistent interface.
+        """
+        effective_message = update.effective_message
+
+        if effective_message is not None:
+            await effective_message.reply_text(
+                message,
+                parse_mode=parse_mode,
+                reply_to_message_id=reply_to_message_id,
+            )
+            return
+
+        await self._bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=message,
+            parse_mode=parse_mode,
+        )
+
     @property
     def _min_players(self):
         if self._cfg.DEBUG:
@@ -775,9 +819,12 @@ class PokerBotModel:
         # Check if user already has an active private game
         existing_game_key = ":".join(["user", str(user.id), "private_game"])
         if self._kv.exists(existing_game_key):
-            await update.effective_message.reply_text(
-                "❌ You already have an active private game!\n"
-                "Use /leave to exit your current game first."
+            await self._send_response(
+                update,
+                (
+                    "❌ You already have an active private game!\n"
+                    "Use /leave to exit your current game first."
+                ),
             )
             return
 
@@ -1062,24 +1109,25 @@ class PokerBotModel:
         chat_id = update.effective_message.chat_id
 
         if not context.args or len(context.args) != 1:
-            await self._view.send_message_reply(
-                chat_id=chat_id,
-                text=(
+            await self._send_response(
+                update,
+                (
                     "❌ Invalid command format\n\n"
                     "Usage: /join <code>\n"
                     "Example: /join ABC123"
                 ),
-                message_id=update.effective_message.message_id,
+                reply_to_message_id=update.effective_message.message_id,
             )
             return
 
         game_code = context.args[0].upper()
 
-        if len(game_code) != 6 or not game_code.isalnum():
-            await self._view.send_message_reply(
-                chat_id=chat_id,
-                text="❌ Invalid game code format\n\nCode must be 6 characters",
-                message_id=update.effective_message.message_id,
+        is_valid, error_msg = self._validate_game_code(game_code)
+        if not is_valid:
+            await self._send_response(
+                update,
+                error_msg,
+                reply_to_message_id=update.effective_message.message_id,
             )
             return
 
@@ -1263,24 +1311,7 @@ class PokerBotModel:
         user = update.effective_user
         user_id = user.id
         message = update.effective_message
-        response_chat_id = (
-            message.chat_id
-            if message is not None
-            else update.effective_chat.id
-        )
-
-        async def send_response(text: str) -> None:
-            if message is not None:
-                await self._view.send_message_reply(
-                    chat_id=response_chat_id,
-                    message_id=message.message_id,
-                    text=text,
-                )
-            else:
-                await self._view.send_message(
-                    chat_id=response_chat_id,
-                    text=text,
-                )
+        reply_to_id = message.message_id if message is not None else None
 
         user_game_key = ":".join(["user", str(user_id), "private_game"])
         game_chat_id = self._kv.get(user_game_key)
@@ -1289,7 +1320,11 @@ class PokerBotModel:
             game_chat_id = game_chat_id.decode("utf-8")
 
         if not game_chat_id:
-            await send_response("❌ You're not in any private game.")
+            await self._send_response(
+                update,
+                "❌ You're not in any private game.",
+                reply_to_message_id=reply_to_id,
+            )
             return
 
         try:
@@ -1301,7 +1336,11 @@ class PokerBotModel:
                 game_chat_id,
             )
             self._kv.delete(user_game_key)
-            await send_response("❌ Game session not found.")
+            await self._send_response(
+                update,
+                "❌ Game session not found.",
+                reply_to_message_id=reply_to_id,
+            )
             return
 
         chat_data = self._application.chat_data.get(game_chat_id_int, {})
@@ -1315,12 +1354,18 @@ class PokerBotModel:
                 user_id,
             )
             self._kv.delete(user_game_key)
-            await send_response("❌ Game session not found.")
+            await self._send_response(
+                update,
+                "❌ Game session not found.",
+                reply_to_message_id=reply_to_id,
+            )
             return
 
         if game.state != GameState.INITIAL:
-            await send_response(
-                "❌ Cannot leave started game. Use buttons to fold."
+            await self._send_response(
+                update,
+                "❌ Cannot leave started game. Use buttons to fold.",
+                reply_to_message_id=reply_to_id,
             )
             return
 
@@ -1335,7 +1380,11 @@ class PokerBotModel:
 
         if player_entry is None:
             self._kv.delete(user_game_key)
-            await send_response("❌ You're not in any private game.")
+            await self._send_response(
+                update,
+                "❌ You're not in any private game.",
+                reply_to_message_id=reply_to_id,
+            )
             return
 
         player_mention = player_entry.mention_markdown
@@ -1365,13 +1414,15 @@ class PokerBotModel:
                 game_chat_id_int,
             )
 
-            await send_response(
+            await self._send_response(
+                update,
                 "\n".join(
                     [
                         "🚪 You left the private game.",
                         "Your seat is now available for others.",
                     ]
-                )
+                ),
+                reply_to_message_id=reply_to_id,
             )
             return
 
@@ -1388,13 +1439,15 @@ class PokerBotModel:
 
         self._save_game(game_chat_id_int, game)
 
-        await send_response(
+        await self._send_response(
+            update,
             "\n".join(
                 [
                     "🚪 You left the private game.",
                     "Your seat is now available for others.",
                 ]
-            )
+            ),
+            reply_to_message_id=reply_to_id,
         )
 
         lobby_text = f"👋 {player_mention} left the game.\n"
