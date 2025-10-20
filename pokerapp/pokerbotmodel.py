@@ -78,6 +78,31 @@ class PokerBotModel:
 
         self._readyMessages = {}
 
+    async def _ensure_minimum_balance(
+        self,
+        update: Update,
+        user_id: int,
+        wallet: Wallet,
+        min_balance: int,
+        reply_to_message_id: Optional[int] = None,
+    ) -> bool:
+        """
+        Centralized balance validation with error messaging.
+
+        Returns:
+            True if balance sufficient, False otherwise (error sent to user)
+        """
+        balance = wallet.value()
+        if balance < min_balance:
+            await self._view.send_insufficient_balance_error(
+                chat_id=update.effective_chat.id,
+                balance=balance,
+                required=min_balance,
+                reply_to_message_id=reply_to_message_id,
+            )
+            return False
+        return True
+
     @property
     def _min_players(self):
         if self._cfg.DEBUG:
@@ -791,15 +816,12 @@ class PokerBotModel:
             return
 
         # Check user balance
-        user_balance = await self._get_user_balance(user.id)
+        wallet = self._get_wallet(user.id)
         min_buyin = stake_config["min_buyin"]
 
-        if user_balance < min_buyin:
-            await self._view.send_insufficient_balance_error(
-                chat_id=chat_id,
-                required=min_buyin,
-                current=user_balance,
-            )
+        if not await self._ensure_minimum_balance(
+            update, user.id, wallet, min_buyin
+        ):
             return
 
         # Generate unique 6-character game code
@@ -903,14 +925,15 @@ class PokerBotModel:
                 "❌ Stake configuration missing for this game."
             )
             return
-        user_balance = await self._get_user_balance(user.id)
+        wallet = self._get_wallet(user.id)
+        min_balance = stake_config["min_buyin"]
 
-        if user_balance < stake_config["min_buyin"]:
-            await self._view.send_insufficient_balance_error(
-                chat_id=update.effective_chat.id,
-                required=stake_config["min_buyin"],
-                current=user_balance,
-            )
+        if not await self._ensure_minimum_balance(
+            update,
+            user.id,
+            wallet,
+            min_balance,
+        ):
             return
 
         # Accept invitation
@@ -1137,20 +1160,15 @@ class PokerBotModel:
             return
 
         wallet = self._get_wallet(user_id)
+        min_balance = stake_config.min_buy_in
 
-        if not self._coordinator.can_player_join(
-            wallet.value(),
-            stake_config.small_blind,
+        if not await self._ensure_minimum_balance(
+            update,
+            user_id,
+            wallet,
+            min_balance,
+            reply_to_message_id=update.effective_message.message_id,
         ):
-            await self._view.send_message_reply(
-                chat_id=chat_id,
-                text=(
-                    "❌ Insufficient balance to join\n\n"
-                    f"Minimum buy-in: ${stake_config.min_buy_in}\n"
-                    f"Your balance: ${wallet.value()}"
-                ),
-                message_id=update.effective_message.message_id,
-            )
             return
 
         try:

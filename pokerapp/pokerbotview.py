@@ -406,8 +406,9 @@ class PokerBotViewer:
     async def send_insufficient_balance_error(
         self,
         chat_id: int,
+        balance: int,
         required: int,
-        current: int,
+        reply_to_message_id: Optional[int] = None,
     ) -> None:
         """Notify user they don't have enough chips."""
 
@@ -416,8 +417,9 @@ class PokerBotViewer:
             text=(
                 "❌ INSUFFICIENT BALANCE\n\n"
                 f"Required: {required} chips\n"
-                f"Your balance: {current} chips\n"
-                f"Needed: {required - current} more\n\n"
+                f"Your balance: {balance} chips\n"
+                f"Needed: {required - balance} more\n\n"
                 "💰 Get free chips with /money command!"
             ),
+            reply_to_message_id=reply_to_message_id,
         )
