@@ -1617,6 +1617,74 @@ class PokerBotModel:
             )
             return
 
+        # === STEP 2A: CREATE PLAYER OBJECTS ===
+
+        chat_id = update.effective_chat.id
+        players: List[Player] = []
+        player_names: List[str] = []
+
+        # Helper to resolve display names (reuse username cache)
+        async def resolve_display_name(player_id: int) -> str:
+            """Get cached username or fetch from Telegram."""
+
+            # Try username cache first (populated during invitations)
+            username = self._lookup_user_by_username(player_id)
+            if username:
+                return username
+
+            # Fallback: Fetch from Telegram API
+            try:
+                if player_id == user_id:
+                    # Host is the callback initiator
+                    return (
+                        getattr(user, "full_name", None)
+                        or getattr(user, "username", None)
+                        or str(player_id)
+                    )
+
+                chat = await self._bot.get_chat(player_id)
+                return (
+                    getattr(chat, "full_name", None)
+                    or getattr(chat, "username", None)
+                    or str(player_id)
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to resolve name for user %s: %s",
+                    player_id,
+                    exc,
+                )
+                return str(player_id)
+
+        # Create Player objects for all accepted players
+        for player_id in accepted_players:
+            display_name = await resolve_display_name(player_id)
+
+            # Create markdown mention for chat messages
+            mention = "[{}](tg://user?id={})".format(
+                escape_markdown(display_name, version=1),
+                player_id,
+            )
+
+            # Create Player object with wallet manager
+            players.append(
+                Player(
+                    user_id=player_id,
+                    mention_markdown=mention,
+                    wallet=WalletManagerModel(player_id, self._kv),
+                    ready_message_id=None,  # No ready message in private games
+                )
+            )
+            player_names.append(display_name)
+
+        logger.info(
+            "Created %d player objects for private game %s",
+            len(players),
+            game_code,
+        )
+
+        # === TODO: STEP 2B - INITIALIZE GAME OBJECT ===
+
         # TODO: Game engine initialization (Step 2)
         # TODO: State cleanup (Step 3)
 
