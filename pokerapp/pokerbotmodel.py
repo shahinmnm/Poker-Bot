@@ -1348,8 +1348,7 @@ class PokerBotModel:
 
         if game is None:
             logger.warning(
-                "No game session found for chat %s when user %s "
-                "tried to leave",
+                "No game session found for chat %s when user %s tried to leave",
                 game_chat_id_int,
                 user_id,
             )
