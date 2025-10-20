@@ -94,6 +94,10 @@ class Game:
         self.current_player_index = -1
         self.remain_cards = get_cards()
         self.trading_end_user_id = 0
+        # Track the nominal dealer button position so it can rotate between
+        # games. Public games currently infer the button from blind
+        # assignments, but multi-hand sessions may rely on this field.
+        self.dealer_index = 0
         self.ready_users = set()
         self.last_turn_time = datetime.datetime.now()
         # Game mode (Phase 2)
