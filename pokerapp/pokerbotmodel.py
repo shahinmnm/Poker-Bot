@@ -121,6 +121,9 @@ class PokerBotModel:
 
         return True, ""
 
+    def _generate_game_code(self) -> str:
+        return secrets.token_urlsafe(4).upper()[:6]
+
     async def _send_response(
         self,
         update: Update,
@@ -870,7 +873,7 @@ class PokerBotModel:
             return
 
         # Generate unique 6-character game code
-        game_code = secrets.token_urlsafe(4).upper()[:6]
+        game_code = self._generate_game_code()
 
         # Create private game instance
         private_game = PrivateGame(
