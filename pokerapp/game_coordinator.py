@@ -96,7 +96,9 @@ class GameCoordinator:
         big_blind_amount = big_blind if big_blind is not None else small_blind * 2
 
         self.player_raise_bet(game, game.players[0], small_blind)
-        self.player_raise_bet(game, game.players[1], big_blind_amount)
+
+        big_blind_raise = max(big_blind_amount - small_blind, 0)
+        self.player_raise_bet(game, game.players[1], big_blind_raise)
 
     def player_raise_bet(
         self,
