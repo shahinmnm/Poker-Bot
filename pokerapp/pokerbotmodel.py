@@ -1570,6 +1570,41 @@ class PokerBotModel:
         small_blind = int(stake_config["small_blind"])
         min_buyin = int(stake_config["min_buyin"])
 
+        async def resolve_player_display_name(player_id: int) -> str:
+            """Resolve a readable name for a player id."""
+
+            if player_id == user.id:
+                username = getattr(user, "username", None)
+                if username:
+                    return f"@{username}"
+                full_name = getattr(user, "full_name", None)
+                if full_name:
+                    return full_name
+
+            invite = private_game.invited_players.get(player_id)
+
+            if invite:
+                username = getattr(invite, "username", "")
+                if username:
+                    return username if username.startswith("@") else f"@{username}"
+
+            try:
+                chat = await self._bot.get_chat(player_id)
+            except Exception:
+                return f"Player {player_id}"
+
+            chat_username = getattr(chat, "username", None)
+            if chat_username:
+                return f"@{chat_username}"
+
+            first_name = getattr(chat, "first_name", None)
+            last_name = getattr(chat, "last_name", None)
+            if first_name or last_name:
+                names = [name for name in (first_name, last_name) if name]
+                return " ".join(names)
+
+            return f"Player {player_id}"
+
         # Validate ALL players have sufficient balance
         insufficient_players = []
 
@@ -1578,9 +1613,7 @@ class PokerBotModel:
 
             # Use coordinator's validation logic
             if not self._coordinator.can_player_join(balance, small_blind):
-                # Try to resolve player name for error message
-                username = self._lookup_user_by_username(player_id)
-                display_name = username if username else f"Player {player_id}"
+                display_name = await resolve_player_display_name(player_id)
                 insufficient_players.append((player_id, display_name, balance))
 
         # If any player lacks funds, reject start
