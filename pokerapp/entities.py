@@ -84,7 +84,13 @@ class Game:
     def __init__(self):
         self.reset()
 
-    def reset(self):
+    def reset(self, rotate_dealer: bool = False):
+        previous_players = getattr(self, "players", [])
+        if rotate_dealer and previous_players:
+            next_dealer_index = (self.dealer_index + 1) % len(previous_players)
+        else:
+            next_dealer_index = 0
+
         self.id = str(uuid4())
         self.pot = 0
         self.max_round_rate = 0
@@ -97,7 +103,7 @@ class Game:
         # Track the nominal dealer button position so it can rotate between
         # games. Public games currently infer the button from blind
         # assignments, but multi-hand sessions may rely on this field.
-        self.dealer_index = 0
+        self.dealer_index = next_dealer_index
         self.ready_users = set()
         self.last_turn_time = datetime.datetime.now()
         # Game mode (Phase 2)
