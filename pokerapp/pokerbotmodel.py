@@ -1556,6 +1556,20 @@ class PokerBotModel:
             )
             return
 
+        # Validate maximum players (prevent overflow)
+        if len(accepted_players) > self._cfg.PRIVATE_MAX_PLAYERS:
+            await self._send_response(
+                update,
+                (
+                    f"❌ Too many players to start!\n\n"
+                    f"Maximum: {self._cfg.PRIVATE_MAX_PLAYERS} players\n"
+                    f"Current: {len(accepted_players)} players\n\n"
+                    "Some players must /leave before starting."
+                ),
+                reply_to_message_id=update.effective_message.message_id,
+            )
+            return
+
         # Get stake configuration
         stake_config = self._cfg.PRIVATE_STAKES.get(private_game.stake_level)
 
