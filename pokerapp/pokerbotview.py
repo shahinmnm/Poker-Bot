@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Optional
+from typing import Optional, Tuple
 
 from telegram import (
     Message,
@@ -298,14 +298,13 @@ class PokerBotViewer:
             reply_markup=reply_markup,
         )
 
-    async def send_player_invite(
+    def build_invitation_message(
         self,
-        chat_id: int,
         inviter_name: str,
         game_code: str,
         stake_name: str,
-    ) -> None:
-        """Send invitation notification in the originating chat."""
+    ) -> Tuple[str, InlineKeyboardMarkup]:
+        """Construct invitation message text and keyboard."""
 
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -323,17 +322,35 @@ class PokerBotViewer:
                 ),
             ],
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        message = (
+            "🎰 PRIVATE GAME INVITATION\n\n"
+            f"{inviter_name} invited you to a private poker game!\n\n"
+            f"🎲 Stakes: {stake_name}\n"
+            f"🔑 Game Code: {game_code}\n\n"
+            "Will you join?"
+        )
+
+        return message, InlineKeyboardMarkup(keyboard)
+
+    async def send_player_invite(
+        self,
+        chat_id: int,
+        inviter_name: str,
+        game_code: str,
+        stake_name: str,
+    ) -> None:
+        """Send invitation notification in the originating chat."""
+
+        message, reply_markup = self.build_invitation_message(
+            inviter_name=inviter_name,
+            game_code=game_code,
+            stake_name=stake_name,
+        )
 
         await self._bot.send_message(
             chat_id=chat_id,
-            text=(
-                "🎰 PRIVATE GAME INVITATION\n\n"
-                f"{inviter_name} invited you to a private poker game!\n\n"
-                f"🎲 Stakes: {stake_name}\n"
-                f"🔑 Game Code: {game_code}\n\n"
-                "Will you join?"
-            ),
+            text=message,
             reply_markup=reply_markup,
         )
 

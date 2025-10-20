@@ -1432,16 +1432,15 @@ class PokerBotModel:
 
         # Send invitation to player
         message, keyboard = self._view.build_invitation_message(
-            host_name=user.first_name,
+            inviter_name=user.first_name,
             game_code=game_code,
-            stake_config=stake_config,
+            stake_name=stake_config["name"],
         )
 
         try:
             await self._bot.send_message(
                 chat_id=target_user_id,
                 text=message,
-                parse_mode="Markdown",
                 reply_markup=keyboard,
             )
             await self._send_response(
@@ -1574,10 +1573,12 @@ class PokerBotModel:
 
         # Update player's message
         await query.edit_message_text(
-            "✅ Joined Game!\n\n"
-            f"Game Code: {game_code}\n"
-            f"Stakes: {stake_config['name']}\n\n"
-            "Use /leave to exit the lobby.",
+            text=(
+                "✅ Joined Game!\n\n"
+                f"Game Code: {game_code}\n"
+                f"Stakes: {stake_config['name']}\n\n"
+                "Use /leave to exit the lobby."
+            )
         )
 
         # Notify host
@@ -1644,8 +1645,10 @@ class PokerBotModel:
 
         # Update message
         await query.edit_message_text(
-            "❌ Invitation Declined\n\n"
-            "You declined the game invitation.",
+            text=(
+                "❌ Invitation Declined\n\n"
+                "You declined the game invitation."
+            )
         )
 
         # Notify host
@@ -1894,10 +1897,15 @@ class PokerBotModel:
             if invite.accepted
         }
 
-        player_ids = [
+        player_ids: List[int] = []
+
+        for candidate in [
             private_game.host_user_id,
+            *private_game.players,
             *accepted_invites.keys(),
-        ]
+        ]:
+            if candidate not in player_ids:
+                player_ids.append(candidate)
 
         if len(player_ids) < 2:
             await query.answer(
