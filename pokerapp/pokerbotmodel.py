@@ -1584,6 +1584,38 @@ class PokerBotModel:
         small_blind = int(stake_config["small_blind"])
         min_buyin = int(stake_config["min_buyin"])
 
+        # Helper to resolve player display names for mentions/errors
+        async def resolve_display_name(player_id: int) -> str:
+            """Resolve a player's display name from cached data or Telegram."""
+
+            # Try invitation metadata first (cached during lobby)
+            invite = private_game.invited_players.get(player_id)
+            if invite and getattr(invite, "username", None):
+                return invite.username
+
+            if player_id == user_id:
+                return (
+                    getattr(user, "full_name", None)
+                    or getattr(user, "username", None)
+                    or str(player_id)
+                )
+
+            # Fallback: Fetch from Telegram API
+            try:
+                chat = await self._bot.get_chat(player_id)
+                return (
+                    getattr(chat, "full_name", None)
+                    or getattr(chat, "username", None)
+                    or str(player_id)
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to resolve name for user %s: %s",
+                    player_id,
+                    exc,
+                )
+                return str(player_id)
+
         # Validate ALL players have sufficient balance
         insufficient_players = []
 
@@ -1592,9 +1624,7 @@ class PokerBotModel:
 
             # Use coordinator's validation logic
             if not self._coordinator.can_player_join(balance, small_blind):
-                # Try to resolve player name for error message
-                username = self._lookup_user_by_username(player_id)
-                display_name = username if username else f"Player {player_id}"
+                display_name = await resolve_display_name(player_id)
                 insufficient_players.append((player_id, display_name, balance))
 
         # If any player lacks funds, reject start
@@ -1622,39 +1652,6 @@ class PokerBotModel:
         chat_id = update.effective_chat.id
         players: List[Player] = []
         player_names: List[str] = []
-
-        # Helper to resolve display names (reuse username cache)
-        async def resolve_display_name(player_id: int) -> str:
-            """Get cached username or fetch from Telegram."""
-
-            # Try username cache first (populated during invitations)
-            username = self._lookup_user_by_username(player_id)
-            if username:
-                return username
-
-            # Fallback: Fetch from Telegram API
-            try:
-                if player_id == user_id:
-                    # Host is the callback initiator
-                    return (
-                        getattr(user, "full_name", None)
-                        or getattr(user, "username", None)
-                        or str(player_id)
-                    )
-
-                chat = await self._bot.get_chat(player_id)
-                return (
-                    getattr(chat, "full_name", None)
-                    or getattr(chat, "username", None)
-                    or str(player_id)
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Failed to resolve name for user %s: %s",
-                    player_id,
-                    exc,
-                )
-                return str(player_id)
 
         # Create Player objects for all accepted players
         for player_id in accepted_players:
