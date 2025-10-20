@@ -1350,8 +1350,7 @@ class PokerBotModel:
             )
 
             await send_response(
-                "🚪 You left the private game.\n"
-                "Your seat is now available for others."
+                "🚪 You left the private game.\nYour seat is now available for others."
             )
             return
 
@@ -1369,8 +1368,7 @@ class PokerBotModel:
         self._save_game(game_chat_id_int, game)
 
         await send_response(
-            "🚪 You left the private game.\n"
-            "Your seat is now available for others."
+            "🚪 You left the private game.\nYour seat is now available for others."
         )
 
         lobby_text = f"👋 {player_mention} left the game.\n"
