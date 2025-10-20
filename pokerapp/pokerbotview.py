@@ -423,3 +423,42 @@ class PokerBotViewer:
             ),
             reply_to_message_id=reply_to_message_id,
         )
+
+    def build_invitation_message(
+        self,
+        host_name: str,
+        game_code: str,
+        stake_config: dict,
+    ) -> tuple[str, InlineKeyboardMarkup]:
+        """
+        Build invitation message with accept/decline buttons.
+
+        Returns:
+            (message_text, keyboard)
+        """
+
+        message = (
+            f"🎴 Game Invitation\n\n"
+            f"{host_name} invited you to join their private poker game!\n\n"
+            f"🎯 Game Code: {game_code}\n\n"
+            f"💰 Stakes: {stake_config['name']}\n"
+            f" • Small Blind: {stake_config['small_blind']:,}\n"
+            f" • Big Blind: {stake_config['big_blind']:,}\n"
+            f"💵 Min Buy-in: {stake_config['min_buyin']:,} chips\n\n"
+            f"Do you want to join?"
+        )
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "✅ Accept",
+                    callback_data=f"invite_accept:{game_code}"
+                ),
+                InlineKeyboardButton(
+                    "❌ Decline",
+                    callback_data=f"invite_decline:{game_code}"
+                ),
+            ]
+        ])
+
+        return message, keyboard
