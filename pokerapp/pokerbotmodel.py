@@ -963,6 +963,8 @@ class PokerBotModel:
         query = update.callback_query
         user = query.from_user
 
+        self._track_user(user.id, getattr(user, "username", None))
+
         # Load game from Redis
         game_key = ":".join(["private_game", game_code])
         game_data = self._kv.get(game_key)
@@ -1068,6 +1070,8 @@ class PokerBotModel:
 
         query = update.callback_query
         user = query.from_user
+
+        self._track_user(user.id, getattr(user, "username", None))
 
         # Load game from Redis
         game_key = ":".join(["private_game", game_code])
