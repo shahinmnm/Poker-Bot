@@ -147,6 +147,7 @@ class Config:
         self.PRIVATE_MAX_PLAYERS: int = int(
             os.getenv("POKERBOT_PRIVATE_MAX_PLAYERS", "6")
         )
+        self.PRIVATE_MIN_PLAYERS: int = 2  # Minimum players to start private game
         self.INITIAL_MONEY: int = int(
             os.getenv("POKERBOT_INITIAL_MONEY", "1000")
         )
