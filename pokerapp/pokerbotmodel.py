@@ -1208,15 +1208,22 @@ class PokerBotModel:
                 lobby_text += " 👑 (Host)"
             lobby_text += "\n"
 
-        await self._view.send_message(
-            chat_id=game_chat_id,
-            text=lobby_text,
-        )
+        try:
+            await self._view.send_message(
+                chat_id=game_chat_id,
+                text=lobby_text,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to notify lobby %s about new player: %s",
+                game_chat_id,
+                exc,
+            )
 
     async def invite_player(
         self,
         update: Update,
-        context: ContextTypes.DEFAULT_TYPE,
+        context: CallbackContext,
     ) -> None:
         """Send invitation to another player."""
 
@@ -1232,7 +1239,7 @@ class PokerBotModel:
     async def leave_private_game(
         self,
         update: Update,
-        context: ContextTypes.DEFAULT_TYPE,
+        context: CallbackContext,
     ) -> None:
         """Handle user leaving lobby."""
 
@@ -1243,7 +1250,7 @@ class PokerBotModel:
     async def start_private_game(
         self,
         update: Update,
-        context: ContextTypes.DEFAULT_TYPE,
+        context: CallbackContext,
     ) -> None:
         """Start private game if lobby conditions met."""
 
