@@ -91,6 +91,25 @@ class PokerBotModel:
             context.chat_data[KEY_CHAT_DATA_GAME] = Game()
         return context.chat_data[KEY_CHAT_DATA_GAME]
 
+    def _game(self, chat_id: ChatId) -> Game:
+        chat_data = self._application.chat_data.setdefault(chat_id, {})
+
+        if KEY_CHAT_DATA_GAME not in chat_data:
+            chat_data[KEY_CHAT_DATA_GAME] = Game()
+
+        return chat_data[KEY_CHAT_DATA_GAME]
+
+    def _save_game(self, chat_id: ChatId, game: Game) -> None:
+        chat_data = self._application.chat_data.setdefault(chat_id, {})
+        chat_data[KEY_CHAT_DATA_GAME] = game
+
+    @staticmethod
+    def _has_available_seat(game: Game) -> bool:
+        return len(game.players) < MAX_PLAYERS
+
+    def _get_wallet(self, user_id: UserId) -> 'WalletManagerModel':
+        return WalletManagerModel(user_id, self._kv)
+
     @staticmethod
     def _current_turn_player(game: Game) -> Player:
         i = game.current_player_index % len(game.players)
@@ -1014,20 +1033,184 @@ class PokerBotModel:
     async def join_private_game(
         self,
         update: Update,
-        context: ContextTypes.DEFAULT_TYPE,
+        context: CallbackContext,
     ) -> None:
-        """Join a private game by using a game code."""
+        """Handle /join <code> command to join private game lobby."""
 
-        await self._view.send_private_game_status(
-            chat_id=update.effective_chat.id,
-            host_name="Host TBD",
-            stake_name="Stake TBD",
-            game_code="CODE123",
-            current_players=1,
-            max_players=5,
-            min_players=2,
-            player_names=["PlaceholderUser"],
-            can_start=False,
+        user_id = update.effective_message.from_user.id
+        chat_id = update.effective_message.chat_id
+
+        if not context.args or len(context.args) != 1:
+            await self._view.send_message_reply(
+                chat_id=chat_id,
+                text=(
+                    "❌ Invalid command format\n\n"
+                    "Usage: /join <code>\n"
+                    "Example: /join ABC123"
+                ),
+                message_id=update.effective_message.message_id,
+            )
+            return
+
+        game_code = context.args[0].upper()
+
+        if len(game_code) != 6 or not game_code.isalnum():
+            await self._view.send_message_reply(
+                chat_id=chat_id,
+                text="❌ Invalid game code format\n\nCode must be 6 characters",
+                message_id=update.effective_message.message_id,
+            )
+            return
+
+        lobby_key = f"private_game:{game_code}"
+        game_chat_id = self._kv.get(lobby_key)
+
+        if isinstance(game_chat_id, bytes):
+            game_chat_id = game_chat_id.decode("utf-8")
+
+        if not game_chat_id:
+            await self._view.send_message_reply(
+                chat_id=chat_id,
+                text=(
+                    f"❌ Game ‘{game_code}’ not found\n\n"
+                    "The game may have ended or the code is incorrect"
+                ),
+                message_id=update.effective_message.message_id,
+            )
+            return
+
+        try:
+            game_chat_id = int(game_chat_id)
+        except (TypeError, ValueError):
+            await self._view.send_message_reply(
+                chat_id=chat_id,
+                text=(
+                    f"❌ Game ‘{game_code}’ not found\n\n"
+                    "The game may have ended or the code is incorrect"
+                ),
+                message_id=update.effective_message.message_id,
+            )
+            return
+
+        game = self._game(game_chat_id)
+
+        if game.state != GameState.INITIAL:
+            await self._view.send_message_reply(
+                chat_id=chat_id,
+                text=(
+                    f"❌ Game ‘{game_code}’ has already started\n\n"
+                    "You cannot join a game in progress"
+                ),
+                message_id=update.effective_message.message_id,
+            )
+            return
+
+        if any(p.user_id == user_id for p in game.players):
+            await self._view.send_message_reply(
+                chat_id=chat_id,
+                text=f"✅ You’re already in game ‘{game_code}’!",
+                message_id=update.effective_message.message_id,
+            )
+            return
+
+        if not self._has_available_seat(game):
+            await self._view.send_message_reply(
+                chat_id=chat_id,
+                text=(
+                    f"❌ Game ‘{game_code}’ is full\n\n"
+                    f"Maximum {MAX_PLAYERS} players allowed"
+                ),
+                message_id=update.effective_message.message_id,
+            )
+            return
+
+        stake_config = game.stake_config
+
+        if stake_config is None:
+            await self._view.send_message_reply(
+                chat_id=chat_id,
+                text=(
+                    f"❌ Game ‘{game_code}’ is not accepting players right now"
+                ),
+                message_id=update.effective_message.message_id,
+            )
+            return
+
+        wallet = self._get_wallet(user_id)
+
+        if not self._coordinator.can_player_join(
+            wallet.value(),
+            stake_config.small_blind,
+        ):
+            await self._view.send_message_reply(
+                chat_id=chat_id,
+                text=(
+                    "❌ Insufficient balance to join\n\n"
+                    f"Minimum buy-in: ${stake_config.min_buy_in}\n"
+                    f"Your balance: ${wallet.value()}"
+                ),
+                message_id=update.effective_message.message_id,
+            )
+            return
+
+        try:
+            user_chat = await context.bot.get_chat(user_id)
+            username = getattr(user_chat, "username", None)
+            first_name = getattr(user_chat, "first_name", None)
+            display_name = username or first_name or f"User{user_id}"
+            if username:
+                mention = f"@{username}"
+            else:
+                mention = "[{}](tg://user?id={})".format(
+                    escape_markdown(display_name, version=1),
+                    user_id,
+                )
+        except Exception:
+            display_name = f"User{user_id}"
+            mention = "[{}](tg://user?id={})".format(
+                escape_markdown(display_name, version=1),
+                user_id,
+            )
+
+        player = Player(
+            user_id=user_id,
+            mention_markdown=mention,
+            wallet=wallet,
+            ready_message_id=None,
+        )
+
+        game.players.append(player)
+
+        self._save_game(game_chat_id, game)
+
+        user_game_key = f"user:{user_id}:private_game"
+        self._kv.set(user_game_key, game_chat_id)
+
+        await self._view.send_message_reply(
+            chat_id=chat_id,
+            text=(
+                f"✅ Successfully joined game ‘{game_code}’!\n\n"
+                f"🎰 Stake: {stake_config.name}\n"
+                f"👥 Players: {len(game.players)}/{MAX_PLAYERS}\n\n"
+                "Waiting for host to start the game…"
+            ),
+            message_id=update.effective_message.message_id,
+        )
+
+        lobby_text = (
+            f"🎉 {mention} joined the game!\n\n"
+            f"👥 Current players ({len(game.players)}/{MAX_PLAYERS}):\n"
+        )
+
+        for idx, player_entry in enumerate(game.players, 1):
+            lobby_text += f"{idx}. {player_entry.mention_markdown}"
+            if idx == 1:
+                lobby_text += " 👑 (Host)"
+            lobby_text += "\n"
+
+        await self._view.send_message(
+            chat_id=game_chat_id,
+            text=lobby_text,
         )
 
     async def invite_player(
