@@ -124,6 +124,32 @@ class PokerBotModel:
     def _generate_game_code(self) -> str:
         return secrets.token_urlsafe(4).upper()[:6]
 
+    def _track_user(self, user_id: int, username: Optional[str]) -> None:
+        """Store username→user_id mapping for invitation lookups."""
+
+        if not username:
+            return
+
+        key = f"username:{username.lower()}"
+        try:
+            self._kv.set(key, str(user_id), ex=86400 * 30)
+        except Exception as exc:
+            logger.debug("Failed to cache username mapping for %s: %s", username, exc)
+
+    def _lookup_user_by_username(self, username: str) -> Optional[int]:
+        """Resolve @username to user_id."""
+
+        key = f"username:{username.lstrip('@').lower()}"
+        user_id = self._kv.get(key)
+
+        if isinstance(user_id, bytes):
+            try:
+                user_id = user_id.decode("utf-8")
+            except Exception:
+                return None
+
+        return int(user_id) if user_id else None
+
     async def _send_response(
         self,
         update: Update,
@@ -258,7 +284,10 @@ class PokerBotModel:
     ) -> None:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
-        user_id = update.effective_message.from_user.id
+        user = update.effective_user
+        user_id = user.id
+
+        self._track_user(user_id, getattr(user, "username", None))
 
         if game.state not in (GameState.INITIAL, GameState.FINISHED):
             await self._view.send_message(
@@ -819,6 +848,8 @@ class PokerBotModel:
         user = update.effective_message.from_user
         chat_id = update.effective_chat.id
 
+        self._track_user(user.id, getattr(user, "username", None))
+
         # Check if user already has an active private game
         existing_game_key = ":".join(["user", str(user.id), "private_game"])
         if self._kv.exists(existing_game_key):
@@ -855,6 +886,7 @@ class PokerBotModel:
 
         query = update.callback_query
         user = query.from_user
+        self._track_user(user.id, getattr(user, "username", None))
         # Validate stake level
         stake_config = self._cfg.PRIVATE_STAKES.get(stake_level)
         if not stake_config:
@@ -880,7 +912,8 @@ class PokerBotModel:
             game_code=game_code,
             host_user_id=user.id,
             stake_level=stake_level,
-            state=PrivateGameState.LOBBY
+            state=PrivateGameState.LOBBY,
+            players=[user.id],
         )
 
         # Store in Redis
@@ -1108,8 +1141,11 @@ class PokerBotModel:
     ) -> None:
         """Handle /join <code> command to join private game lobby."""
 
-        user_id = update.effective_message.from_user.id
+        user = update.effective_message.from_user
+        user_id = user.id
         chat_id = update.effective_message.chat_id
+
+        self._track_user(user_id, getattr(user, "username", None))
 
         if not context.args or len(context.args) != 1:
             await self._send_response(
@@ -1293,16 +1329,336 @@ class PokerBotModel:
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Send invitation to another player."""
+        """Host invites player to their private game. Usage: /invite @username"""
 
-        inviter = update.effective_user
+        user = update.effective_user
+        self._track_user(user.id, getattr(user, "username", None))
 
-        await self._view.send_player_invite(
-            chat_id=update.effective_chat.id,
-            inviter_name=inviter.full_name,
-            game_code="CODE123",
-            stake_name="Medium (25/50)",
+        # Check if user has active private game
+        user_game_key = f"user:{user.id}:private_game"
+        game_code = self._kv.get(user_game_key)
+
+        if isinstance(game_code, bytes):
+            game_code = game_code.decode("utf-8")
+
+        if not game_code:
+            await self._send_response(
+                update,
+                "❌ You don't have an active private game.\n\nCreate one with /private",
+            )
+            return
+
+        # Parse target username
+        if not context.args:
+            await self._send_response(
+                update,
+                "❌ Please specify a player:\n\n/invite @username",
+            )
+            return
+
+        target_username = context.args[0].lstrip("@")
+
+        if not target_username:
+            await self._send_response(
+                update,
+                "❌ Please specify a player:\n\n/invite @username",
+            )
+            return
+
+        target_user_id = self._lookup_user_by_username(target_username)
+
+        if not target_user_id:
+            await self._send_response(
+                update,
+                (
+                    f"❌ User @{target_username} not found.\n\n"
+                    "Players must have used the bot before being invited."
+                ),
+            )
+            return
+
+        # Check if already in game
+        target_game_key = f"user:{target_user_id}:private_game"
+        if self._kv.get(target_game_key):
+            await self._send_response(
+                update,
+                f"❌ @{target_username} is already in a game.",
+            )
+            return
+
+        # Load game data
+        game_key = f"private_game:{game_code}"
+        game_json = self._kv.get(game_key)
+
+        if isinstance(game_json, bytes):
+            game_json = game_json.decode("utf-8")
+
+        if not game_json:
+            await self._send_response(update, "❌ Game not found.")
+            return
+
+        game_data = json.loads(game_json)
+        stake_level = game_data.get("stake_level")
+
+        try:
+            stake_config = self._cfg.PRIVATE_STAKES[stake_level]
+        except KeyError:
+            await self._send_response(update, "❌ Game stakes are misconfigured.")
+            return
+
+        # Store invitation
+        invite_key = f"invite:{game_code}:{target_user_id}"
+        invite_data = {
+            "host_id": user.id,
+            "host_name": user.first_name,
+            "stake_level": stake_level,
+            "invited_at": datetime.datetime.now().isoformat(),
+            "status": "pending",
+        }
+        self._kv.set(invite_key, json.dumps(invite_data), ex=3600)
+
+        # Track pending invite
+        pending_key = f"user:{target_user_id}:pending_invites"
+        try:
+            self._kv.sadd(pending_key, game_code)
+            self._kv.expire(pending_key, 3600)
+        except Exception as exc:
+            logger.debug(
+                "Failed to track pending invite for %s/%s: %s",
+                target_user_id,
+                game_code,
+                exc,
+            )
+
+        # Send invitation to player
+        message, keyboard = self._view.build_invitation_message(
+            host_name=user.first_name,
+            game_code=game_code,
+            stake_config=stake_config,
         )
+
+        try:
+            await self._bot.send_message(
+                chat_id=target_user_id,
+                text=message,
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
+            await self._send_response(
+                update,
+                f"✅ Invitation sent to @{target_username}!",
+            )
+        except Exception as exc:
+            logger.error("Failed to send invitation: %s", exc)
+            await self._send_response(
+                update,
+                (
+                    f"❌ Couldn't send invitation to @{target_username}.\n"
+                    "They may have blocked the bot."
+                ),
+            )
+
+    async def accept_invitation(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Player accepts game invitation via callback button."""
+
+        query = update.callback_query
+
+        if query is None or not query.data:
+            return
+
+        user = query.from_user
+        self._track_user(user.id, getattr(user, "username", None))
+
+        # Extract game code from callback data
+        try:
+            game_code = query.data.split(":", 1)[1]
+        except IndexError:
+            await query.edit_message_text(
+                "❌ This invitation has expired or is invalid.",
+            )
+            return
+
+        # Validate invitation exists
+        invite_key = f"invite:{game_code}:{user.id}"
+        invite_json = self._kv.get(invite_key)
+
+        if isinstance(invite_json, bytes):
+            invite_json = invite_json.decode("utf-8")
+
+        if not invite_json:
+            await query.edit_message_text(
+                "❌ This invitation has expired or is invalid.",
+            )
+            return
+
+        invite_data = json.loads(invite_json)
+        status = invite_data.get("status", "pending")
+
+        if status != "pending":
+            await query.edit_message_text(
+                f"❌ You already {status} this invitation.",
+            )
+            return
+
+        # Check balance
+        stake_level = invite_data.get("stake_level")
+
+        try:
+            stake_config = self._cfg.PRIVATE_STAKES[stake_level]
+        except KeyError:
+            await query.edit_message_text("❌ Game stakes are misconfigured.")
+            return
+
+        wallet = self._get_wallet(user.id)
+        min_buyin = int(stake_config["min_buyin"])
+
+        if not await self._ensure_minimum_balance(
+            update,
+            user.id,
+            wallet,
+            min_buyin,
+        ):
+            await query.edit_message_text(
+                "❌ Insufficient balance!\n\n"
+                f"Required: {min_buyin:,} chips\n"
+                f"Your balance: {wallet.value():,} chips",
+            )
+            return
+
+        # Load game
+        game_key = f"private_game:{game_code}"
+        game_json = self._kv.get(game_key)
+
+        if isinstance(game_json, bytes):
+            game_json = game_json.decode("utf-8")
+
+        if not game_json:
+            await query.edit_message_text("❌ Game no longer exists.")
+            return
+
+        from pokerapp.private_game import PrivateGame
+
+        game = PrivateGame.from_json(game_json)
+
+        # Check if game is full
+        max_players = getattr(self._cfg, "PRIVATE_MAX_PLAYERS", 6)
+        if len(game.players) >= max_players:
+            await query.edit_message_text(
+                f"❌ Game is full (max {max_players} players).",
+            )
+            return
+
+        # Add player to game
+        if user.id not in game.players:
+            game.players.append(user.id)
+            self._kv.set(game_key, game.to_json(), ex=3600)
+
+        # Link user to game
+        user_game_key = f"user:{user.id}:private_game"
+        self._kv.set(user_game_key, game_code, ex=3600)
+
+        # Update invitation status
+        invite_data["status"] = "accepted"
+        self._kv.set(invite_key, json.dumps(invite_data), ex=3600)
+
+        # Remove from pending
+        pending_key = f"user:{user.id}:pending_invites"
+        try:
+            self._kv.srem(pending_key, game_code)
+        except Exception:
+            pass
+
+        # Update player's message
+        await query.edit_message_text(
+            "✅ Joined Game!\n\n"
+            f"Game Code: {game_code}\n"
+            f"Stakes: {stake_config['name']}\n\n"
+            "Use /leave to exit the lobby.",
+        )
+
+        # Notify host
+        try:
+            await self._bot.send_message(
+                chat_id=invite_data["host_id"],
+                text=(
+                    f"✅ @{user.username or user.first_name} "
+                    "accepted your invitation!"
+                ),
+            )
+        except Exception:
+            pass
+
+    async def decline_invitation(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Player declines game invitation via callback button."""
+
+        query = update.callback_query
+
+        if query is None or not query.data:
+            return
+
+        user = query.from_user
+        self._track_user(user.id, getattr(user, "username", None))
+
+        # Extract game code
+        try:
+            game_code = query.data.split(":", 1)[1]
+        except IndexError:
+            await query.edit_message_text(
+                "❌ This invitation has expired or is invalid.",
+            )
+            return
+
+        # Validate invitation
+        invite_key = f"invite:{game_code}:{user.id}"
+        invite_json = self._kv.get(invite_key)
+
+        if isinstance(invite_json, bytes):
+            invite_json = invite_json.decode("utf-8")
+
+        if not invite_json:
+            await query.edit_message_text(
+                "❌ This invitation has expired or is invalid.",
+            )
+            return
+
+        invite_data = json.loads(invite_json)
+
+        # Update status
+        invite_data["status"] = "declined"
+        self._kv.set(invite_key, json.dumps(invite_data), ex=3600)
+
+        # Remove from pending
+        pending_key = f"user:{user.id}:pending_invites"
+        try:
+            self._kv.srem(pending_key, game_code)
+        except Exception:
+            pass
+
+        # Update message
+        await query.edit_message_text(
+            "❌ Invitation Declined\n\n"
+            "You declined the game invitation.",
+        )
+
+        # Notify host
+        try:
+            await self._bot.send_message(
+                chat_id=invite_data["host_id"],
+                text=(
+                    f"❌ @{user.username or user.first_name} "
+                    "declined your invitation."
+                ),
+            )
+        except Exception:
+            pass
 
     async def leave_private_game(
         self,

@@ -67,6 +67,7 @@ class PrivateGame:
     host_user_id: UserId
     stake_level: str
     state: PrivateGameState = PrivateGameState.LOBBY
+    players: List[UserId] = field(default_factory=list)
     invited_players: Dict[UserId, PrivateGameInvite] = field(
         default_factory=dict
     )
@@ -82,6 +83,7 @@ class PrivateGame:
                 "stake_level": self.stake_level,
                 "state": self.state.value,
                 "created_at": self.created_at,
+                "players": [int(player_id) for player_id in self.players],
                 "invited_players": {
                     str(user_id): invite.to_dict()
                     for user_id, invite in self.invited_players.items()
@@ -97,12 +99,14 @@ class PrivateGame:
             int(user_id): PrivateGameInvite.from_dict(invite_data)
             for user_id, invite_data in raw_invites.items()
         }
+        players = [int(player_id) for player_id in payload.get("players", [])]
         state_value = payload.get("state", PrivateGameState.LOBBY.value)
         return cls(
             game_code=str(payload["game_code"]),
             host_user_id=int(payload["host_user_id"]),
             stake_level=str(payload["stake_level"]),
             state=PrivateGameState(state_value),
+            players=players,
             invited_players=invited_players,
             created_at=int(payload.get("created_at", 0)),
         )
