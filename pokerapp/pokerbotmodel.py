@@ -805,8 +805,6 @@ class PokerBotModel:
 
         query = update.callback_query
         user = query.from_user
-        chat_id = update.effective_chat.id
-
         # Validate stake level
         stake_config = self._cfg.PRIVATE_STAKES.get(stake_level)
         if not stake_config:
