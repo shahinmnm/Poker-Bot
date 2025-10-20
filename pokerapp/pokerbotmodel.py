@@ -285,9 +285,8 @@ class PokerBotModel:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         user = update.effective_user
+        self._track_user(user.id, user.username)
         user_id = user.id
-
-        self._track_user(user_id, getattr(user, "username", None))
 
         if game.state not in (GameState.INITIAL, GameState.FINISHED):
             await self._view.send_message(
@@ -886,7 +885,7 @@ class PokerBotModel:
 
         query = update.callback_query
         user = query.from_user
-        self._track_user(user.id, getattr(user, "username", None))
+        self._track_user(user.id, user.username)
         # Validate stake level
         stake_config = self._cfg.PRIVATE_STAKES.get(stake_level)
         if not stake_config:
@@ -1141,11 +1140,10 @@ class PokerBotModel:
     ) -> None:
         """Handle /join <code> command to join private game lobby."""
 
-        user = update.effective_message.from_user
+        user = update.effective_user
+        self._track_user(user.id, user.username)
         user_id = user.id
         chat_id = update.effective_message.chat_id
-
-        self._track_user(user_id, getattr(user, "username", None))
 
         if not context.args or len(context.args) != 1:
             await self._send_response(
