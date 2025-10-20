@@ -437,14 +437,18 @@ class PokerBotViewer:
             (message_text, keyboard)
         """
 
+        small_blind = format(stake_config["small_blind"], ",")
+        big_blind = format(stake_config["big_blind"], ",")
+        min_buyin = format(stake_config["min_buyin"], ",")
+
         message = (
             f"🎴 Game Invitation\n\n"
             f"{host_name} invited you to join their private poker game!\n\n"
             f"🎯 Game Code: {game_code}\n\n"
             f"💰 Stakes: {stake_config['name']}\n"
-            f" • Small Blind: {stake_config['small_blind']:,}\n"
-            f" • Big Blind: {stake_config['big_blind']:,}\n"
-            f"💵 Min Buy-in: {stake_config['min_buyin']:,} chips\n\n"
+            f" • Small Blind: {small_blind}\n"
+            f" • Big Blind: {big_blind}\n"
+            f"💵 Min Buy-in: {min_buyin} chips\n\n"
             f"Do you want to join?"
         )
 
@@ -452,11 +456,11 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     "✅ Accept",
-                    callback_data=f"invite_accept:{game_code}"
+                    callback_data="invite_accept:" + str(game_code)
                 ),
                 InlineKeyboardButton(
                     "❌ Decline",
-                    callback_data=f"invite_decline:{game_code}"
+                    callback_data="invite_decline:" + str(game_code)
                 ),
             ]
         ])
