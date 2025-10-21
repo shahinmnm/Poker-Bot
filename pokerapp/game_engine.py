@@ -119,6 +119,14 @@ class PokerEngine:
         if self.should_end_round(game):
             return TurnResult.END_ROUND
 
+        next_player = self.get_next_active_player(game)
+
+        if next_player is None:
+            return TurnResult.END_ROUND
+
+        game.current_player_index = game.players.index(next_player)
+
+        return TurnResult.CONTINUE_ROUND
 
     def advance_to_next_street(self, game: Game) -> GameState:
         """
