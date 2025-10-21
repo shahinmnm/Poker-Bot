@@ -5,7 +5,7 @@ import datetime
 import json
 import logging
 import secrets
-from typing import Awaitable, Callable, List, Optional, Union
+from typing import Awaitable, Callable, Dict, List, Optional, Union
 
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
@@ -75,6 +75,7 @@ class PokerBotModel:
         self._stake_config = STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL]
 
         self._readyMessages = {}
+        self._username_cache: Dict[int, str] = {}
 
     async def _ensure_minimum_balance(
         self,
@@ -131,6 +132,7 @@ class PokerBotModel:
         key = "username:" + username.lower()
         try:
             self._kv.set(key, str(user_id), ex=86400 * 30)
+            self._username_cache[user_id] = username
         except Exception as exc:
             logger.debug(
                 "Failed to cache username mapping for %s: %s",
@@ -922,12 +924,16 @@ class PokerBotModel:
         self._kv.set(
             game_key,
             private_game.to_json(),
-            ex=3600  # Expire after 1 hour
+            ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
         )
 
         # Link user to game
         user_game_key = ":".join(["user", str(user.id), "private_game"])
-        self._kv.set(user_game_key, game_code, ex=3600)
+        self._kv.set(
+            user_game_key,
+            game_code,
+            ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
+        )
 
         # Show game created confirmation with lobby status
         message = (
@@ -1028,12 +1034,16 @@ class PokerBotModel:
         self._kv.set(
             lobby_key,
             private_game.to_json(),
-            ex=3600
+            ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
         )
 
         # Link user to game
         user_game_key = ":".join(["user", str(user.id), "private_game"])
-        self._kv.set(user_game_key, game_code, ex=3600)
+        self._kv.set(
+            user_game_key,
+            game_code,
+            ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
+        )
 
         # Update invitation message
         message = (
@@ -1102,7 +1112,7 @@ class PokerBotModel:
         self._kv.set(
             game_key,
             private_game.to_json(),
-            ex=3600
+            ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
         )
 
         # Update invitation message
@@ -1428,13 +1438,17 @@ class PokerBotModel:
             "invited_at": datetime.datetime.now().isoformat(),
             "status": "pending",
         }
-        self._kv.set(invite_key, json.dumps(invite_data), ex=3600)
+        self._kv.set(
+            invite_key,
+            json.dumps(invite_data),
+            ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
+        )
 
         # Track pending invite
         pending_key = "user:" + str(target_user_id) + ":pending_invites"
         try:
             self._kv.sadd(pending_key, game_code)
-            self._kv.expire(pending_key, 3600)
+            self._kv.expire(pending_key, self._cfg.PRIVATE_GAME_TTL_SECONDS)
         except Exception as exc:
             logger.debug(
                 "Failed to track pending invite for %s/%s: %s",
@@ -1481,6 +1495,7 @@ class PokerBotModel:
         from pokerapp.private_game import PrivateGame, PrivateGameState
 
         user = update.effective_user
+        chat_id = update.effective_chat.id
 
         # Get game code from user's active game
         user_game_key = ":".join(["user", str(user.id), "private_game"])
@@ -1499,10 +1514,13 @@ class PokerBotModel:
             game_code = game_code.decode("utf-8")
 
         # Load game from Redis
-        game_key = ":".join(["private_game", game_code])
-        game_data = self._kv.get(game_key)
+        lobby_key = ":".join(["private_game", game_code])
+        game_json = self._kv.get(lobby_key)
 
-        if not game_data:
+        if isinstance(game_json, bytes):
+            game_json = game_json.decode("utf-8")
+
+        if not game_json:
             await self._send_response(
                 update,
                 f"❌ Game {game_code} not found or expired.",
@@ -1510,10 +1528,7 @@ class PokerBotModel:
             )
             return
 
-        if isinstance(game_data, bytes):
-            game_data = game_data.decode("utf-8")
-
-        private_game = PrivateGame.from_json(game_data)
+        private_game = PrivateGame.from_json(game_json)
 
         # Validate caller is host
         if user.id != private_game.host_user_id:
@@ -1585,6 +1600,10 @@ class PokerBotModel:
         small_blind = int(stake_config["small_blind"])
         big_blind = int(stake_config["big_blind"])
         min_buyin = int(stake_config["min_buyin"])
+        minimum_required = max(
+            min_buyin,
+            big_blind * self._cfg.MINIMUM_BALANCE_MULTIPLIER,
+        )
 
         # Validate ALL players have sufficient balance
         insufficient_players = []
@@ -1592,11 +1611,9 @@ class PokerBotModel:
         for player_id in accepted_players:
             balance = await self._get_user_balance(player_id)
 
-            # Use coordinator's validation logic
-            if not self._coordinator.can_player_join(balance, small_blind):
-                # Try to resolve player name for error message
-                username = self._lookup_user_by_username(player_id)
-                display_name = username if username else f"Player {player_id}"
+            if balance < minimum_required:
+                cached_name = self._username_cache.get(player_id)
+                display_name = cached_name if cached_name else f"Player {player_id}"
                 insufficient_players.append((player_id, display_name, balance))
 
         # If any player lacks funds, reject start
@@ -1605,11 +1622,11 @@ class PokerBotModel:
 
             for player_id, name, balance in insufficient_players:
                 error_lines.append(
-                    f"• {name}: {balance}$ (need {min_buyin}$)"
+                    f"• {name}: {balance}$ (need {minimum_required}$)"
                 )
 
             error_lines.append(
-                f"\nAll players need at least {min_buyin}$ to play."
+                f"\nAll players need at least {minimum_required}$ to play."
             )
 
             await self._send_response(
@@ -1617,11 +1634,49 @@ class PokerBotModel:
                 "\n".join(error_lines),
                 reply_to_message_id=update.effective_message.message_id,
             )
+
+            # Clean up lobby immediately (don't wait for TTL)
+            keys_deleted = self._kv.delete(lobby_key)
+
+            for pid in accepted_players:
+                user_game_key = ":".join(["user", str(pid), "private_game"])
+                keys_deleted += self._kv.delete(user_game_key)
+
+            for pid in accepted_players:
+                if pid != private_game.host_user_id:
+                    invite_key = ":".join(["private_invite", str(pid), game_code])
+                    keys_deleted += self._kv.delete(invite_key)
+
+            logger.info(
+                "Cleaned up failed lobby %s (%d keys deleted)",
+                game_code,
+                keys_deleted,
+            )
+            return
+
+        # Re-fetch lobby to ensure no concurrent modifications
+        current_json = self._kv.get(lobby_key)
+
+        if isinstance(current_json, bytes):
+            current_json = current_json.decode("utf-8")
+
+        if current_json != game_json:
+            logger.warning(
+                "Lobby state changed during validation for game %s "
+                "(players may have joined/left)",
+                game_code,
+            )
+            await self._view.send_message(
+                chat_id=chat_id,
+                text=(
+                    "⚠️ Lobby state changed during game start. "
+                    "Please try /start again."
+                ),
+            )
             return
 
         # === STEP 2A: CREATE PLAYER OBJECTS ===
 
-        chat_id = update.effective_chat.id
         players: List[Player] = []
         player_names: List[str] = []
 
@@ -1629,27 +1684,31 @@ class PokerBotModel:
         async def resolve_display_name(player_id: int) -> str:
             """Get cached username or fetch from Telegram."""
 
-            # Try username cache first (populated during invitations)
-            username = self._lookup_user_by_username(player_id)
-            if username:
-                return username
+            cached_name = self._username_cache.get(player_id)
+            if cached_name:
+                return cached_name
+
+            if player_id == user.id:
+                name = (
+                    getattr(user, "full_name", None)
+                    or getattr(user, "username", None)
+                    or str(player_id)
+                )
+                self._username_cache[player_id] = name
+                return name
 
             # Fallback: Fetch from Telegram API
             try:
-                if player_id == user.id:
-                    # Host is the callback initiator
-                    return (
-                        getattr(user, "full_name", None)
-                        or getattr(user, "username", None)
-                        or str(player_id)
-                    )
-
-                chat = await self._bot.get_chat(player_id)
-                return (
-                    getattr(chat, "full_name", None)
-                    or getattr(chat, "username", None)
+                member = await self._bot.get_chat_member(chat_id, player_id)
+                member_user = getattr(member, "user", None)
+                name = (
+                    getattr(member_user, "full_name", None)
+                    or getattr(member_user, "first_name", None)
+                    or getattr(member_user, "username", None)
                     or str(player_id)
                 )
+                self._username_cache[player_id] = name
+                return name
             except Exception as exc:
                 logger.warning(
                     "Failed to resolve name for user %s: %s",
@@ -1658,31 +1717,42 @@ class PokerBotModel:
                 )
                 return str(player_id)
 
-        # Create Player objects for all accepted players
-        for player_id in accepted_players:
-            display_name = await resolve_display_name(player_id)
+        # Load wallets and names in parallel
+        wallet_tasks = [
+            WalletManagerModel.load(user_id, self._kv, logger)
+            for user_id in accepted_players
+        ]
+        name_tasks = [resolve_display_name(user_id) for user_id in accepted_players]
 
-            # Create markdown mention for chat messages
+        wallets = await asyncio.gather(*wallet_tasks)
+        player_names = await asyncio.gather(*name_tasks)
+
+        # Create Player objects for all accepted players
+        for player_id, wallet, display_name in zip(
+            accepted_players, wallets, player_names
+        ):
             mention = "[{}](tg://user?id={})".format(
                 escape_markdown(display_name, version=1),
                 player_id,
             )
 
-            # Create Player object with wallet manager
             players.append(
                 Player(
                     user_id=player_id,
                     mention_markdown=mention,
-                    wallet=WalletManagerModel(player_id, self._kv),
+                    wallet=wallet,
                     ready_message_id=None,  # No ready message in private games
                 )
             )
-            player_names.append(display_name)
 
         logger.info(
-            "Created %d player objects for private game %s",
+            "Created %d player objects for game %s: %s",
             len(players),
             game_code,
+            ", ".join(
+                f"{name} (ID={uid}, balance={player.wallet.value()})"
+                for uid, name, player in zip(accepted_players, player_names, players)
+            ),
         )
 
         # === STEP 2B: INITIALIZE GAME OBJECT ===
@@ -1726,11 +1796,16 @@ class PokerBotModel:
         }
 
         snapshot_key = ":".join(["game", str(chat_id)])
-        self._kv.set(snapshot_key, json.dumps(game_snapshot), ex=3600)
+        self._kv.set(
+            snapshot_key,
+            json.dumps(game_snapshot),
+            ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
+        )
 
         logger.info(
-            "Persisted game snapshot to Redis (key=%s, ttl=3600s)",
+            "Persisted game snapshot to Redis (key=%s, ttl=%ss)",
             snapshot_key,
+            self._cfg.PRIVATE_GAME_TTL_SECONDS,
         )
 
         # === STEP 2D: CLEANUP LOBBY STATE ===
@@ -1863,15 +1938,27 @@ class PokerBotModel:
         # Add player to game
         if user.id not in game.players:
             game.players.append(user.id)
-            self._kv.set(game_key, game.to_json(), ex=3600)
+            self._kv.set(
+                game_key,
+                game.to_json(),
+                ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
+            )
 
         # Link user to game
         user_game_key = "user:" + str(user.id) + ":private_game"
-        self._kv.set(user_game_key, game_code, ex=3600)
+        self._kv.set(
+            user_game_key,
+            game_code,
+            ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
+        )
 
         # Update invitation status
         invite_data["status"] = "accepted"
-        self._kv.set(invite_key, json.dumps(invite_data), ex=3600)
+        self._kv.set(
+            invite_key,
+            json.dumps(invite_data),
+            ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
+        )
 
         # Remove from pending
         pending_key = "user:" + str(user.id) + ":pending_invites"
@@ -1941,7 +2028,11 @@ class PokerBotModel:
 
         # Update status
         invite_data["status"] = "declined"
-        self._kv.set(invite_key, json.dumps(invite_data), ex=3600)
+        self._kv.set(
+            invite_key,
+            json.dumps(invite_data),
+            ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
+        )
 
         # Remove from pending
         pending_key = "user:" + str(user.id) + ":pending_invites"
@@ -2176,6 +2267,19 @@ class WalletManagerModel(Wallet):
         key = self._prefix(self.user_id)
         if self._kv.get(key) is None:
             self._kv.set(key, DEFAULT_MONEY)
+
+    @classmethod
+    async def load(
+        cls,
+        user_id: UserId,
+        kv: Optional[redis.Redis],
+        logger: logging.Logger,
+    ) -> "WalletManagerModel":
+        try:
+            return await asyncio.to_thread(cls, user_id, kv)
+        except Exception as exc:
+            logger.exception("Failed to load wallet for user %s: %s", user_id, exc)
+            raise
 
     @staticmethod
     def _prefix(id: int, suffix: str = ""):

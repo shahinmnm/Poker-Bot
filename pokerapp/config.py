@@ -163,6 +163,11 @@ class Config:
             for key, preset in STAKE_PRESETS.items()
         }
 
+        # Q10: Redis key expiration settings
+        self.PRIVATE_GAME_TTL_SECONDS: int = int(
+            os.getenv("POKERBOT_PRIVATE_GAME_TTL", "3600")
+        )
+
         # Q7: Balance validation settings
         self.MINIMUM_BALANCE_MULTIPLIER: int = 20
         self.ENFORCE_BALANCE_CHECK: bool = True
