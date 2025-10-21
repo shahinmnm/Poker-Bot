@@ -1733,7 +1733,27 @@ class PokerBotModel:
             game_key,
         )
 
-        # === TODO: STEP 2D - CLEANUP LOBBY STATE ===
+        # === STEP 2D: CLEANUP LOBBY STATE ===
+
+        # Delete lobby key (game has started, lobby no longer needed)
+        self._kv.delete(redis_key)
+
+        # Delete all player-to-game mappings
+        for pid in accepted_players:
+            user_game_key = ":".join(["user", str(pid), "private_game"])
+            self._kv.delete(user_game_key)
+
+        # Delete all invitation keys
+        for pid in accepted_players:
+            if pid != private_game.host_user_id:  # Host has no invitation
+                invite_key = ":".join(["private_invite", str(pid), game_code])
+                self._kv.delete(invite_key)
+
+        logger.info(
+            "Cleaned up lobby state for game %s (%d keys deleted)",
+            game_code,
+            1 + len(accepted_players) + (len(accepted_players) - 1),
+        )
 
         # TODO: Game engine initialization (Step 2)
         # TODO: State cleanup (Step 3)
