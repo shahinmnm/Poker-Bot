@@ -67,7 +67,12 @@ class PokerEngine:
 
         return None
 
-    def should_end_round(self, game: Game) -> bool:
+    def should_end_round(
+        self,
+        game: Game,
+        *,
+        next_player: Optional[Player] = None,
+    ) -> bool:
         """
         Check if betting round is complete.
         Round ends when all players matched max bet OR folded/all-in
@@ -88,8 +93,15 @@ class PokerEngine:
             for p in active_players
         )
 
-        # Check if we've completed the circle back to last raiser
-        current_player = game.players[game.current_player_index]
+        # Check if we've completed the circle back to last raiser. The caller
+        # may already know who is slated to act next; use that information so
+        # the evaluation runs against the upcoming player rather than the one
+        # who just finished their turn.
+        if next_player is None:
+            current_player = game.players[game.current_player_index]
+        else:
+            current_player = next_player
+
         at_round_initiator = (
             current_player.user_id == game.trading_end_user_id
         )
@@ -115,13 +127,15 @@ class PokerEngine:
         if len(active_or_allin) == 1:
             return TurnResult.END_GAME
 
-        # Check if betting round is complete
-        if self.should_end_round(game):
-            return TurnResult.END_ROUND
-
         next_player = self.get_next_active_player(game)
 
         if next_player is None:
+            return TurnResult.END_ROUND
+
+        # Check if betting round is complete using the next player who would
+        # act. This avoids prompting the raiser for an unnecessary extra turn
+        # when the action should already close.
+        if self.should_end_round(game, next_player=next_player):
             return TurnResult.END_ROUND
 
         game.current_player_index = game.players.index(next_player)
