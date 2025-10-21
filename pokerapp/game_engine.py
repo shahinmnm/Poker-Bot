@@ -105,10 +105,11 @@ class PokerEngine:
             TurnResult indicating whether to continue,
             end round, or end game
         """
-        # Count players still in game
+        # Count players still in the hand (actively acting or already all-in)
         active_or_allin = [
-            p for p in game.players
-            if p.state in (PlayerState.ACTIVE, PlayerState.ALL_IN)
+            player
+            for player in game.players
+            if player.state in (PlayerState.ACTIVE, PlayerState.ALL_IN)
         ]
 
         # Only one player left → end game immediately
@@ -126,7 +127,7 @@ class PokerEngine:
             # No active players left (all folded or all-in)
             return TurnResult.END_ROUND
 
-        # Update game state to next player's turn
+        # Update game state to next player's turn and continue the round
         game.current_player_index = game.players.index(next_player)
 
         return TurnResult.CONTINUE_ROUND
