@@ -53,26 +53,28 @@ class GameCoordinator:
         result = self.engine.process_turn(game)
 
         if result == TurnResult.CONTINUE_ROUND:
-            current_player = game.players[game.current_player_index]
+            while True:
+                current_player = game.players[game.current_player_index]
 
-            # Auto all-in if player has no money
-            if current_player.wallet.value() <= 0:
-                logger.info(
-                    "Player %s has $0 - setting ALL_IN and advancing turn",
-                    current_player.user_id,
-                )
-                current_player.state = PlayerState.ALL_IN
+                # Auto all-in if player has no money
+                if current_player.wallet.value() <= 0:
+                    if current_player.state != PlayerState.ALL_IN:
+                        logger.info(
+                            "Player %s has $0 - setting ALL_IN and advancing turn",
+                            current_player.user_id,
+                        )
+                        current_player.state = PlayerState.ALL_IN
 
-                # Call process_turn() once more to advance to next player
-                # This avoids recursion while ensuring the ALL_IN player is skipped
-                result = self.engine.process_turn(game)
+                    # Call process_turn() again to advance to next player
+                    result = self.engine.process_turn(game)
 
-                if result == TurnResult.CONTINUE_ROUND:
-                    return result, game.players[game.current_player_index]
-                else:
-                    return result, None
+                    if result != TurnResult.CONTINUE_ROUND:
+                        return result, None
 
-            return result, current_player
+                    # Continue looping to evaluate the next player in turn order
+                    continue
+
+                return result, current_player
 
         return result, None
 
