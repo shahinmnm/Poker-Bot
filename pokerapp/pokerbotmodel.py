@@ -1857,6 +1857,39 @@ class PokerBotModel:
             chat_id,
         )
 
+        # === STEP 3B: SEND INDIVIDUAL PLAYER NOTIFICATIONS ===
+
+        for player in players:
+            try:
+                await self._view.send_message(
+                    chat_id=player.user_id,
+                    text=(
+                        f"🎮 **Game Started!**\n\n"
+                        f"💰 **Your Balance:** ${player.balance:,.0f}\n"
+                        f"📊 **Blinds:** ${small_blind}/{big_blind}\n\n"
+                        "Your cards will be dealt shortly. Good luck! 🍀"
+                    ),
+                    parse_mode="Markdown",
+                )
+                logger.debug(
+                    "Sent start notification to player %s (balance: $%d)",
+                    player.user_id,
+                    player.balance,
+                )
+            except Exception as exc:
+                # Log but don't fail the game if individual notification fails
+                logger.warning(
+                    "Failed to send start notification to player %s: %s",
+                    player.user_id,
+                    exc,
+                )
+
+        logger.info(
+            "Sent individual start notifications to %d players for game %s",
+            len(players),
+            game_code,
+        )
+
         # TODO: Game engine initialization (Step 2)
         # TODO: State cleanup (Step 3)
 
