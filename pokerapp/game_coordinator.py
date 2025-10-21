@@ -57,9 +57,20 @@ class GameCoordinator:
 
             # Auto all-in if player has no money
             if current_player.wallet.value() <= 0:
+                logger.info(
+                    "Player %s has $0 - setting ALL_IN and advancing turn",
+                    current_player.user_id,
+                )
                 current_player.state = PlayerState.ALL_IN
-                # Recursively check again after state change
-                return self.process_game_turn(game)
+
+                # Call process_turn() once more to advance to next player
+                # This avoids recursion while ensuring the ALL_IN player is skipped
+                result = self.engine.process_turn(game)
+
+                if result == TurnResult.CONTINUE_ROUND:
+                    return result, game.players[game.current_player_index]
+                else:
+                    return result, None
 
             return result, current_player
 
