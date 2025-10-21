@@ -1836,6 +1836,27 @@ class PokerBotModel:
             expected_keys,
         )
 
+        # === STEP 3A: SEND GAME START NOTIFICATION ===
+
+        await self._view.send_message(
+            chat_id=chat_id,
+            text=(
+                f"🎮 **Game Starting!**\n\n"
+                f"**Players ({len(players)}):**\n"
+                + "\n".join(f"• {name}" for name in player_names)
+                + f"\n\n**Stakes:** {stake_config['name']}\n"
+                f"**Blinds:** {small_blind}/{big_blind}\n\n"
+                "Good luck! 🍀"
+            ),
+            parse_mode="Markdown",
+        )
+
+        logger.info(
+            "Sent game start notification for game %s to chat %s",
+            game_code,
+            chat_id,
+        )
+
         # TODO: Game engine initialization (Step 2)
         # TODO: State cleanup (Step 3)
 
