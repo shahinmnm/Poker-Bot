@@ -98,7 +98,8 @@ class GameCoordinator:
         )
 
         self.player_raise_bet(game, game.players[0], small_blind)
-        self.player_raise_bet(game, game.players[1], big_blind_amount)
+        big_blind_raise = max(big_blind_amount - game.max_round_rate, 0)
+        self.player_raise_bet(game, game.players[1], big_blind_raise)
 
     def player_raise_bet(
         self,
