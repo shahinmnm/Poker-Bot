@@ -31,7 +31,7 @@ from pokerapp.entities import (
     BalanceValidator,
 )
 from pokerapp.game_coordinator import GameCoordinator
-from pokerapp.game_engine import TurnResult
+from pokerapp.game_engine import GameEngine, TurnResult
 from pokerapp.pokerbotview import PokerBotViewer
 from pokerapp.kvstore import ensure_kv
 
@@ -1890,8 +1890,25 @@ class PokerBotModel:
             game_code,
         )
 
-        # TODO: Game engine initialization (Step 2)
-        # TODO: State cleanup (Step 3)
+        # === STEP 3C: INITIALIZE GAME ENGINE ===
+
+        engine = GameEngine(
+            game_id=game_code,
+            chat_id=chat_id,
+            players=players,
+            small_blind=small_blind,
+            big_blind=big_blind,
+            kv_store=self._kv,
+            view=self._view,
+        )
+
+        # Start the first hand
+        await engine.start_new_hand()
+
+        logger.info(
+            "Game engine initialized and first hand started for game %s",
+            game_code,
+        )
 
     async def accept_invitation(
         self,
