@@ -31,7 +31,7 @@ from pokerapp.entities import (
     BalanceValidator,
 )
 from pokerapp.game_coordinator import GameCoordinator
-from pokerapp.game_engine import GameEngine, TurnResult
+from pokerapp.game_engine import TurnResult
 from pokerapp.pokerbotview import PokerBotViewer
 from pokerapp.kvstore import ensure_kv
 
@@ -1892,21 +1892,62 @@ class PokerBotModel:
 
         # === STEP 3C: INITIALIZE GAME ENGINE ===
 
-        engine = GameEngine(
-            game_id=game_code,
-            chat_id=chat_id,
-            players=players,
-            small_blind=small_blind,
-            big_blind=big_blind,
-            kv_store=self._kv,
-            view=self._view,
-        )
+        from pokerapp.game_engine import GameEngine
 
-        # Start the first hand
-        await engine.start_new_hand()
+        try:
+            # Create engine instance
+            engine = GameEngine(
+                game_id=game_code,
+                chat_id=chat_id,
+                players=players,
+                small_blind=small_blind,
+                big_blind=big_blind,
+                kv_store=self._kv,
+                view=self._view,
+            )
+
+            # Start first hand (deals cards, applies blinds, sets first actor)
+            await engine.start_new_hand()
+
+            logger.info(
+                "Game engine initialized and first hand started for game %s",
+                game_code,
+            )
+
+        except Exception as exc:
+            logger.error(
+                "Failed to initialize game engine for game %s: %s",
+                game_code,
+                exc,
+            )
+
+            # Notify players of failure
+            await self._view.send_message(
+                chat_id=chat_id,
+                text=(
+                    "❌ **Game Failed to Start**\n\n"
+                    "An error occurred while initializing the game. "
+                    "Please try again or contact support."
+                ),
+                parse_mode="Markdown",
+            )
+
+            # Clean up lobby
+            await self.delete_private_game_lobby(chat_id, game_code)
+
+            raise  # Re-raise for tracking
+
+        # === STEP 3D: STATE CLEANUP ===
+
+        # Mark game as PLAYING
+        game_state_key = f"private_game:{chat_id}:{game_code}:state"
+        await self._kv.set(game_state_key, "PLAYING")
+
+        # Clear the lobby (no longer needed)
+        await self.delete_private_game_lobby(chat_id, game_code)
 
         logger.info(
-            "Game engine initialized and first hand started for game %s",
+            "Private game %s fully initialized and in PLAYING state",
             game_code,
         )
 
