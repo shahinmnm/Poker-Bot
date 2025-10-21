@@ -1548,8 +1548,11 @@ class PokerBotModel:
         if len(accepted_players) < self._cfg.PRIVATE_MIN_PLAYERS:
             await self._send_response(
                 update,
-                f"❌ Need at least {self._cfg.PRIVATE_MIN_PLAYERS} players to start!\n\n"
-                f"Current: {len(accepted_players)} player(s)",
+                (
+                    "❌ Need at least "
+                    f"{self._cfg.PRIVATE_MIN_PLAYERS} players to start!\n\n"
+                    f"Current: {len(accepted_players)} player(s)"
+                ),
                 reply_to_message_id=update.effective_message.message_id,
             )
             return
@@ -1580,6 +1583,7 @@ class PokerBotModel:
             return
 
         small_blind = int(stake_config["small_blind"])
+        big_blind = int(stake_config["big_blind"])
         min_buyin = int(stake_config["min_buyin"])
 
         # Validate ALL players have sufficient balance
@@ -1632,7 +1636,7 @@ class PokerBotModel:
 
             # Fallback: Fetch from Telegram API
             try:
-                if player_id == user_id:
+                if player_id == user.id:
                     # Host is the callback initiator
                     return (
                         getattr(user, "full_name", None)
@@ -1698,7 +1702,8 @@ class PokerBotModel:
         context.chat_data[KEY_OLD_PLAYERS] = list(accepted_players)
 
         logger.info(
-            "Initialized Game object for private game %s (mode=%s, players=%d)",
+            "Initialized Game object for private game %s "
+            "(mode=%s, players=%d)",
             game_code,
             game.mode.value,
             len(players),
