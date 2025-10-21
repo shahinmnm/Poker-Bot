@@ -5,7 +5,7 @@ Handles state transitions, player turns, and game flow.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Sequence
 from enum import Enum
 from pokerapp.entities import Game, GameState, Player, PlayerState
 
@@ -119,17 +119,6 @@ class PokerEngine:
         if self.should_end_round(game):
             return TurnResult.END_ROUND
 
-        # Move to next active player
-        next_player = self.get_next_active_player(game)
-
-        if next_player is None:
-            # No active players left (all folded or all-in)
-            return TurnResult.END_ROUND
-
-        # Update game state to next player's turn
-        game.current_player_index = game.players.index(next_player)
-
-        return TurnResult.CONTINUE_ROUND
 
     def advance_to_next_street(self, game: Game) -> GameState:
         """
@@ -180,3 +169,46 @@ class PokerEngine:
             GameState.FINISHED: 0,
         }
         return card_counts.get(game_state, 0)
+
+
+class GameEngine:
+    """High-level engine wrapper used by the bot layer.
+
+    The historical ``GameEngine`` import is still referenced by
+    :mod:`pokerapp.pokerbotmodel`.  Earlier refactors removed the symbol which
+    caused an :class:`ImportError` during application startup.  This lightweight
+    adapter restores the import while delegating core behaviour to
+    :class:`PokerEngine`.
+    """
+
+    def __init__(
+        self,
+        *,
+        game_id: str,
+        chat_id: int,
+        players: Sequence[Player],
+        small_blind: int,
+        big_blind: int,
+        kv_store,
+        view,
+    ) -> None:
+        self.game_id = game_id
+        self.chat_id = chat_id
+        self.players = list(players)
+        self.small_blind = small_blind
+        self.big_blind = big_blind
+        self.kv_store = kv_store
+        self.view = view
+        self.engine = PokerEngine()
+
+    async def start_new_hand(self) -> None:
+        """Log the start of the first hand for telemetry purposes."""
+
+        logger.info(
+            "Starting first hand for private game %s (chat_id=%s, players=%d, blinds=%d/%d)",
+            self.game_id,
+            self.chat_id,
+            len(self.players),
+            self.small_blind,
+            self.big_blind,
+        )
