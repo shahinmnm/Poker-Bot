@@ -968,8 +968,8 @@ class PokerBotModel:
         self._track_user(user.id, getattr(user, "username", None))
 
         # Load game from Redis
-        game_key = ":".join(["private_game", game_code])
-        game_data = self._kv.get(game_key)
+        lobby_key = ":".join(["private_game", game_code])
+        game_data = self._kv.get(lobby_key)
 
         if not game_data:
             await query.answer("❌ Game not found!", show_alert=True)
@@ -1026,7 +1026,7 @@ class PokerBotModel:
 
         # Save updated game
         self._kv.set(
-            game_key,
+            lobby_key,
             private_game.to_json(),
             ex=3600
         )
@@ -1725,34 +1725,40 @@ class PokerBotModel:
             "created_at": int(datetime.datetime.utcnow().timestamp()),
         }
 
-        game_key = ":".join(["game", str(chat_id)])
-        self._kv.set(game_key, json.dumps(game_snapshot), ex=3600)
+        snapshot_key = ":".join(["game", str(chat_id)])
+        self._kv.set(snapshot_key, json.dumps(game_snapshot), ex=3600)
 
         logger.info(
             "Persisted game snapshot to Redis (key=%s, ttl=3600s)",
-            game_key,
+            snapshot_key,
         )
 
         # === STEP 2D: CLEANUP LOBBY STATE ===
 
+        keys_deleted = 0
+
         # Delete lobby key (game has started, lobby no longer needed)
-        self._kv.delete(redis_key)
+        keys_deleted += self._kv.delete(lobby_key)
 
         # Delete all player-to-game mappings
         for pid in accepted_players:
             user_game_key = ":".join(["user", str(pid), "private_game"])
-            self._kv.delete(user_game_key)
+            keys_deleted += self._kv.delete(user_game_key)
 
         # Delete all invitation keys
         for pid in accepted_players:
             if pid != private_game.host_user_id:  # Host has no invitation
                 invite_key = ":".join(["private_invite", str(pid), game_code])
-                self._kv.delete(invite_key)
+                keys_deleted += self._kv.delete(invite_key)
+
+        # Expected deletions: lobby (1) + mappings (n) + invites (n-1) = 2n
+        expected_keys = 2 * len(accepted_players)
 
         logger.info(
-            "Cleaned up lobby state for game %s (%d keys deleted)",
+            "Cleaned up lobby state for game %s (%d/%d keys deleted)",
             game_code,
-            1 + len(accepted_players) + (len(accepted_players) - 1),
+            keys_deleted,
+            expected_keys,
         )
 
         # TODO: Game engine initialization (Step 2)
