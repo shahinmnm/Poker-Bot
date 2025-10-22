@@ -4,6 +4,7 @@ import logging
 
 from telegram import (
     BotCommand,
+    CallbackQuery,
     Update,
 )
 from telegram.ext import (
@@ -63,6 +64,10 @@ class PokerBotController:
         )
         application.add_handler(
             CallbackQueryHandler(self._handle_callback_query)
+        )
+        # Register callback query handler for action buttons
+        application.add_handler(
+            CallbackQueryHandler(self.handle_action_button)
         )
 
         application.post_init = self._post_init
@@ -411,3 +416,84 @@ Send 💰 /money once per day for free chips!
         await self._model.create_private_game_with_stake(
             update, context, stake_level
         )
+
+    async def handle_action_button(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """
+        Handle inline button callbacks for player actions.
+
+        Callback data format: "action:{action_type}:{game_id}"
+
+        For raises: "action:raise:{amount}:{game_id}"
+        """
+        query: CallbackQuery = update.callback_query
+
+        if not query or not query.data:
+            return
+
+        # Parse callback data
+        parts = query.data.split(":")
+
+        if len(parts) < 3 or parts[0] != "action":
+            await query.answer("❌ Invalid action format")
+            return
+
+        action_type = parts[1]
+
+        # Handle raise which has amount in data
+        if action_type == "raise":
+            if len(parts) != 4:
+                await query.answer("❌ Invalid raise format")
+                return
+
+            try:
+                amount = int(parts[2])
+                game_id = parts[3]
+            except ValueError:
+                await query.answer("❌ Invalid raise amount")
+                return
+        else:
+            game_id = parts[2]
+            amount = 0
+
+        # Validate user
+        user_id = str(query.from_user.id)
+
+        try:
+            # Map action types to PlayerAction enum
+            action_map = {
+                "check": PlayerAction.CHECK,
+                "call": PlayerAction.CALL,
+                "fold": PlayerAction.FOLD,
+                "raise": PlayerAction.RAISE_RATE,
+                "allin": PlayerAction.ALL_IN,
+            }
+
+            if action_type not in action_map:
+                await query.answer("❌ Unknown action")
+                return
+
+            player_action = action_map[action_type]
+
+            # Process action through model
+            success = await self._model.handle_player_action(
+                user_id=user_id,
+                chat_id=str(query.message.chat_id),
+                game_id=game_id,
+                action=player_action,
+                amount=amount,
+            )
+
+            if success:
+                # Acknowledge the button press
+                await query.answer()
+            else:
+                await query.answer(
+                    "❌ Action failed. Not your turn or invalid move."
+                )
+        except Exception as e:  # pragma: no cover - defensive logging
+            logger.error(f"Error handling action button: {e}")
+            await query.answer("❌ An error occurred")
