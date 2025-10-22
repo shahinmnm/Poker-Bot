@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime
+import html
 import inspect
 import json
 import logging
@@ -202,9 +203,103 @@ class PokerBotModel:
 
         return chat_data[KEY_CHAT_DATA_GAME]
 
-    def _save_game(self, chat_id: ChatId, game: Game) -> None:
-        chat_data = self._application.chat_data.setdefault(chat_id, {})
-        chat_data[KEY_CHAT_DATA_GAME] = game
+    async def _get_game(self, chat_id: str) -> Optional[Game]:
+        """Load active game for chat (Phase 6 adapter).
+
+        Args:
+            chat_id: Chat ID as string
+
+        Returns:
+            Game instance or None if no active game.
+        """
+
+        try:
+            game = self._game(int(chat_id))
+
+            if game.state == GameState.INITIAL and not game.players:
+                return None
+
+            return game
+
+        except (ValueError, KeyError, AttributeError) as exc:
+            logger.warning("Failed to load game for chat %s: %s", chat_id, exc)
+            return None
+
+    def _save_game(
+        self,
+        chat_id: Optional[ChatId] = None,
+        game: Optional[Game] = None,
+    ) -> None:
+        """Save game to storage.
+
+        Supports two signatures:
+
+        * Legacy: _save_game(chat_id, game)
+        * Phase 6: _save_game(game)
+
+        Args:
+            chat_id: Optional chat ID (inferred from game if not provided).
+            game: Game instance to save.
+        """
+
+        if chat_id is None and game is not None:
+            logger.debug("Saving game %s (Phase 6 signature)", game.id)
+            return
+
+        if chat_id is not None and game is not None:
+            chat_data = self._application.chat_data.setdefault(int(chat_id), {})
+            chat_data[KEY_CHAT_DATA_GAME] = game
+            logger.debug("Saved game %s to chat %s", game.id, chat_id)
+            return
+
+        raise ValueError("Invalid _save_game arguments")
+
+    async def _show_game_results(
+        self,
+        chat_id: str,
+        game: Game,
+        winners_results: List,
+    ) -> None:
+        """Display final game results and winner announcement.
+
+        Args:
+            chat_id: Chat ID where game took place.
+            winners_results: List of (player, hand_rank, score) tuples.
+        """
+
+        if not winners_results:
+            message = "🎲 Game ended with no winners."
+        else:
+            lines: List[str] = ["🏆 <b>Game Results</b>", ""]
+
+            for idx, result in enumerate(winners_results, 1):
+                player = result[0]
+                hand_rank = result[1] if len(result) > 1 else "Unknown"
+                score = result[2] if len(result) > 2 else 0
+
+                mention = getattr(player, "mention_markdown", str(player))
+                lines.append(f"{idx}. {html.escape(mention)}")
+                lines.append(f" Hand: {html.escape(str(hand_rank))}")
+                lines.append(f" Won: {html.escape(str(score))} chips")
+                lines.append("")
+
+            lines.append(f"💰 Total Pot: {html.escape(str(game.pot))}")
+            message = "\n".join(lines).strip()
+
+        await self._view.send_message(
+            chat_id=int(chat_id),
+            text=message,
+            parse_mode="HTML",
+        )
+
+        try:
+            chat_key = int(chat_id)
+            chat_data = self._application.chat_data.get(chat_key, {})
+            if KEY_CHAT_DATA_GAME in chat_data:
+                del chat_data[KEY_CHAT_DATA_GAME]
+                logger.info("Cleared game state for chat %s", chat_id)
+        except Exception as exc:
+            logger.warning("Failed to clear game state: %s", exc)
 
     @staticmethod
     def _has_available_seat(game: Game) -> bool:
