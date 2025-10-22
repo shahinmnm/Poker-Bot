@@ -1848,7 +1848,6 @@ class PokerBotModel:
                 f"**Blinds:** {small_blind}/{big_blind}\n\n"
                 "Good luck! 🍀"
             ),
-            parse_mode="Markdown",
         )
 
         logger.info(
