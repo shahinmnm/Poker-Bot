@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Optional
+from typing import List, Optional, Dict
 
 from telegram import (
     Message,
@@ -14,7 +14,7 @@ from telegram.constants import ParseMode
 from io import BytesIO
 
 from pokerapp.desk import DeskImageGenerator
-from pokerapp.cards import Cards
+from pokerapp.cards import Card, Cards
 from pokerapp.entities import (
     Game,
     Player,
@@ -30,6 +30,54 @@ class PokerBotViewer:
     def __init__(self, bot: Bot):
         self._bot = bot
         self._desk_generator = DeskImageGenerator()
+
+    @staticmethod
+    def _format_card(card: Card) -> str:
+        """
+        Format a card with Unicode symbol and suit emoji.
+
+        Args:
+            card: Card object with rank and suit
+
+        Returns:
+            Formatted string like "A♠" or "K♥"
+        """
+
+        suit_symbols = {
+            'spades': '♠',
+            'hearts': '♥',
+            'diamonds': '♦',
+            'clubs': '♣'
+        }
+
+        rank_display = {
+            1: 'A',
+            11: 'J',
+            12: 'Q',
+            13: 'K'
+        }
+
+        rank_str = rank_display.get(card.rank, str(card.rank))
+        suit_str = suit_symbols.get(card.suit, '?')
+
+        return f"{rank_str}{suit_str}"
+
+    @staticmethod
+    def _format_board_cards(cards: List[Card]) -> str:
+        """
+        Format multiple cards for board display.
+
+        Args:
+            cards: List of Card objects
+
+        Returns:
+            Formatted string like "A♠ K♥ J♣"
+        """
+
+        if not cards:
+            return "Waiting for flop…"
+
+        return " ".join(PokerBotViewer._format_card(card) for card in cards)
 
     async def send_message(
         self,
