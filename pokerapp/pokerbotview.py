@@ -168,6 +168,80 @@ class PokerBotViewer:
 
         return "\n".join(lines)
 
+    def build_action_buttons(
+        self,
+        game: Game,
+        current_player: Player,
+    ) -> InlineKeyboardMarkup:
+        """
+        Build inline keyboard with available actions for current player.
+
+        Args:
+            game: Current game instance
+            current_player: Player whose turn it is
+
+        Returns:
+            InlineKeyboardMarkup with action buttons
+        """
+
+        buttons = []
+
+        current_bet = game.max_round_rate
+        player_bet = current_player.round_rate
+        player_balance = current_player.wallet.value()
+        call_amount = current_bet - player_bet
+
+        row1 = []
+        if call_amount == 0:
+            row1.append(
+                InlineKeyboardButton("✅ Check", callback_data=f"action:check:{game.id}")
+            )
+        elif call_amount < player_balance:
+            row1.append(
+                InlineKeyboardButton(
+                    f"💵 Call ${call_amount}", callback_data=f"action:call:{game.id}"
+                )
+            )
+
+        row1.append(
+            InlineKeyboardButton("❌ Fold", callback_data=f"action:fold:{game.id}")
+        )
+        buttons.append(row1)
+
+        if player_balance > call_amount:
+            row2 = []
+            big_blind = game.table_stake * 2
+            min_raise = max(current_bet * 2, big_blind)
+
+            if player_balance >= min_raise:
+                row2.append(
+                    InlineKeyboardButton(
+                        f"📈 Raise ${min_raise}",
+                        callback_data=f"action:raise:{min_raise}:{game.id}",
+                    )
+                )
+
+                pot_raise = game.pot
+                if pot_raise > min_raise and player_balance >= pot_raise:
+                    row2.append(
+                        InlineKeyboardButton(
+                            f"📊 Raise ${pot_raise}",
+                            callback_data=f"action:raise:{pot_raise}:{game.id}",
+                        )
+                    )
+
+            if player_balance > 0:
+                row2.append(
+                    InlineKeyboardButton(
+                        f"🔥 All-In ${player_balance}",
+                        callback_data=f"action:allin:{game.id}",
+                    )
+                )
+
+            buttons.append(row2)
+
+        return InlineKeyboardMarkup(buttons)
+
     async def send_message(
         self,
         chat_id: ChatId,
