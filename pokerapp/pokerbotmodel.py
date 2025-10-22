@@ -1145,7 +1145,7 @@ class PokerBotModel:
         balance = self._kv.get(balance_key)
 
         if balance is None:
-            return getattr(self._cfg, "INITIAL_MONEY", 1000)
+            return getattr(self._cfg, "INITIAL_MONEY", DEFAULT_MONEY)
 
         return int(balance)
 
@@ -2390,8 +2390,10 @@ class WalletManagerModel(Wallet):
     ) -> "WalletManagerModel":
         try:
             return await asyncio.to_thread(cls, user_id, kv)
-        except Exception as exc:
-            logger.exception("Failed to load wallet for user %s: %s", user_id, exc)
+        except (TypeError, ValueError, redis.RedisError) as exc:
+            logger.exception(
+                "Failed to load wallet for user %s: %s", user_id, type(exc).__name__
+            )
             raise
 
     @staticmethod
