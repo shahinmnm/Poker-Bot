@@ -5,7 +5,7 @@ import datetime
 import json
 import logging
 import secrets
-from typing import Awaitable, Callable, Dict, List, Optional, Union
+from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Union
 
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
@@ -1810,21 +1810,9 @@ class PokerBotModel:
 
         # === STEP 2D: CLEANUP LOBBY STATE ===
 
-        keys_deleted = 0
-
-        # Delete lobby key (game has started, lobby no longer needed)
-        keys_deleted += self._kv.delete(lobby_key)
-
-        # Delete all player-to-game mappings
-        for pid in accepted_players:
-            user_game_key = ":".join(["user", str(pid), "private_game"])
-            keys_deleted += self._kv.delete(user_game_key)
-
-        # Delete all invitation keys
-        for pid in accepted_players:
-            if pid != private_game.host_user_id:  # Host has no invitation
-                invite_key = ":".join(["private_invite", str(pid), game_code])
-                keys_deleted += self._kv.delete(invite_key)
+        keys_deleted = await self.delete_private_game_lobby(
+            game_code, accepted_players, private_game.host_user_id
+        )
 
         # Expected deletions: lobby (1) + mappings (n) + invites (n-1) = 2n
         expected_keys = 2 * len(accepted_players)
@@ -1933,7 +1921,9 @@ class PokerBotModel:
             )
 
             # Clean up lobby
-            await self.delete_private_game_lobby(chat_id, game_code)
+            await self.delete_private_game_lobby(
+                game_code, accepted_players, private_game.host_user_id
+            )
 
             raise  # Re-raise for tracking
 
@@ -1944,12 +1934,45 @@ class PokerBotModel:
         await self._kv.set(game_state_key, "PLAYING")
 
         # Clear the lobby (no longer needed)
-        await self.delete_private_game_lobby(chat_id, game_code)
+        await self.delete_private_game_lobby(
+            game_code, accepted_players, private_game.host_user_id
+        )
 
         logger.info(
             "Private game %s fully initialized and in PLAYING state",
             game_code,
         )
+
+    async def delete_private_game_lobby(
+        self,
+        game_code: str,
+        player_ids: Iterable[int],
+        host_user_id: Optional[int],
+    ) -> int:
+        """Remove lobby and invitation data for a private game.
+
+        Returns the number of keys deleted to aid logging.
+        """
+
+        player_ids = tuple(player_ids)
+
+        keys_deleted = 0
+
+        lobby_key = ":".join(["private_game", game_code])
+        keys_deleted += self._kv.delete(lobby_key)
+
+        for player_id in player_ids:
+            user_game_key = ":".join(["user", str(player_id), "private_game"])
+            keys_deleted += self._kv.delete(user_game_key)
+
+        for player_id in player_ids:
+            if host_user_id is not None and player_id == host_user_id:
+                continue
+
+            invite_key = ":".join(["private_invite", str(player_id), game_code])
+            keys_deleted += self._kv.delete(invite_key)
+
+        return keys_deleted
 
     async def accept_invitation(
         self,
