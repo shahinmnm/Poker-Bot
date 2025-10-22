@@ -105,15 +105,17 @@ class GameEngineTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(player.cards), 2)
             self.assertEqual(player.state, PlayerState.ACTIVE)
 
-        # Blinds applied to the first two players.
-        self.assertEqual(players[0].round_rate, 10)
-        self.assertEqual(players[1].round_rate, 20)
+        # Blinds applied to the seats immediately after the dealer.
+        self.assertEqual(game.players[0].round_rate, 10)
+        self.assertEqual(game.players[1].round_rate, 20)
+        self.assertEqual(game.players[0].user_id, players[1].user_id)
+        self.assertEqual(game.players[1].user_id, players[2].user_id)
 
         # Private hands sent and the first turn announced.
         self.assertEqual(len(view.sent_messages), len(players))
         self.assertEqual(len(view.turn_prompts), 1)
         self.assertEqual(view.turn_prompts[0][0], 42)
-        self.assertEqual(view.turn_prompts[0][1], players[2].user_id)
+        self.assertEqual(view.turn_prompts[0][1], players[0].user_id)
 
         # Game state persisted to Redis-compatible KV store.
         raw_state = kv.get("game_state:test-game")
@@ -127,7 +129,7 @@ class GameEngineTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(snapshot["cards"]), 2)
 
         # The current player should be the seat after the big blind.
-        self.assertEqual(state["current_player"], players[2].user_id)
+        self.assertEqual(state["current_player"], players[0].user_id)
 
 
 if __name__ == "__main__":  # pragma: no cover

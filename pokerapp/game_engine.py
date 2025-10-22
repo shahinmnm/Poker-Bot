@@ -264,6 +264,32 @@ class GameEngine:
         self._game.remain_cards = []
         self._game.trading_end_user_id = 0
 
+    def _align_players_with_dealer(self) -> None:
+        """Rotate the seating order so blinds follow the dealer."""
+
+        players_count = len(self._players)
+        if players_count < 2:
+            return
+
+        small_blind_index = (self._game.dealer_index + 1) % players_count
+        if small_blind_index == 0:
+            return
+
+        rotated_players = (
+            self._players[small_blind_index:] + self._players[:small_blind_index]
+        )
+        self._players[:] = rotated_players
+        self._game.players = self._players
+        self._game.dealer_index = (self._game.dealer_index - small_blind_index) % players_count
+
+    def _big_blind_index(self) -> int:
+        players_count = len(self._players)
+        if players_count == 0:
+            return 0
+
+        big_blind_index = (self._game.dealer_index + 2) % players_count
+        return big_blind_index
+
     def _deal_private_cards(self) -> None:
         deck = get_shuffled_deck()
 
@@ -464,19 +490,16 @@ class GameEngine:
         self._deal_private_cards()
         await self._notify_private_hands()
 
-        self._game.current_player_index = (
-            self._game.dealer_index + 1
-        ) % len(self._players)
+        self._align_players_with_dealer()
         self._coordinator.apply_pre_flop_blinds(
             game=self._game,
             small_blind=self._small_blind,
             big_blind=self._big_blind,
         )
 
-        # After blinds the next player to act is the seat following the big blind.
-        self._game.current_player_index = (
-            self._game.dealer_index + 1
-        ) % len(self._players)
+        # Position the index on the big blind so the betting loop advances to
+        # the seat after the blinds when play resumes.
+        self._game.current_player_index = self._big_blind_index()
 
         self._persist_state({"hand_number": self._hand_number})
 
