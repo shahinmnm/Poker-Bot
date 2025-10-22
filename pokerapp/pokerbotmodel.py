@@ -1132,22 +1132,15 @@ class PokerBotModel:
         )
 
     async def _get_user_balance(self, user_id: int) -> int:
-        """
-        Get user's current balance from Redis.
+        """Fetch a user's wallet balance using the wallet manager keys."""
 
-        Args:
-            user_id: Telegram user ID
-
-        Returns:
-            User balance (defaults to initial balance if not set)
-        """
-        balance_key = ":".join(["user", str(user_id), "balance"])
-        balance = self._kv.get(balance_key)
-
-        if balance is None:
-            return getattr(self._cfg, "INITIAL_MONEY", 1000)
-
-        return int(balance)
+        try:
+            wallet = await WalletManagerModel.load(user_id, self._kv, logger)
+            return wallet.value()
+        except Exception:
+            # Fall back to the configured initial balance if wallet retrieval fails.
+            logger.exception("Failed to load wallet for balance check for user %s", user_id)
+            return getattr(self._cfg, "INITIAL_MONEY", DEFAULT_MONEY)
 
     async def join_private_game(
         self,
