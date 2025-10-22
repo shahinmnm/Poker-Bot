@@ -19,6 +19,8 @@ from pokerapp.entities import (
     Game,
     Player,
     PlayerAction,
+    PlayerState,
+    GameState,
     MessageId,
     ChatId,
     Mention,
@@ -78,6 +80,93 @@ class PokerBotViewer:
             return "Waiting for flop…"
 
         return " ".join(PokerBotViewer._format_card(card) for card in cards)
+
+    def format_game_state(
+        self,
+        game: Game,
+        current_player: Optional[Player] = None,
+        action_prompt: str = ""
+    ) -> str:
+        """
+        Format complete game state for the living message.
+
+        Args:
+            game: Current game instance
+            current_player: Player whose turn it is (None if game ended)
+            action_prompt: Text prompting current player's action
+
+        Returns:
+            HTML-formatted message text
+        """
+
+        lines = []
+
+        round_name = {
+            GameState.ROUND_PRE_FLOP: "PRE-FLOP",
+            GameState.ROUND_FLOP: "FLOP",
+            GameState.ROUND_TURN: "TURN",
+            GameState.ROUND_RIVER: "RIVER",
+            GameState.FINISHED: "FINISHED",
+        }.get(game.state, "STARTING")
+
+        lines.append(f"🃏 <b>POKER GAME #{game.id[:8].upper()} - {round_name}</b>")
+
+        big_blind = game.table_stake * 2
+
+        lines.append(
+            f"💰 Pot: <b>${game.pot}</b> | "
+            f"Stakes: {game.table_stake}/{big_blind}"
+        )
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("")
+
+        if game.cards_table:
+            lines.append("🎴 <b>Board Cards:</b>")
+            lines.append(self._format_board_cards(game.cards_table))
+            lines.append("")
+
+        lines.append(f"👥 <b>Players ({len(game.players)}):</b>")
+
+        for _, player in enumerate(game.players):
+            if current_player and player.user_id == current_player.user_id:
+                icon = "⏰"
+            elif player.state == PlayerState.FOLD:
+                icon = "❌"
+            elif player.state == PlayerState.ALL_IN:
+                icon = "🔥"
+            else:
+                icon = "✅"
+
+            balance = player.wallet.value()
+
+            bet_display = ""
+            if player.round_rate > 0:
+                if player.state == PlayerState.ALL_IN:
+                    bet_display = f" [ALL-IN ${player.round_rate}]"
+                else:
+                    bet_display = f" [BET ${player.round_rate}]"
+            elif player.state == PlayerState.FOLD:
+                bet_display = " [FOLDED]"
+
+            name = player.mention_markdown.strip('`').split(']')[0].strip('[')
+
+            lines.append(f"{icon} {name} ${balance}{bet_display}")
+
+        lines.append("")
+
+        if game.recent_actions:
+            lines.append("📢 <b>Recent Activity:</b>")
+            for action in game.recent_actions:
+                lines.append(f"• {action}")
+
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("")
+
+        if action_prompt:
+            lines.append(f"👉 {action_prompt}")
+            lines.append("")
+
+        return "\n".join(lines)
 
     async def send_message(
         self,
