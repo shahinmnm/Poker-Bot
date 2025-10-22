@@ -1147,7 +1147,7 @@ class PokerBotModel:
         balance = self._kv.get(balance_key)
 
         if balance is None:
-            return getattr(self._cfg, "INITIAL_MONEY", 1000)
+            return getattr(self._cfg, "INITIAL_MONEY", DEFAULT_MONEY)
 
         return int(balance)
 
