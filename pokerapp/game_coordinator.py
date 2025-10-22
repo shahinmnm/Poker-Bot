@@ -13,7 +13,6 @@ from pokerapp.entities import (
     Game,
     GameState,
     Player,
-    PlayerAction,
     PlayerState,
     Money,
 )
@@ -28,10 +27,11 @@ class GameCoordinator:
     Replaces complex logic in pokerbotmodel.py
     """
 
-    def __init__(self):
+    def __init__(self, view=None):
         self.engine = PokerEngine()
         self.pot_calculator = SidePotCalculator()
         self.winner_determine = WinnerDetermination()
+        self._view = view  # Optional PokerBotViewer for UI updates
 
     async def _send_or_update_game_state(
         self,
@@ -39,52 +39,63 @@ class GameCoordinator:
         current_player: Optional[Player] = None,
         action_prompt: str = "",
     ) -> None:
-        """Send or update the single living game message.
+        """
+        Send or update the single living game message.
 
         Args:
-            game: Current game instance
-            current_player: Player whose turn it is
-            action_prompt: Text prompting the current player
+            game: Current game state
+            current_player: Player whose turn it is (for button generation)
+            action_prompt: Custom prompt text to append
         """
 
-        view = getattr(self, "_view", None)
-        chat_id = getattr(self, "_chat_id", None)
-
-        if view is None or chat_id is None:
-            logger.debug(
-                "GameCoordinator UI view/chat not configured; skipping state update",
-            )
+        if self._view is None:
+            logger.warning("View not initialized; cannot update game state UI")
             return
 
-        if game.has_group_message():
-            success = await view.update_game_state(
-                chat_id=chat_id,
-                message_id=game.group_message_id,
-                game=game,
-                current_player=current_player,
-                action_prompt=action_prompt,
-            )
+        # Format current game state
+        state_text = self._view.format_game_state(game)
 
-            if not success:
-                message_id = await view.send_game_state(
-                    chat_id=chat_id,
-                    game=game,
-                    current_player=current_player,
-                    action_prompt=action_prompt,
+        # Add custom prompt if provided
+        if action_prompt:
+            state_text += f"\n\n{action_prompt}"
+
+        # Build action buttons if a player is acting
+        reply_markup = None
+
+        if current_player is not None:
+            reply_markup = self._view.build_action_buttons(game, current_player)
+
+        # Edit existing message or send new one
+        if game.has_group_message():
+            try:
+                await self._view.update_game_state(
+                    chat_id=game.chat_id,
+                    message_id=game.group_message_id,
+                    text=state_text,
+                    reply_markup=reply_markup,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to edit message %s, sending new: %s",
+                    game.group_message_id,
+                    exc,
                 )
 
-                if message_id:
-                    game.set_group_message(message_id)
-        else:
-            message_id = await view.send_game_state(
-                chat_id=chat_id,
-                game=game,
-                current_player=current_player,
-                action_prompt=action_prompt,
-            )
-
-            if message_id:
+                # Fallback: send new message
+                message_id = await self._view.send_game_state(
+                    chat_id=game.chat_id,
+                    text=state_text,
+                    reply_markup=reply_markup,
+                )
                 game.set_group_message(message_id)
+        else:
+            # No existing message - send new
+            message_id = await self._view.send_game_state(
+                chat_id=game.chat_id,
+                text=state_text,
+                reply_markup=reply_markup,
+            )
+            game.set_group_message(message_id)
 
     def can_player_join(self, player_balance: int, table_stake: int) -> bool:
         """
@@ -265,33 +276,32 @@ class GameCoordinator:
     def _format_action_text(
         self,
         player: Player,
-        action_type: PlayerAction,
+        action: str,
         amount: int = 0,
     ) -> str:
-        """Format a player action for the activity feed.
+        """
+        Format player action for the activity feed.
 
         Args:
-            player: Player who acted
-            action_type: Type of action taken
-            amount: Amount involved (for bets/raises)
+            player: Player who took action
+            action: Action type (fold/call/raise/check/all-in)
+            amount: Money involved (0 for fold/check)
 
         Returns:
-            Formatted action string like "Alice raised to $50"
+            Formatted string like "Alice called $50"
         """
 
-        name = player.mention_markdown.strip("`").split("]")[0].strip("[")
+        name = player.first_name
 
-        if action_type == PlayerAction.CHECK:
-            return f"{name} checked"
-        elif action_type == PlayerAction.CALL:
-            return f"{name} called ${amount}"
-        elif action_type == PlayerAction.FOLD:
+        if action == "fold":
             return f"{name} folded"
-        elif action_type == PlayerAction.RAISE_RATE:
+        elif action == "check":
+            return f"{name} checked"
+        elif action == "call":
+            return f"{name} called ${amount}"
+        elif action == "raise":
             return f"{name} raised to ${amount}"
-        elif action_type == PlayerAction.ALL_IN:
-            return f"{name} went all-in ${amount}"
-        elif action_type == PlayerAction.BET:
-            return f"{name} bet ${amount}"
+        elif action == "all-in":
+            return f"{name} went ALL-IN (${amount})"
         else:
-            return f"{name} acted"
+            return f"{name} {action} ${amount}"
