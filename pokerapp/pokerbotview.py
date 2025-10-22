@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import logging
+
 from typing import List, Optional, Dict
 
 from telegram import (
@@ -26,6 +28,9 @@ from pokerapp.entities import (
     Mention,
     Money,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class PokerBotViewer:
@@ -241,6 +246,90 @@ class PokerBotViewer:
             buttons.append(row2)
 
         return InlineKeyboardMarkup(buttons)
+
+    async def send_game_state(
+        self,
+        chat_id: ChatId,
+        game: Game,
+        current_player: Optional[Player] = None,
+        action_prompt: str = "",
+    ) -> Optional[int]:
+        """Send new game state message to group chat.
+
+        Args:
+            chat_id: Target chat ID
+            game: Current game instance
+            current_player: Player whose turn it is
+            action_prompt: Text prompting action
+
+        Returns:
+            Message ID of sent message, or None on failure
+        """
+
+        try:
+            text = self.format_game_state(game, current_player, action_prompt)
+
+            # Build buttons if there's a current player
+            reply_markup = None
+            if current_player:
+                reply_markup = self.build_action_buttons(game, current_player)
+
+            message = await self._bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=reply_markup,
+                disable_notification=True,
+                disable_web_page_preview=True,
+            )
+
+            return message.message_id
+        except Exception as e:
+            logger.error(f"Failed to send game state: {e}")
+            return None
+
+    async def update_game_state(
+        self,
+        chat_id: ChatId,
+        message_id: int,
+        game: Game,
+        current_player: Optional[Player] = None,
+        action_prompt: str = "",
+    ) -> bool:
+        """Update existing game state message via edit_message_text.
+
+        Args:
+            chat_id: Target chat ID
+            message_id: Message ID to edit
+            game: Current game instance
+            current_player: Player whose turn it is
+            action_prompt: Text prompting action
+
+        Returns:
+            True if update succeeded, False otherwise
+        """
+
+        try:
+            text = self.format_game_state(game, current_player, action_prompt)
+
+            # Build buttons if there's a current player
+            reply_markup = None
+            if current_player:
+                reply_markup = self.build_action_buttons(game, current_player)
+
+            await self._bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=reply_markup,
+                disable_web_page_preview=True,
+            )
+
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update game state: {e}")
+            return False
 
     async def send_message(
         self,
