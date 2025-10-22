@@ -73,7 +73,7 @@ class PokerBotModel:
         self._application = application
 
         # NEW: Replace old logic with coordinator
-        self._coordinator = GameCoordinator()
+        self._coordinator = GameCoordinator(view=view)
         self._stake_config = STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL]
 
         self._readyMessages = {}
