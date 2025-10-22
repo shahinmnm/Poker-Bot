@@ -9,7 +9,14 @@ from typing import Optional, Tuple
 
 from pokerapp.game_engine import PokerEngine, TurnResult
 from pokerapp.betting import SidePotCalculator
-from pokerapp.entities import Game, GameState, Player, PlayerState, Money
+from pokerapp.entities import (
+    Game,
+    GameState,
+    Player,
+    PlayerAction,
+    PlayerState,
+    Money,
+)
 from pokerapp.winnerdetermination import WinnerDetermination
 
 logger = logging.getLogger(__name__)
@@ -25,6 +32,59 @@ class GameCoordinator:
         self.engine = PokerEngine()
         self.pot_calculator = SidePotCalculator()
         self.winner_determine = WinnerDetermination()
+
+    async def _send_or_update_game_state(
+        self,
+        game: Game,
+        current_player: Optional[Player] = None,
+        action_prompt: str = "",
+    ) -> None:
+        """Send or update the single living game message.
+
+        Args:
+            game: Current game instance
+            current_player: Player whose turn it is
+            action_prompt: Text prompting the current player
+        """
+
+        view = getattr(self, "_view", None)
+        chat_id = getattr(self, "_chat_id", None)
+
+        if view is None or chat_id is None:
+            logger.debug(
+                "GameCoordinator UI view/chat not configured; skipping state update",
+            )
+            return
+
+        if game.has_group_message():
+            success = await view.update_game_state(
+                chat_id=chat_id,
+                message_id=game.group_message_id,
+                game=game,
+                current_player=current_player,
+                action_prompt=action_prompt,
+            )
+
+            if not success:
+                message_id = await view.send_game_state(
+                    chat_id=chat_id,
+                    game=game,
+                    current_player=current_player,
+                    action_prompt=action_prompt,
+                )
+
+                if message_id:
+                    game.set_group_message(message_id)
+        else:
+            message_id = await view.send_game_state(
+                chat_id=chat_id,
+                game=game,
+                current_player=current_player,
+                action_prompt=action_prompt,
+            )
+
+            if message_id:
+                game.set_group_message(message_id)
 
     def can_player_join(self, player_balance: int, table_stake: int) -> bool:
         """
@@ -201,3 +261,37 @@ class GameCoordinator:
 
         game.max_round_rate = 0
         game.trading_end_user_id = game.players[0].user_id
+
+    def _format_action_text(
+        self,
+        player: Player,
+        action_type: PlayerAction,
+        amount: int = 0,
+    ) -> str:
+        """Format a player action for the activity feed.
+
+        Args:
+            player: Player who acted
+            action_type: Type of action taken
+            amount: Amount involved (for bets/raises)
+
+        Returns:
+            Formatted action string like "Alice raised to $50"
+        """
+
+        name = player.mention_markdown.strip("`").split("]")[0].strip("[")
+
+        if action_type == PlayerAction.CHECK:
+            return f"{name} checked"
+        elif action_type == PlayerAction.CALL:
+            return f"{name} called ${amount}"
+        elif action_type == PlayerAction.FOLD:
+            return f"{name} folded"
+        elif action_type == PlayerAction.RAISE_RATE:
+            return f"{name} raised to ${amount}"
+        elif action_type == PlayerAction.ALL_IN:
+            return f"{name} went all-in ${amount}"
+        elif action_type == PlayerAction.BET:
+            return f"{name} bet ${amount}"
+        else:
+            return f"{name} acted"
