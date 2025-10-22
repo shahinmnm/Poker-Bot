@@ -2551,6 +2551,7 @@ class PokerBotModel:
             result, next_player = self._coordinator.process_game_turn(game)
 
             if result == TurnResult.CONTINUE_ROUND and next_player is not None:
+                # Continue to next player's turn
                 await self._coordinator._send_or_update_game_state(
                     game=game,
                     current_player=next_player,
@@ -2558,29 +2559,85 @@ class PokerBotModel:
                 )
 
             elif result == TurnResult.END_ROUND:
-                advance_fn = getattr(self, "_advance_to_next_street", None)
-                if callable(advance_fn):
-                    advance_result = advance_fn(game)
-                    if inspect.isawaitable(advance_result):
-                        await advance_result
+                # Betting round complete - advance to next street
+                self._coordinator.commit_round_bets(game)
+                new_state, cards_to_deal = self._coordinator.advance_game_street(game)
+
+                # Deal community cards if needed
+                if cards_to_deal > 0:
+                    for _ in range(cards_to_deal):
+                        game.cards_table.append(game.cards_deck.pop(0))
+
+                # Check if game is now finished (river complete)
+                if new_state == GameState.FINISHED:
+                    # Showdown - determine winners
+                    winners = self._coordinator.finish_game_with_winners(game)
+
+                    # Update UI with final results
+                    if hasattr(self._coordinator, "_view") and self._coordinator._view:
+                        # Format winner message (simplified for now)
+                        winner_text = "\n".join(
+                            f"🏆 {w[0].first_name} wins ${w[2]} with {w[1].hand_type.name}"
+                            for w in winners
+                        )
+
+                        await self._coordinator._view.send_message(
+                            chat_id=chat_id,
+                            text=f"🎉 Game Over!\n\n{winner_text}",
+                        )
+
                 else:
-                    self._coordinator.commit_round_bets(game)
-                    new_state, cards_to_deal = self._coordinator.advance_game_street(game)
-                    if cards_to_deal > 0 and chat_id_int is not None:
-                        await self.add_cards_to_table(cards_to_deal, game, chat_id_int)
-                    if new_state == GameState.FINISHED and hasattr(self, "_finish_game"):
-                        await self._finish_game(game, chat_id_int)
+                    # Continue to next betting round
+                    first_active = next(
+                        (p for p in game.players if p.state == PlayerState.ACTIVE),
+                        None,
+                    )
+
+                    if first_active:
+                        await self._coordinator._send_or_update_game_state(
+                            game=game,
+                            current_player=first_active,
+                            action_prompt=(
+                                f"{new_state.name} - Your turn, {first_active.mention_markdown}!"
+                            ),
+                        )
 
             elif result == TurnResult.END_GAME:
-                finish_fn = getattr(self, "_finish_game_and_show_winners", None)
-                if callable(finish_fn):
-                    finish_result = finish_fn(game)
-                    if inspect.isawaitable(finish_result):
-                        await finish_result
-                elif hasattr(self, "_finish_game") and chat_id_int is not None:
-                    finish_result = self._finish_game(game, chat_id_int)
-                    if inspect.isawaitable(finish_result):
-                        await finish_result
+                # Only one player left (all others folded)
+                active_players = [
+                    p
+                    for p in game.players
+                    if p.state in (PlayerState.ACTIVE, PlayerState.ALL_IN)
+                ]
+
+                if len(active_players) == 1:
+                    winner = active_players[0]
+
+                    # Award entire pot to last standing player
+                    self._coordinator.commit_round_bets(game)
+                    winner.wallet.win(game.id, game.pot)
+
+                    # Update UI
+                    if hasattr(self._coordinator, "_view") and self._coordinator._view:
+                        await self._coordinator._view.send_message(
+                            chat_id=chat_id,
+                            text=f"🏆 {winner.first_name} wins ${game.pot} (all others folded)!",
+                        )
+
+                else:
+                    # Showdown with multiple all-ins
+                    winners = self._coordinator.finish_game_with_winners(game)
+
+                    if hasattr(self._coordinator, "_view") and self._coordinator._view:
+                        winner_text = "\n".join(
+                            f"🏆 {w[0].first_name} wins ${w[2]} with {w[1].hand_type.name}"
+                            for w in winners
+                        )
+
+                        await self._coordinator._view.send_message(
+                            chat_id=chat_id,
+                            text=f"🎉 Showdown!\n\n{winner_text}",
+                        )
 
             try:
                 if save_game_fn.__code__.co_argcount >= 3 and chat_id_int is not None:
