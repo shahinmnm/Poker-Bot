@@ -272,6 +272,17 @@ class GameEngine:
         if players_count < 2:
             return
 
+        if players_count == 2:
+            dealer_index = self._game.dealer_index
+            if dealer_index == 0:
+                return
+
+            rotated_players = self._players[dealer_index:] + self._players[:dealer_index]
+            self._players[:] = rotated_players
+            self._game.players = self._players
+            self._game.dealer_index = 0
+            return
+
         small_blind_index = (self._game.dealer_index + 1) % players_count
         if small_blind_index == 0:
             return
