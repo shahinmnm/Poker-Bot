@@ -13,7 +13,7 @@ class DummyWallet(Wallet):
 
     @staticmethod
     def _prefix(id: int, suffix: str = ""):
-        return f"wallet:{id}{suffix}"
+        return ":".join(["wallet", str(id)]) + suffix
 
     def add_daily(self):  # pragma: no cover - not used in test
         return 0
@@ -33,7 +33,7 @@ class DummyWallet(Wallet):
         self.inc_authorized_money(game_id, amount)
         self.inc(-amount)
 
-    def authorize_all(self, game_id: str) -> int:  # pragma: no cover - not used
+    def authorize_all(self, game_id: str) -> int:  # pragma: no cover
         amount = self._balance
         self._authorised[game_id] = self._authorised.get(game_id, 0) + amount
         self._balance = 0
@@ -55,10 +55,21 @@ class DummyView:
     async def send_message(self, chat_id: int, text: str, **kwargs) -> None:
         self.sent_messages.append((chat_id, text))
 
-    async def send_turn_actions(self, chat_id: int, game, player, money: int) -> None:
+    async def send_turn_actions(
+        self,
+        chat_id: int,
+        game,
+        player,
+        money: int,
+    ) -> None:
         self.turn_prompts.append((chat_id, player.user_id, money))
 
-    async def send_desk_cards_img(self, chat_id: int, cards, caption: str = "") -> None:
+    async def send_desk_cards_img(
+        self,
+        chat_id: int,
+        cards,
+        caption: str = "",
+    ) -> None:
         self.table_updates.append((chat_id, list(cards)))
 
 

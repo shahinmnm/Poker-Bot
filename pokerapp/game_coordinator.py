@@ -63,8 +63,8 @@ class GameCoordinator:
                 )
                 current_player.state = PlayerState.ALL_IN
 
-                # Call process_turn() once more to advance to next player
-                # This avoids recursion while ensuring the ALL_IN player is skipped
+                # Call process_turn() once more to advance to the next player.
+                # Avoid recursion and skip ALL_IN players.
                 result = self.engine.process_turn(game)
 
                 if result == TurnResult.CONTINUE_ROUND:

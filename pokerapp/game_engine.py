@@ -201,7 +201,7 @@ class GameEngine:
     complete hand can be played in group or private chats.
     """
 
-    STATE_TTL_SECONDS = 12 * 60 * 60  # 12 hours – enough for slow private games
+    STATE_TTL_SECONDS = 12 * 60 * 60  # 12 hours; enough for slow games
 
     def __init__(
         self,
@@ -222,13 +222,15 @@ class GameEngine:
         self._chat_id = chat_id
         self._players: list[Player] = list(players)
         self._small_blind = small_blind
-        self._big_blind = big_blind if big_blind is not None else small_blind * 2
+        self._big_blind = (
+            big_blind if big_blind is not None else small_blind * 2
+        )
         self._kv = ensure_kv(kv_store)
         self._view = view
         self._coordinator = coordinator or GameCoordinator()
 
         self._hand_number = 0
-        self._state_key = f"game_state:{self._game_id}"
+        self._state_key = ":".join(["game_state", self._game_id])
 
         self._game = Game()
         # Override generated ID so wallet authorisation remains tied to the
@@ -277,7 +279,10 @@ class GameEngine:
             if dealer_index == 0:
                 return
 
-            rotated_players = self._players[dealer_index:] + self._players[:dealer_index]
+            rotated_players = (
+                self._players[dealer_index:]
+                + self._players[:dealer_index]
+            )
             self._players[:] = rotated_players
             self._game.players = self._players
             self._game.dealer_index = 0
@@ -288,11 +293,14 @@ class GameEngine:
             return
 
         rotated_players = (
-            self._players[small_blind_index:] + self._players[:small_blind_index]
+            self._players[small_blind_index:]
+            + self._players[:small_blind_index]
         )
         self._players[:] = rotated_players
         self._game.players = self._players
-        self._game.dealer_index = (self._game.dealer_index - small_blind_index) % players_count
+        self._game.dealer_index = (
+            self._game.dealer_index - small_blind_index
+        ) % players_count
 
     def _big_blind_index(self) -> int:
         players_count = len(self._players)
@@ -325,7 +333,10 @@ class GameEngine:
                 f"Blinds: {self._small_blind}/{self._big_blind}"
             )
             try:
-                await self._view.send_message(chat_id=player.user_id, text=message)
+                await self._view.send_message(
+                    chat_id=player.user_id,
+                    text=message,
+                )
             except Exception as exc:  # pragma: no cover - network issues
                 self._logger.warning(
                     "Failed to send private hand to %s: %s",
@@ -334,7 +345,10 @@ class GameEngine:
                 )
 
         await asyncio.gather(
-            *(send_to_player(player) for player in self._players),
+            *(
+                send_to_player(player)
+                for player in self._players
+            ),
             return_exceptions=True,
         )
 
@@ -386,7 +400,20 @@ class GameEngine:
                 "cards": list(player.cards),
             }
 
-    def _persist_state(self, extra: Optional[dict[str, object]] = None) -> None:
+    def _persist_state(
+        self,
+        extra: Optional[dict[str, object]] = None,
+    ) -> None:
+        if (
+            self._players
+            and 0 <= self._game.current_player_index < len(self._players)
+        ):
+            current_player = self._players[
+                self._game.current_player_index
+            ].user_id
+        else:
+            current_player = None
+
         payload = {
             "game_id": self._game_id,
             "hand_number": self._hand_number,
@@ -394,11 +421,7 @@ class GameEngine:
             "pot": self._game.pot,
             "max_round_rate": self._game.max_round_rate,
             "community_cards": list(self._game.cards_table),
-            "current_player": (
-                self._players[self._game.current_player_index].user_id
-                if self._players and 0 <= self._game.current_player_index < len(self._players)
-                else None
-            ),
+            "current_player": current_player,
             "players": list(self._snapshot_players()),
             "updated_at": datetime.datetime.now().isoformat(),
         }
@@ -418,14 +441,16 @@ class GameEngine:
             )
 
     async def _finish_hand(self) -> None:
-        winners_results = self._coordinator.finish_game_with_winners(self._game)
+        winners_results = self._coordinator.finish_game_with_winners(
+            self._game
+        )
 
         active_players = self._game.players_by(
             states=(PlayerState.ACTIVE, PlayerState.ALL_IN)
         )
         only_one_player = len(active_players) == 1
 
-        text_lines = ["Game is finished with result:\n"]
+        text_lines = ["Game is finished with result: \n"]
         for player, best_hand, money in winners_results:
             win_hand = " ".join(best_hand)
             text_lines.append(
@@ -439,10 +464,15 @@ class GameEngine:
 
         if self._view is not None:
             try:
-                await self._view.send_message(chat_id=self._chat_id, text=message)
+                await self._view.send_message(
+                    chat_id=self._chat_id,
+                    text=message,
+                )
             except Exception as exc:  # pragma: no cover - Telegram failures
                 self._logger.warning(
-                    "Failed to announce winners for %s: %s", self._game_id, exc
+                    "Failed to announce winners for %s: %s",
+                    self._game_id,
+                    exc,
                 )
 
         for player in self._players:
@@ -453,7 +483,9 @@ class GameEngine:
 
     async def _play_betting_round(self) -> None:
         while True:
-            result, next_player = self._coordinator.process_game_turn(self._game)
+            result, next_player = self._coordinator.process_game_turn(
+                self._game
+            )
             self._persist_state()
 
             if result == TurnResult.END_GAME:
@@ -468,9 +500,10 @@ class GameEngine:
                     await self._finish_hand()
                     return
 
-                new_state, cards_count = self._coordinator.advance_game_street(
+                advance_result = self._coordinator.advance_game_street(
                     self._game
                 )
+                new_state, cards_count = advance_result
                 self._persist_state({"state": new_state.name})
 
                 if cards_count > 0:
@@ -493,7 +526,9 @@ class GameEngine:
         """Initialise a fresh hand and prompt the first player to act."""
 
         if len(self._players) < 2:
-            raise ValueError("At least two players are required to start a hand")
+            raise ValueError(
+                "At least two players are required to start a hand"
+            )
 
         self._hand_number += 1
         self._reset_players_for_hand()

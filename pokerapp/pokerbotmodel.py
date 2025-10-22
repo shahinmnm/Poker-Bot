@@ -1139,9 +1139,11 @@ class PokerBotModel:
             user_id: Telegram user ID
 
         Returns:
-            User balance (defaults to initial balance if not set)
+            int: User balance. Defaults to initial balance if not set.
         """
-        balance_key = ":".join(["user", str(user_id), "balance"])
+        balance_key = ":".join(
+            ["user", str(user_id), "balance"]
+        )
         balance = self._kv.get(balance_key)
 
         if balance is None:
@@ -1613,7 +1615,9 @@ class PokerBotModel:
 
             if balance < minimum_required:
                 cached_name = self._username_cache.get(player_id)
-                display_name = cached_name if cached_name else f"Player {player_id}"
+                display_name = (
+                    cached_name if cached_name else f"Player {player_id}"
+                )
                 insufficient_players.append((player_id, display_name, balance))
 
         # If any player lacks funds, reject start
@@ -1639,12 +1643,16 @@ class PokerBotModel:
             keys_deleted = self._kv.delete(lobby_key)
 
             for pid in accepted_players:
-                user_game_key = ":".join(["user", str(pid), "private_game"])
+                user_game_key = ":".join(
+                    ["user", str(pid), "private_game"]
+                )
                 keys_deleted += self._kv.delete(user_game_key)
 
             for pid in accepted_players:
                 if pid != private_game.host_user_id:
-                    invite_key = ":".join(["private_invite", str(pid), game_code])
+                    invite_key = ":".join(
+                        ["private_invite", str(pid), game_code]
+                    )
                     keys_deleted += self._kv.delete(invite_key)
 
             logger.info(
@@ -1722,7 +1730,10 @@ class PokerBotModel:
             WalletManagerModel.load(user_id, self._kv, logger)
             for user_id in accepted_players
         ]
-        name_tasks = [resolve_display_name(user_id) for user_id in accepted_players]
+        name_tasks = [
+            resolve_display_name(user_id)
+            for user_id in accepted_players
+        ]
 
         wallets = await asyncio.gather(*wallet_tasks)
         player_names = await asyncio.gather(*name_tasks)
@@ -1745,14 +1756,20 @@ class PokerBotModel:
                 )
             )
 
+        player_summaries = [
+            f"{name} (ID={uid}, balance={player.wallet.value()})"
+            for uid, name, player in zip(
+                accepted_players,
+                player_names,
+                players,
+            )
+        ]
+
         logger.info(
             "Created %d player objects for game %s: %s",
             len(players),
             game_code,
-            ", ".join(
-                f"{name} (ID={uid}, balance={player.wallet.value()})"
-                for uid, name, player in zip(accepted_players, player_names, players)
-            ),
+            ", ".join(player_summaries),
         )
 
         # === STEP 2B: INITIALIZE GAME OBJECT ===
@@ -1842,10 +1859,10 @@ class PokerBotModel:
             chat_id=chat_id,
             text=(
                 f"🎮 **Game Starting!**\n\n"
-                f"**Players ({len(players)}):**\n"
+                f"**Players ({len(players)})**: \n"
                 + "\n".join(f"• {name}" for name in player_names)
-                + f"\n\n**Stakes:** {stake_config['name']}\n"
-                f"**Blinds:** {small_blind}/{big_blind}\n\n"
+                + f"\n\n**Stakes**: {stake_config['name']}\n"
+                f"**Blinds**: {small_blind}/{big_blind}\n\n"
                 "Good luck! 🍀"
             ),
             parse_mode="Markdown",
@@ -1866,8 +1883,8 @@ class PokerBotModel:
                     chat_id=player.user_id,
                     text=(
                         f"🎮 **Game Started!**\n\n"
-                        f"💰 **Your Balance:** ${balance:,.0f}\n"
-                        f"📊 **Blinds:** ${small_blind}/{big_blind}\n\n"
+                        f"💰 **Your Balance**: ${format(balance, ',.0f')}\n"
+                        f"📊 **Blinds**: ${small_blind}/{big_blind}\n\n"
                         "Your cards will be dealt shortly. Good luck! 🍀"
                     ),
                     parse_mode="Markdown",
@@ -1941,7 +1958,9 @@ class PokerBotModel:
         # === STEP 3D: STATE CLEANUP ===
 
         # Mark game as PLAYING
-        game_state_key = f"private_game:{chat_id}:{game_code}:state"
+        game_state_key = ":".join(
+            ["private_game", str(chat_id), str(game_code), "state"]
+        )
         await self._kv.set(game_state_key, "PLAYING")
 
         # Clear the lobby (no longer needed)
@@ -2273,11 +2292,13 @@ class PokerBotModel:
 
         if not game.players:
             self._application.chat_data.pop(game_chat_id_int, None)
-            self._kv.delete(":".join(["game", str(game_chat_id_int)]))
+            game_key = ":".join(["game", str(game_chat_id_int)])
+            self._kv.delete(game_key)
 
             game_code = getattr(game, "code", None)
             if game_code:
-                self._kv.delete(":".join(["private_game", game_code]))
+                private_game_key = ":".join(["private_game", game_code])
+                self._kv.delete(private_game_key)
 
             logger.info(
                 "User %s left and game %s is now empty. Game deleted.",
@@ -2391,7 +2412,11 @@ class WalletManagerModel(Wallet):
         try:
             return await asyncio.to_thread(cls, user_id, kv)
         except Exception as exc:
-            logger.exception("Failed to load wallet for user %s: %s", user_id, exc)
+            logger.exception(
+                "Failed to load wallet for user %s: %s",
+                user_id,
+                exc,
+            )
             raise
 
     @staticmethod
