@@ -3,7 +3,8 @@
 from abc import abstractmethod
 import enum
 import datetime
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict
+from dataclasses import dataclass, field
 from enum import Enum
 from uuid import uuid4
 from pokerapp.cards import get_cards
@@ -80,7 +81,11 @@ class GameMode(Enum):
     PRIVATE = "private"
 
 
+@dataclass
 class Game:
+    group_message_id: Optional[int] = None
+    recent_actions: List[str] = field(default_factory=list)
+
     def __init__(self):
         self.reset()
 
@@ -110,12 +115,38 @@ class Game:
         # Game mode (Phase 2)
         self.mode: GameMode = GameMode.GROUP
         self.stake_config: Optional[StakeConfig] = None
+        self.group_message_id = None
+        self.recent_actions = []
 
     def players_by(self, states: Tuple[PlayerState]) -> List[Player]:
         return list(filter(lambda p: p.state in states, self.players))
 
     def __repr__(self):
         return "{}({!r})".format(self.__class__.__name__, self.__dict__)
+
+    def add_action(self, action_text: str) -> None:
+        """
+        Add action to recent activity feed.
+
+        Keeps only last 3 actions.
+
+        Args:
+            action_text: Human-readable action description
+        """
+
+        self.recent_actions.append(action_text)
+        if len(self.recent_actions) > 3:
+            self.recent_actions.pop(0)
+
+    def set_group_message(self, message_id: int) -> None:
+        """Store the living message ID for future edits."""
+
+        self.group_message_id = message_id
+
+    def has_group_message(self) -> bool:
+        """Check if we have a message to edit."""
+
+        return self.group_message_id is not None
 
 
 class GameState(enum.Enum):
