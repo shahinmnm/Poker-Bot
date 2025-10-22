@@ -2,6 +2,8 @@
 
 import asyncio
 import datetime
+from datetime import datetime
+import inspect
 import json
 import logging
 import secrets
@@ -2381,6 +2383,225 @@ class PokerBotModel:
             player_names=["Alice", "Bob", "You"],
             can_start=False,
         )
+
+
+    async def handle_player_action(
+        self,
+        user_id: str,
+        chat_id: str,
+        game_id: str,
+        action: PlayerAction,
+        amount: int = 0,
+    ) -> bool:
+        """Process a player action received from inline callbacks."""
+
+        try:
+            load_game_fn = getattr(self, "_load_game", None)
+
+            if load_game_fn is None:
+                logger.error("_load_game method not implemented; cannot handle action")
+                return False
+
+            chat_id_int: Optional[int] = None
+            try:
+                chat_id_int = int(chat_id)
+            except (TypeError, ValueError):
+                chat_id_int = None
+
+            try:
+                game_result = load_game_fn(game_id)
+            except TypeError:
+                if chat_id_int is None:
+                    logger.warning("Cannot load game %s without valid chat id", game_id)
+                    return False
+                game_result = load_game_fn(chat_id_int, game_id)
+
+            if inspect.isawaitable(game_result):
+                game = await game_result
+            else:
+                game = game_result
+
+            if not game:
+                logger.warning("Game %s not found for action", game_id)
+                return False
+
+            expected_play_state = getattr(GameState, "PLAYING", None)
+            if expected_play_state is not None:
+                if game.state != expected_play_state:
+                    logger.warning("Game %s not in PLAYING state", game_id)
+                    return False
+            else:
+                if game.state in (GameState.INITIAL, GameState.FINISHED):
+                    logger.warning("Game %s not accepting actions in state %s", game_id, game.state)
+                    return False
+
+            try:
+                user_id_int = int(user_id)
+            except (TypeError, ValueError):
+                logger.warning("Invalid user id %r for action in game %s", user_id, game_id)
+                return False
+
+            player = next((p for p in game.players if p.user_id == user_id_int), None)
+            if not player:
+                logger.warning("User %s not in game %s", user_id, game_id)
+                return False
+
+            if not game.players:
+                logger.warning("Game %s has no players", game_id)
+                return False
+
+            current_player = game.players[game.current_player_index % len(game.players)]
+            if current_player.user_id != user_id_int:
+                logger.warning("Not user %s's turn in game %s", user_id, game_id)
+                return False
+
+            if player.state not in (PlayerState.ACTIVE, PlayerState.ALL_IN):
+                logger.warning("Player %s in invalid state: %s", user_id, player.state)
+                return False
+
+            if not hasattr(self, "_coordinator") or self._coordinator is None:
+                from pokerapp.game_coordinator import GameCoordinator
+
+                self._coordinator = GameCoordinator()
+
+            self._coordinator._view = getattr(self, "_view", None)
+            self._coordinator._chat_id = chat_id
+
+            player_display = getattr(player, "first_name", None) or getattr(
+                player, "mention_markdown", f"Player {player.user_id}"
+            )
+
+            action_amount = 0
+
+            if action == PlayerAction.FOLD:
+                player.state = PlayerState.FOLD
+                game.add_action(f"{player_display} folded")
+
+            elif action == PlayerAction.CHECK:
+                if game.max_round_rate > player.round_rate:
+                    logger.warning(
+                        "Check invalid - must call $%s", game.max_round_rate - player.round_rate
+                    )
+                    return False
+
+                game.add_action(f"{player_display} checked")
+
+            elif action == PlayerAction.CALL:
+                call_amount = game.max_round_rate - player.round_rate
+
+                if call_amount <= 0:
+                    logger.warning("Call invalid - nothing to call")
+                    return False
+
+                if player.wallet.value() < call_amount:
+                    action_amount = self._coordinator.player_all_in(game, player)
+                    player.state = PlayerState.ALL_IN
+                    game.add_action(f"{player_display} all-in ${action_amount}")
+                else:
+                    action_amount = self._coordinator.player_call_or_check(game, player)
+                    game.add_action(f"{player_display} called ${action_amount}")
+
+            elif action == PlayerAction.RAISE_RATE:
+                min_raise = game.max_round_rate * 2
+
+                if amount < min_raise:
+                    logger.warning("Raise amount below minimum %s", min_raise)
+                    return False
+
+                total_needed = amount + (game.max_round_rate - player.round_rate)
+
+                if player.wallet.value() < total_needed:
+                    logger.warning("Insufficient funds for raise to $%s", amount)
+                    return False
+
+                action_amount = self._coordinator.player_raise_bet(game, player, amount)
+                game.add_action(f"{player_display} raised to ${game.max_round_rate}")
+
+            elif action == PlayerAction.ALL_IN:
+                action_amount = self._coordinator.player_all_in(game, player)
+                player.state = PlayerState.ALL_IN
+                game.add_action(f"{player_display} all-in ${action_amount}")
+
+            else:
+                logger.warning("Unsupported action type: %s", action)
+                return False
+
+            save_game_fn = getattr(self, "_save_game", None)
+            if save_game_fn is None:
+                logger.error("_save_game method not implemented; cannot persist game state")
+                return False
+
+            try:
+                if save_game_fn.__code__.co_argcount >= 3 and chat_id_int is not None:
+                    save_result = save_game_fn(chat_id_int, game)
+                else:
+                    save_result = save_game_fn(game)
+            except TypeError:
+                if chat_id_int is None:
+                    raise
+                save_result = save_game_fn(chat_id_int, game)
+
+            if inspect.isawaitable(save_result):
+                await save_result
+
+            player.last_move_date = datetime.now()
+            if hasattr(game, "last_turn_time"):
+                game.last_turn_time = datetime.now()
+
+            result, next_player = self._coordinator.process_game_turn(game)
+
+            if result == TurnResult.CONTINUE_ROUND and next_player is not None:
+                await self._coordinator._send_or_update_game_state(
+                    game=game,
+                    current_player=next_player,
+                    action_prompt=f"Your turn, {next_player.mention_markdown}!",
+                )
+
+            elif result == TurnResult.END_ROUND:
+                advance_fn = getattr(self, "_advance_to_next_street", None)
+                if callable(advance_fn):
+                    advance_result = advance_fn(game)
+                    if inspect.isawaitable(advance_result):
+                        await advance_result
+                else:
+                    self._coordinator.commit_round_bets(game)
+                    new_state, cards_to_deal = self._coordinator.advance_game_street(game)
+                    if cards_to_deal > 0 and chat_id_int is not None:
+                        await self.add_cards_to_table(cards_to_deal, game, chat_id_int)
+                    if new_state == GameState.FINISHED and hasattr(self, "_finish_game"):
+                        await self._finish_game(game, chat_id_int)
+
+            elif result == TurnResult.END_GAME:
+                finish_fn = getattr(self, "_finish_game_and_show_winners", None)
+                if callable(finish_fn):
+                    finish_result = finish_fn(game)
+                    if inspect.isawaitable(finish_result):
+                        await finish_result
+                elif hasattr(self, "_finish_game") and chat_id_int is not None:
+                    finish_result = self._finish_game(game, chat_id_int)
+                    if inspect.isawaitable(finish_result):
+                        await finish_result
+
+            try:
+                if save_game_fn.__code__.co_argcount >= 3 and chat_id_int is not None:
+                    final_save = save_game_fn(chat_id_int, game)
+                else:
+                    final_save = save_game_fn(game)
+            except TypeError:
+                if chat_id_int is None:
+                    raise
+                final_save = save_game_fn(chat_id_int, game)
+
+            if inspect.isawaitable(final_save):
+                await final_save
+
+            return True
+
+        except Exception as exc:
+            logger.error(
+                "Error processing action for user %s: %s", user_id, exc, exc_info=True
+            )
+            return False
 
 
 class WalletManagerModel(Wallet):
