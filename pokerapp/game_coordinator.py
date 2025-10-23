@@ -53,20 +53,9 @@ class GameCoordinator:
             logger.warning("View not initialized; cannot update game state UI")
             return
 
-        chat_id = getattr(self, "_chat_id", None) or getattr(game, "chat_id", None)
-
-        # Add custom prompt if provided
-        if action_prompt:
-            state_text += f"\n\n{action_prompt}"
-
-        # Build action buttons if a player is acting
-        reply_markup = None
-
-        if current_player is not None:
-            reply_markup = self._view.build_action_buttons(
-                game,
-                current_player,
-            )
+        chat_id = getattr(self, "_chat_id", None)
+        if chat_id is None:
+            chat_id = getattr(game, "chat_id", None)
 
         # Edit existing message or send new
         if game.has_group_message():
