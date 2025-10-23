@@ -299,6 +299,9 @@ class GameEngine:
         if players_count == 0:
             return 0
 
+        if players_count == 2:
+            return (self._game.dealer_index + 1) % players_count
+
         big_blind_index = (self._game.dealer_index + 2) % players_count
         return big_blind_index
 
