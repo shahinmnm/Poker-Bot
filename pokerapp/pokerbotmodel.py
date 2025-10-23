@@ -716,6 +716,102 @@ class PokerBotModel:
 
         return m
 
+    async def handle_player_action(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        game_id: str,
+        action: PlayerAction,
+        amount: int = 0,
+    ) -> bool:
+        query = update.callback_query
+
+        if query is None or query.message is None:
+            return False
+
+        game = self._game_from_context(context)
+
+        if game.state in (GameState.INITIAL, GameState.FINISHED):
+            return False
+
+        if game.id != game_id:
+            return False
+
+        current_player = self._current_turn_player(game)
+
+        if current_player.user_id != query.from_user.id:
+            return False
+
+        if action == PlayerAction.RAISE_RATE and amount <= 0:
+            return False
+
+        if action in (PlayerAction.CALL, PlayerAction.CHECK):
+            await self.call_check(update, context)
+        elif action == PlayerAction.FOLD:
+            await self.fold(update, context)
+        elif action == PlayerAction.ALL_IN:
+            await self.all_in(update, context)
+        elif action == PlayerAction.RAISE_RATE:
+            handled = await self._handle_variable_raise(update, context, amount)
+
+            if not handled:
+                return False
+        else:
+            return False
+
+        await self._view.remove_markup(
+            chat_id=query.message.chat_id,
+            message_id=query.message.message_id,
+        )
+
+        return True
+
+    async def _handle_variable_raise(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        target_total: int,
+    ) -> bool:
+        game = self._game_from_context(context)
+        player = self._current_turn_player(game)
+
+        current_max = game.max_round_rate
+        call_amount = current_max - player.round_rate
+        raise_amount = target_total - current_max
+
+        if raise_amount <= 0:
+            return False
+
+        total_required = call_amount + raise_amount
+
+        if player.wallet.value() <= total_required:
+            await self.all_in(update, context)
+            return True
+
+        chat_id = update.effective_message.chat_id
+
+        action = PlayerAction.RAISE_RATE
+
+        if player.round_rate == current_max:
+            action = PlayerAction.BET
+
+        await self._view.send_message(
+            chat_id=chat_id,
+            text=(
+                f"{player.mention_markdown} {action.value} {raise_amount}$"
+            ),
+        )
+
+        self._coordinator.player_raise_bet(
+            game=game,
+            player=player,
+            amount=raise_amount,
+        )
+
+        await self._start_betting_round(game, chat_id)
+
+        return True
+
     async def ban_player(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
