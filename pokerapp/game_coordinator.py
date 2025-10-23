@@ -213,6 +213,8 @@ class GameCoordinator:
     def player_all_in(self, game: Game, player: Player) -> Money:
         """Handle all-in action for a player."""
 
+        previous_max = game.max_round_rate
+
         amount = player.wallet.authorize_all(
             game_id=game.id,
         )
@@ -221,6 +223,15 @@ class GameCoordinator:
         if game.max_round_rate < player.round_rate:
             game.max_round_rate = player.round_rate
             game.trading_end_user_id = player.user_id
+
+            actual_raise = game.max_round_rate - previous_max
+
+            if actual_raise > 0:
+                base_increment = game.table_stake * 2 if game.table_stake else 0
+                minimum_full_raise = max(game.last_raise_amount, base_increment)
+
+                if minimum_full_raise == 0 or actual_raise >= minimum_full_raise:
+                    game.last_raise_amount = actual_raise
 
         return amount
 
