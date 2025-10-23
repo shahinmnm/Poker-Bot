@@ -7,15 +7,17 @@ import inspect
 import json
 import logging
 import secrets
-from typing import Awaitable, Callable, Dict, List, Optional, Union
+from collections import defaultdict
+from typing import Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
 from telegram.ext import Application, CallbackContext, ContextTypes
 from telegram.helpers import escape_markdown
+from telegram.constants import ParseMode
 
 from pokerapp.config import Config, STAKE_PRESETS
-from pokerapp.cards import get_shuffled_deck
+from pokerapp.cards import Cards, get_shuffled_deck
 from pokerapp.privatechatmodel import UserPrivateChatModel
 from pokerapp.desk import KEY_CHAT_DATA_GAME, KEY_OLD_PLAYERS
 from pokerapp.entities import (
@@ -31,11 +33,13 @@ from pokerapp.entities import (
     PlayerState,
     Wallet,
     BalanceValidator,
+    Score,
 )
 from pokerapp.game_coordinator import GameCoordinator
 from pokerapp.game_engine import TurnResult
 from pokerapp.pokerbotview import PokerBotViewer
 from pokerapp.kvstore import ensure_kv
+from pokerapp.winnerdetermination import get_combination_name
 
 
 logger = logging.getLogger(__name__)
@@ -258,48 +262,158 @@ class PokerBotModel:
         self,
         chat_id: str,
         game: Game,
-        winners_results: List,
+        winners_results: Union[
+            Dict[Score, List[Tuple[Player, Cards]]],
+            List[Tuple[Player, Cards, Money]],
+        ],
     ) -> None:
-        """Display final game results and winner announcement.
+        """
+        Display final game results and distribute winnings.
 
         Args:
-            chat_id: Chat ID where game took place.
-            winners_results: List of (player, hand_rank, score) tuples.
+            chat_id: Chat identifier
+            game: Completed game instance
+            winners_results: Either a score→players map or legacy
+                list of (player, hand_cards, winnings) tuples.
         """
 
-        if not winners_results:
-            message = "🎲 Game ended with no winners."
-        else:
-            lines: List[str] = ["🏆 <b>Game Results</b>", ""]
-
-            for idx, result in enumerate(winners_results, 1):
-                player = result[0]
-                hand_rank = result[1] if len(result) > 1 else "Unknown"
-                score = result[2] if len(result) > 2 else 0
-
-                mention = getattr(player, "mention_markdown", str(player))
-                lines.append(f"{idx}. {html.escape(mention)}")
-                lines.append(f" Hand: {html.escape(str(hand_rank))}")
-                lines.append(f" Won: {html.escape(str(score))} chips")
-                lines.append("")
-
-            lines.append(f"💰 Total Pot: {html.escape(str(game.pot))}")
-            message = "\n".join(lines).strip()
-
-        await self._view.send_message(
-            chat_id=int(chat_id),
-            text=message,
-            parse_mode="HTML",
-        )
-
         try:
-            chat_key = int(chat_id)
-            chat_data = self._application.chat_data.get(chat_key, {})
-            if KEY_CHAT_DATA_GAME in chat_data:
-                del chat_data[KEY_CHAT_DATA_GAME]
-                logger.info("Cleared game state for chat %s", chat_id)
+            normalized_results: Dict[
+                Score, List[Tuple[Player, Cards, Optional[Money]]]
+            ]
+
+            if isinstance(winners_results, dict):
+                normalized_results = {
+                    score: [(player, cards, None) for player, cards in players]
+                    for score, players in winners_results.items()
+                }
+            else:
+                aggregated: Dict[
+                    Score, Dict[int, Tuple[Player, Cards, Money]]
+                ] = defaultdict(dict)
+
+                for player, hand_cards, amount in winners_results:
+                    try:
+                        score = self._coordinator.winner_determine._check_hand_get_score(  # type: ignore[attr-defined]
+                            hand_cards
+                        )
+                    except Exception:
+                        # Fallback: treat all winners as same score if scoring fails
+                        score = 0
+
+                    player_entries = aggregated[score]
+
+                    if player.user_id in player_entries:
+                        prev_player, prev_hand, prev_amount = player_entries[
+                            player.user_id
+                        ]
+                        player_entries[player.user_id] = (
+                            prev_player,
+                            prev_hand,
+                            prev_amount + amount,
+                        )
+                    else:
+                        player_entries[player.user_id] = (
+                            player,
+                            hand_cards,
+                            amount,
+                        )
+
+                normalized_results = {
+                    score: list(entries.values())
+                    for score, entries in aggregated.items()
+                }
+
+            sorted_scores = sorted(normalized_results.keys(), reverse=True)
+
+            if not sorted_scores:
+                await self._bot.send_message(
+                    chat_id=int(chat_id),
+                    text="🎲 Game ended with no winners (all folded).",
+                    parse_mode=ParseMode.HTML,
+                )
+                return
+
+            lines: List[str] = ["🏆 <b>Game Results:</b>\n"]
+
+            for rank, score in enumerate(sorted_scores, start=1):
+                players_with_score = normalized_results[score]
+                hand_name = get_combination_name(score)
+
+                if rank == 1:
+                    lines.append(f"🥇 <b>Winner(s) - {html.escape(hand_name)}</b>")
+                else:
+                    lines.append(f"\n{rank}. {html.escape(hand_name)}")
+
+                for player, hand_cards, winnings in players_with_score:
+                    mention_raw = getattr(
+                        player,
+                        "mention_markdown",
+                        f"Player {player.user_id}",
+                    )
+                    mention_raw = mention_raw.strip("`")
+                    if mention_raw.startswith("[") and "](" in mention_raw:
+                        label, link = mention_raw[1:].split("](", 1)
+                        link = link.rstrip(")")
+                        mention = (
+                            f'<a href="{html.escape(link, quote=True)}">'
+                            f"{html.escape(label)}</a>"
+                        )
+                    else:
+                        mention = html.escape(mention_raw)
+
+                    cards_str = " ".join(
+                        html.escape(str(card)) for card in hand_cards[:5]
+                    )
+
+                    lines.append(f" • {mention}")
+                    lines.append(f" Cards: <code>{cards_str}</code>")
+                    if winnings is not None:
+                        winnings_text = html.escape(str(winnings))
+                        lines.append(f" Winnings: <b>{winnings_text}$</b>")
+
+            lines.append(f"\n💰 Total Pot: {html.escape(str(game.pot))}")
+
+            result_text = "\n".join(lines)
+
+            await self._bot.send_message(
+                chat_id=int(chat_id),
+                text=result_text,
+                parse_mode=ParseMode.HTML,
+            )
+
+            logger.info(
+                "Game results sent to chat %s: %d winners",
+                chat_id,
+                sum(len(players) for players in normalized_results.values()),
+            )
+
         except Exception as exc:
-            logger.warning("Failed to clear game state: %s", exc)
+            logger.exception(
+                "Error displaying game results for chat %s: %s",
+                chat_id,
+                exc,
+            )
+
+            await self._bot.send_message(
+                chat_id=int(chat_id),
+                text="❌ Error displaying results. Check logs.",
+                parse_mode=ParseMode.HTML,
+            )
+
+        finally:
+            try:
+                chat_key = int(chat_id)
+                chat_data = self._application.chat_data.get(chat_key, {})
+                if KEY_CHAT_DATA_GAME in chat_data:
+                    del chat_data[KEY_CHAT_DATA_GAME]
+                    logger.debug("Cleared game state for chat %s", chat_id)
+            except Exception as cleanup_exc:
+                logger.error(
+                    "Failed to cleanup game state for chat %s: %s",
+                    chat_id,
+                    cleanup_exc,
+                )
 
     @staticmethod
     def _has_available_seat(game: Game) -> bool:
@@ -2504,6 +2618,7 @@ class PokerBotModel:
 
         user_id_str = str(user_id)
         chat_id_str = str(chat_id)
+        chat_id_int = int(chat_id)
 
         game = await self._get_game(chat_id_str)
 
@@ -2603,7 +2718,7 @@ class PokerBotModel:
 
             game.add_action(action_text)
 
-            self._save_game(game)
+            self._save_game(chat_id_int, game)
 
             turn_result, next_player = self._coordinator.process_game_turn(game)
 
@@ -2619,8 +2734,9 @@ class PokerBotModel:
                 game.state = new_state
 
                 if cards_to_deal > 0:
-                    for _ in range(cards_to_deal):
-                        game.cards_table.append(game.deck.pop())
+                    dealt_cards = game.remain_cards[:cards_to_deal]
+                    game.cards_table.extend(dealt_cards)
+                    game.remain_cards = game.remain_cards[cards_to_deal:]
 
                 self._coordinator.commit_round_bets(game)
 
