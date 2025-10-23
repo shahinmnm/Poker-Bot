@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import asyncio
-import datetime
+import datetime as dt
 from datetime import datetime
 import inspect
 import json
@@ -53,7 +53,7 @@ MAX_PLAYERS = 8
 MIN_PLAYERS = 2
 ONE_DAY = 86400
 DEFAULT_MONEY = 1000
-MAX_TIME_FOR_TURN = datetime.timedelta(minutes=2)
+MAX_TIME_FOR_TURN = dt.timedelta(minutes=2)
 DESCRIPTION_FILE = "assets/description_bot.md"
 
 
@@ -405,7 +405,7 @@ class PokerBotModel:
             return
 
         SATURDAY = 5
-        if datetime.datetime.today().weekday() == SATURDAY:
+        if dt.datetime.today().weekday() == SATURDAY:
             dice_msg = await self._view.send_dice_reply(
                 chat_id=chat_id,
                 message_id=message_id,
@@ -638,7 +638,7 @@ class PokerBotModel:
                 continue
 
             if result == TurnResult.CONTINUE_ROUND and next_player:
-                game.last_turn_time = datetime.datetime.now()
+                game.last_turn_time = dt.datetime.now()
                 await self._view.send_turn_actions(
                     chat_id=chat_id,
                     game=game,
@@ -727,7 +727,7 @@ class PokerBotModel:
         if game.state in (GameState.INITIAL, GameState.FINISHED):
             return
 
-        diff = datetime.datetime.now() - game.last_turn_time
+        diff = dt.datetime.now() - game.last_turn_time
         if diff < MAX_TIME_FOR_TURN:
             await self._view.send_message(
                 chat_id=chat_id,
@@ -1429,7 +1429,7 @@ class PokerBotModel:
             "host_id": user.id,
             "host_name": user.first_name,
             "stake_level": stake_level,
-            "invited_at": datetime.datetime.now().isoformat(),
+            "invited_at": dt.datetime.now().isoformat(),
             "status": "pending",
         }
         self._kv.set(
@@ -1801,7 +1801,7 @@ class PokerBotModel:
             "small_blind": small_blind,
             "big_blind": big_blind,
             "game_code": game_code,
-            "created_at": int(datetime.datetime.utcnow().timestamp()),
+            "created_at": int(dt.datetime.utcnow().timestamp()),
         }
 
         snapshot_key = ":".join(["game", str(chat_id)])
@@ -2503,18 +2503,28 @@ class PokerBotModel:
 
             elif action == PlayerAction.RAISE_RATE:
                 min_raise = game.max_round_rate * 2
+                call_amount = game.max_round_rate - player.round_rate
+                raise_increment = amount - game.max_round_rate
 
                 if amount < min_raise:
                     logger.warning("Raise amount below minimum %s", min_raise)
                     return False
 
-                total_needed = amount + (game.max_round_rate - player.round_rate)
+                if raise_increment <= 0:
+                    logger.warning(
+                        "Raise target must exceed current max rate %s", game.max_round_rate
+                    )
+                    return False
+
+                total_needed = call_amount + raise_increment
 
                 if player.wallet.value() < total_needed:
                     logger.warning("Insufficient funds for raise to $%s", amount)
                     return False
 
-                action_amount = self._coordinator.player_raise_bet(game, player, amount)
+                action_amount = self._coordinator.player_raise_bet(
+                    game, player, raise_increment
+                )
                 game.add_action(f"{player_display} raised to ${game.max_round_rate}")
 
             elif action == PlayerAction.ALL_IN:
@@ -2635,7 +2645,7 @@ class WalletManagerModel(Wallet):
         return "pokerbot:" + str(id) + suffix
 
     def _current_date(self) -> str:
-        return datetime.datetime.utcnow().strftime("%d/%m/%y")
+        return dt.datetime.utcnow().strftime("%d/%m/%y")
 
     def _key_daily(self) -> str:
         return self._prefix(self.user_id, ":daily")
