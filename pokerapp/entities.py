@@ -110,6 +110,7 @@ class Game:
         # assignments, but multi-hand sessions may rely on this field.
         self.dealer_index = next_dealer_index
         self.table_stake = 0  # Small blind amount for this game
+        self.last_raise_amount = 0
         self.ready_users = set()
         self.last_turn_time = datetime.datetime.now()
         # Game mode (Phase 2)

@@ -171,6 +171,7 @@ class GameCoordinator:
         self.player_raise_bet(game, game.players[0], small_blind)
         big_blind_raise = max(big_blind_amount - game.max_round_rate, 0)
         self.player_raise_bet(game, game.players[1], big_blind_raise)
+        game.last_raise_amount = big_blind_amount
 
     def player_raise_bet(
         self,
@@ -190,6 +191,9 @@ class GameCoordinator:
 
         game.max_round_rate = player.round_rate
         game.trading_end_user_id = player.user_id
+
+        if amount > 0:
+            game.last_raise_amount = amount
 
         return total_amount
 
@@ -261,6 +265,7 @@ class GameCoordinator:
 
         game.max_round_rate = 0
         game.trading_end_user_id = game.players[0].user_id
+        game.last_raise_amount = game.table_stake * 2 if game.table_stake else 0
 
     def _format_action_text(
         self,
