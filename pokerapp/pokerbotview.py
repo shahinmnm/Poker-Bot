@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+from html import escape
 
 from typing import List, Optional, Dict
 
@@ -114,13 +115,17 @@ class PokerBotViewer:
             GameState.FINISHED: "FINISHED",
         }.get(game.state, "STARTING")
 
-        lines.append(f"🃏 <b>POKER GAME #{game.id[:8].upper()} - {round_name}</b>")
+        game_id = escape(game.id[:8].upper())
+        lines.append(f"🃏 <b>POKER GAME #{game_id} - {round_name}</b>")
 
         big_blind = game.table_stake * 2
 
+        pot_amount = escape(str(game.pot))
+        table_stake = escape(str(game.table_stake))
+        big_blind_display = escape(str(big_blind))
         lines.append(
-            f"💰 Pot: <b>${game.pot}</b> | "
-            f"Stakes: {game.table_stake}/{big_blind}"
+            f"💰 Pot: <b>${pot_amount}</b> | "
+            f"Stakes: {table_stake}/{big_blind_display}"
         )
         lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("")
@@ -146,29 +151,33 @@ class PokerBotViewer:
 
             bet_display = ""
             if player.round_rate > 0:
+                bet_amount = escape(str(player.round_rate))
                 if player.state == PlayerState.ALL_IN:
-                    bet_display = f" [ALL-IN ${player.round_rate}]"
+                    bet_display = f" [ALL-IN ${bet_amount}]"
                 else:
-                    bet_display = f" [BET ${player.round_rate}]"
+                    bet_display = f" [BET ${bet_amount}]"
             elif player.state == PlayerState.FOLD:
                 bet_display = " [FOLDED]"
 
             name = player.mention_markdown.strip('`').split(']')[0].strip('[')
+            name = escape(name)
+            balance_display = escape(str(balance))
+            bet_display = escape(bet_display)
 
-            lines.append(f"{icon} {name} ${balance}{bet_display}")
+            lines.append(f"{icon} {name} ${balance_display}{bet_display}")
 
         lines.append("")
 
         if game.recent_actions:
             lines.append("📢 <b>Recent Activity:</b>")
             for action in game.recent_actions:
-                lines.append(f"• {action}")
+                lines.append(f"• {escape(action)}")
 
         lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("")
 
         if action_prompt:
-            lines.append(f"👉 {action_prompt}")
+            lines.append(f"👉 {escape(action_prompt)}")
             lines.append("")
 
         return "\n".join(lines)
