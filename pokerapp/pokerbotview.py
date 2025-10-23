@@ -44,10 +44,15 @@ class PokerBotViewer:
         """
 
         suit_symbols = {
+            '♠': '♠',
+            '♣': '♣',
+            '♦': '♦',
+            '♥': '♥',
+            # Allow lookups by descriptive suit names as a fallback.
             'spades': '♠',
-            'hearts': '♥',
+            'clubs': '♣',
             'diamonds': '♦',
-            'clubs': '♣'
+            'hearts': '♥',
         }
 
         rank_display = {
