@@ -1014,7 +1014,10 @@ class PokerBotModel:
             if player.round_rate == game.max_round_rate:
                 action = PlayerAction.BET
 
-            if player.wallet.value() < raise_bet_rate.value:
+            call_amount = max(game.max_round_rate - player.round_rate, 0)
+            total_required = call_amount + raise_bet_rate.value
+
+            if player.wallet.value() < total_required:
                 await self.all_in(update=update, context=context)
                 return
 
@@ -1027,7 +1030,7 @@ class PokerBotModel:
             self._coordinator.player_raise_bet(
                 game=game,
                 player=player,
-                amount=raise_bet_rate.value,
+                amount=game.max_round_rate + raise_bet_rate.value,
             )
         except UserException as e:
             await self._view.send_message(chat_id=chat_id, text=str(e))
