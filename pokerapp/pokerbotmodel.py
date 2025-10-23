@@ -6,6 +6,7 @@ import html
 import json
 import logging
 import secrets
+from collections import defaultdict
 from typing import Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 import redis
@@ -263,7 +264,10 @@ class PokerBotModel:
         self,
         chat_id: str,
         game: Game,
-        winners_results: Dict[Score, List[Tuple[Player, Cards]]],
+        winners_results: Union[
+            Dict[Score, List[Tuple[Player, Cards]]],
+            List[Tuple[Player, Cards, Money]],
+        ],
     ) -> None:
         """
         Display final game results and distribute winnings.
@@ -277,7 +281,53 @@ class PokerBotModel:
         """
 
         try:
-            sorted_scores = sorted(winners_results.keys(), reverse=True)
+            normalized_results: Dict[
+                Score, List[Tuple[Player, Cards, Optional[Money]]]
+            ]
+
+            if isinstance(winners_results, dict):
+                normalized_results = {
+                    score: [(player, cards, None) for player, cards in players]
+                    for score, players in winners_results.items()
+                }
+            else:
+                aggregated: Dict[
+                    Score, Dict[int, Tuple[Player, Cards, Money]]
+                ] = defaultdict(dict)
+
+                for player, hand_cards, amount in winners_results:
+                    try:
+                        score = self._coordinator.winner_determine._check_hand_get_score(  # type: ignore[attr-defined]
+                            hand_cards
+                        )
+                    except Exception:
+                        # Fallback: treat all winners as same score if scoring fails
+                        score = 0
+
+                    player_entries = aggregated[score]
+
+                    if player.user_id in player_entries:
+                        prev_player, prev_hand, prev_amount = player_entries[
+                            player.user_id
+                        ]
+                        player_entries[player.user_id] = (
+                            prev_player,
+                            prev_hand,
+                            prev_amount + amount,
+                        )
+                    else:
+                        player_entries[player.user_id] = (
+                            player,
+                            hand_cards,
+                            amount,
+                        )
+
+                normalized_results = {
+                    score: list(entries.values())
+                    for score, entries in aggregated.items()
+                }
+
+            sorted_scores = sorted(normalized_results.keys(), reverse=True)
 
             if not sorted_scores:
                 await self._bot.send_message(
@@ -290,7 +340,7 @@ class PokerBotModel:
             lines: List[str] = ["🏆 <b>Game Results:</b>\n"]
 
             for rank, score in enumerate(sorted_scores, start=1):
-                players_with_score = winners_results[score]
+                players_with_score = normalized_results[score]
                 hand_name = get_combination_name(score)
 
                 if rank == 1:
@@ -301,7 +351,7 @@ class PokerBotModel:
                 else:
                     lines.append(f"\n{rank}. {html.escape(hand_name)}")
 
-                for player, hand_cards in players_with_score:
+                for player, hand_cards, winnings in players_with_score:
                     mention_raw = getattr(
                         player,
                         "mention_markdown",
@@ -324,6 +374,9 @@ class PokerBotModel:
 
                     lines.append(f" • {mention}")
                     lines.append(f" Cards: <code>{cards_str}</code>")
+                    if winnings is not None:
+                        winnings_text = html.escape(str(winnings))
+                        lines.append(f" Winnings: <b>{winnings_text}$</b>")
 
             lines.append(f"\n💰 Total Pot: {html.escape(str(game.pot))}")
 
@@ -338,7 +391,7 @@ class PokerBotModel:
             logger.info(
                 "Game results sent to chat %s: %d winners",
                 chat_id,
-                sum(len(players) for players in winners_results.values()),
+                sum(len(players) for players in normalized_results.values()),
             )
 
         except Exception as exc:

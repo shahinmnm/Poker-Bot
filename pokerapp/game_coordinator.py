@@ -32,6 +32,7 @@ class GameCoordinator:
         self.pot_calculator = SidePotCalculator()
         self.winner_determine = WinnerDetermination()
         self._view = view  # Optional PokerBotViewer for UI updates
+        self._chat_id: Optional[int] = None
 
     async def _send_or_update_game_state(
         self,
@@ -52,8 +53,7 @@ class GameCoordinator:
             logger.warning("View not initialized; cannot update game state UI")
             return
 
-        # Format current game state
-        state_text = self._view.format_game_state(game)
+        chat_id = getattr(self, "_chat_id", None) or getattr(game, "chat_id", None)
 
         # Add custom prompt if provided
         if action_prompt:
@@ -68,37 +68,32 @@ class GameCoordinator:
                 current_player,
             )
 
-        # Edit existing message or send new one
+        # Edit existing message or send new
         if game.has_group_message():
-            try:
-                await self._view.update_game_state(
-                    chat_id=game.chat_id,
-                    message_id=game.group_message_id,
-                    text=state_text,
-                    reply_markup=reply_markup,
-                )
-                game.set_group_message(game.group_message_id)
-            except Exception as exc:
-                logger.warning(
-                    "Failed to edit message %s, sending new: %s",
-                    game.group_message_id,
-                    exc,
-                )
-
-                # Fallback: send new message
-                message_id = await self._view.send_game_state(
-                    chat_id=game.chat_id,
-                    text=state_text,
-                    reply_markup=reply_markup,
-                )
-                game.set_group_message(message_id)
-        else:
-            # No existing message - send new
-            message_id = await self._view.send_game_state(
-                chat_id=game.chat_id,
-                text=state_text,
-                reply_markup=reply_markup,
+            updated = await self._view.update_game_state(
+                chat_id=chat_id,
+                message_id=game.group_message_id,
+                game=game,
+                current_player=current_player,
+                action_prompt=action_prompt,
             )
+
+            if updated:
+                return
+
+            logger.warning(
+                "Failed to edit message %s; attempting to send new message",
+                game.group_message_id,
+            )
+
+        message_id = await self._view.send_game_state(
+            chat_id=chat_id,
+            game=game,
+            current_player=current_player,
+            action_prompt=action_prompt,
+        )
+
+        if message_id is not None:
             game.set_group_message(message_id)
 
     def can_player_join(self, player_balance: int, table_stake: int) -> bool:
