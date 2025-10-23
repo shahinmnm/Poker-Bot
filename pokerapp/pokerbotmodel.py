@@ -2409,9 +2409,17 @@ class PokerBotModel:
         """
 
         user_id_str = str(user_id)
-        chat_id_str = str(chat_id)
 
-        game = await self._get_game(chat_id_str)
+        try:
+            chat_id_int = int(chat_id)
+        except (TypeError, ValueError):
+            logger.error("Invalid chat_id %r for user action", chat_id)
+            return False
+
+        chat_id_str = str(chat_id_int)
+
+        chat_data = self._application.chat_data.get(chat_id_int, {})
+        game = chat_data.get(KEY_CHAT_DATA_GAME)
 
         if not game:
             logger.warning(
@@ -2509,14 +2517,14 @@ class PokerBotModel:
 
             game.add_action(action_text)
 
-            await self._save_game(game)
+            self._save_game(chat_id_int, game)
 
             turn_result, next_player = self._coordinator.process_game_turn(game)
 
             if turn_result == TurnResult.CONTINUE_ROUND:
                 await self._coordinator._send_or_update_game_state(
                     game=game,
-                    chat_id=chat_id_str,
+                    current_player=next_player,
                 )
 
             elif turn_result == TurnResult.END_ROUND:
@@ -2530,11 +2538,10 @@ class PokerBotModel:
 
                 self._coordinator.commit_round_bets(game)
 
-                await self._save_game(game)
+                self._save_game(chat_id_int, game)
 
                 await self._coordinator._send_or_update_game_state(
                     game=game,
-                    chat_id=chat_id_str,
                 )
 
             elif turn_result == TurnResult.END_GAME:
@@ -2542,7 +2549,7 @@ class PokerBotModel:
 
                 game.state = GameState.FINISHED
 
-                await self._save_game(game)
+                self._save_game(chat_id_int, game)
 
                 await self._show_game_results(
                     chat_id=chat_id_str,
