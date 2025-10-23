@@ -23,6 +23,27 @@ class HandsOfPoker(enum.Enum):
     HIGH_CARD = 1
 
 
+HAND_NAME_MAP = {
+    HandsOfPoker.ROYAL_FLUSH.value: "Royal Flush",
+    HandsOfPoker.STRAIGHT_FLUSH.value: "Straight Flush",
+    HandsOfPoker.FOUR_OF_A_KIND.value: "Four of a Kind",
+    HandsOfPoker.FULL_HOUSE.value: "Full House",
+    HandsOfPoker.FLUSH.value: "Flush",
+    HandsOfPoker.STRAIGHTS.value: "Straight",
+    HandsOfPoker.THREE_OF_A_KIND.value: "Three of a Kind",
+    HandsOfPoker.TWO_PAIR.value: "Two Pair",
+    HandsOfPoker.PAIR.value: "One Pair",
+    HandsOfPoker.HIGH_CARD.value: "High Card",
+}
+
+
+def get_combination_name(score: Score) -> str:
+    """Return a human-readable name for a score value."""
+
+    rank_value = score // HAND_RANK
+    return HAND_NAME_MAP.get(rank_value, "Unknown Hand")
+
+
 class WinnerDetermination:
     @staticmethod
     def _make_combinations(cards: Card) -> Card:
