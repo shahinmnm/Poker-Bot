@@ -205,6 +205,7 @@ class PokerBotModel:
 
     def _save_game(self, chat_id: ChatId, game: Game) -> None:
         chat_data = self._application.chat_data.setdefault(chat_id, {})
+        setattr(game, "chat_id", chat_id)
         chat_data[KEY_CHAT_DATA_GAME] = game
 
     @staticmethod
@@ -2431,6 +2432,8 @@ class PokerBotModel:
         if game.current_player_index >= len(game.players):
             logger.error("Invalid current_player_index in game %s", game.id)
             return False
+
+        setattr(game, "chat_id", chat_id_int)
 
         current_player = game.players[game.current_player_index]
 
