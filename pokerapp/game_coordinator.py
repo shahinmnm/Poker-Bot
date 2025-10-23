@@ -74,6 +74,7 @@ class GameCoordinator:
                     text=state_text,
                     reply_markup=reply_markup,
                 )
+                game.set_group_message(game.group_message_id)
             except Exception as exc:
                 logger.warning(
                     "Failed to edit message %s, sending new: %s",

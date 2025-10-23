@@ -2680,8 +2680,9 @@ class PokerBotModel:
                 game.state = new_state
 
                 if cards_to_deal > 0:
-                    for _ in range(cards_to_deal):
-                        game.cards_table.append(game.deck.pop())
+                    dealt_cards = game.remain_cards[:cards_to_deal]
+                    game.cards_table.extend(dealt_cards)
+                    game.remain_cards = game.remain_cards[cards_to_deal:]
 
                 self._coordinator.commit_round_bets(game)
 
