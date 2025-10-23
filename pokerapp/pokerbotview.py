@@ -50,11 +50,17 @@ class PokerBotViewer:
             Formatted string like "A♠" or "K♥"
         """
 
+        # Support both descriptive suit names and cards that already use
+        # Unicode suit symbols.
         suit_symbols = {
             'spades': '♠',
             'hearts': '♥',
             'diamonds': '♦',
-            'clubs': '♣'
+            'clubs': '♣',
+            '♠': '♠',
+            '♥': '♥',
+            '♦': '♦',
+            '♣': '♣',
         }
 
         rank_display = {
