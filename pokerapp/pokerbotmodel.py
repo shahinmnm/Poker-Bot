@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime
+from datetime import datetime as dt
 import html
 import json
 import logging
@@ -205,28 +206,6 @@ class PokerBotModel:
             chat_data[KEY_CHAT_DATA_GAME] = Game()
 
         return chat_data[KEY_CHAT_DATA_GAME]
-
-    async def _get_game(self, chat_id: str) -> Optional[Game]:
-        """Load active game for chat (Phase 6 adapter).
-
-        Args:
-            chat_id: Chat ID as string
-
-        Returns:
-            Game instance or None if no active game.
-        """
-
-        try:
-            game = self._game(int(chat_id))
-
-            if game.state == GameState.INITIAL and not game.players:
-                return None
-
-            return game
-
-        except (ValueError, KeyError, AttributeError) as exc:
-            logger.warning("Failed to load game for chat %s: %s", chat_id, exc)
-            return None
 
     def _save_game(
         self,
@@ -621,7 +600,7 @@ class PokerBotModel:
             return
 
         SATURDAY = 5
-        if datetime.datetime.today().weekday() == SATURDAY:
+        if dt.today().weekday() == SATURDAY:
             dice_msg = await self._view.send_dice_reply(
                 chat_id=chat_id,
                 message_id=message_id,
@@ -854,7 +833,7 @@ class PokerBotModel:
                 continue
 
             if result == TurnResult.CONTINUE_ROUND and next_player:
-                game.last_turn_time = datetime.datetime.now()
+                game.last_turn_time = dt.now()
                 await self._view.send_turn_actions(
                     chat_id=chat_id,
                     game=game,
@@ -870,7 +849,15 @@ class PokerBotModel:
         chat_id: ChatId,
     ) -> None:
         for _ in range(count):
-            game.cards_table.append(game.remain_cards.pop())
+            if not game.remain_cards:
+                logger.debug(
+                    "No more cards remaining when attempting to deal to table"
+                )
+                break
+
+            card = game.remain_cards.pop()
+            game.cards_table.append(card)
+            logger.debug("Dealt community card %s", card)
 
         await self._view.send_desk_cards_img(
             chat_id=chat_id,
@@ -904,6 +891,14 @@ class PokerBotModel:
         await self._view.send_message(chat_id=chat_id, text=text)
 
         # Approve wallet transactions
+        for winner, _hand, amount in winners_results:
+            logger.debug(
+                "Winner %s takes %s from pot %s",
+                winner.user_id,
+                amount,
+                game.pot,
+            )
+
         for player in game.players:
             player.wallet.approve(game.id)
 
@@ -943,7 +938,7 @@ class PokerBotModel:
         if game.state in (GameState.INITIAL, GameState.FINISHED):
             return
 
-        diff = datetime.datetime.now() - game.last_turn_time
+        diff = dt.now() - game.last_turn_time
         if diff < MAX_TIME_FOR_TURN:
             await self._view.send_message(
                 chat_id=chat_id,
@@ -1645,7 +1640,7 @@ class PokerBotModel:
             "host_id": user.id,
             "host_name": user.first_name,
             "stake_level": stake_level,
-            "invited_at": datetime.datetime.now().isoformat(),
+            "invited_at": dt.now().isoformat(),
             "status": "pending",
         }
         self._kv.set(
@@ -2017,7 +2012,7 @@ class PokerBotModel:
             "small_blind": small_blind,
             "big_blind": big_blind,
             "game_code": game_code,
-            "created_at": int(datetime.datetime.utcnow().timestamp()),
+            "created_at": int(dt.utcnow().timestamp()),
         }
 
         snapshot_key = ":".join(["game", str(chat_id)])
@@ -2626,9 +2621,15 @@ class PokerBotModel:
 
         user_id_str = str(user_id)
         chat_id_str = str(chat_id)
-        chat_id_int = int(chat_id)
 
-        game = await self._get_game(chat_id_str)
+        try:
+            chat_id_int = int(chat_id)
+        except (TypeError, ValueError):
+            logger.warning("Invalid chat_id provided for action buttons: %s", chat_id)
+            return False
+
+        chat_data = self._application.chat_data.get(chat_id_int, {})
+        game = chat_data.get(KEY_CHAT_DATA_GAME)
 
         if not game:
             logger.warning(
@@ -2746,7 +2747,7 @@ class PokerBotModel:
             if turn_result == TurnResult.CONTINUE_ROUND:
                 await self._coordinator._send_or_update_game_state(
                     game=game,
-                    chat_id=chat_id_str,
+                    chat_id=chat_id_int,
                 )
 
             elif turn_result == TurnResult.END_ROUND:
@@ -2758,16 +2759,23 @@ class PokerBotModel:
                 game.state = new_state
 
                 if cards_to_deal > 0:
-                    dealt_cards = game.remain_cards[:cards_to_deal]
-                    game.cards_table.extend(dealt_cards)
-                    game.remain_cards = game.remain_cards[cards_to_deal:]
+                    for _ in range(cards_to_deal):
+                        if not game.remain_cards:
+                            logger.debug(
+                                "Attempted to deal community card but deck empty"
+                            )
+                            break
+
+                        card = game.remain_cards.pop()
+                        game.cards_table.append(card)
+                        logger.debug("Dealt community card %s", card)
 
                 self._coordinator.commit_round_bets(game)
                 self._save_game(chat_id_int, game)
 
                 await self._coordinator._send_or_update_game_state(
                     game=game,
-                    chat_id=chat_id_str,
+                    chat_id=chat_id_int,
                 )
 
             elif turn_result == TurnResult.END_GAME:
@@ -2828,7 +2836,7 @@ class WalletManagerModel(Wallet):
         return "pokerbot:" + str(id) + suffix
 
     def _current_date(self) -> str:
-        return datetime.datetime.utcnow().strftime("%d/%m/%y")
+        return dt.utcnow().strftime("%d/%m/%y")
 
     def _key_daily(self) -> str:
         return self._prefix(self.user_id, ":daily")

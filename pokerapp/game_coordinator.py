@@ -5,7 +5,7 @@ Bridges pure game logic with Telegram bot operations.
 """
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 from pokerapp.game_engine import PokerEngine, TurnResult
 from pokerapp.betting import SidePotCalculator
@@ -39,6 +39,7 @@ class GameCoordinator:
         game: Game,
         current_player: Optional[Player] = None,
         action_prompt: str = "",
+        chat_id: Optional[Union[int, str]] = None,
     ) -> None:
         """
         Send or update the single living game message.
@@ -47,20 +48,24 @@ class GameCoordinator:
             game: Current game state
             current_player: Player whose turn it is (for button generation)
             action_prompt: Custom prompt text to append
+            chat_id: Explicit chat identifier for viewer updates
         """
 
         if self._view is None:
             logger.warning("View not initialized; cannot update game state UI")
             return
 
-        chat_id = getattr(self, "_chat_id", None)
-        if chat_id is None:
-            chat_id = getattr(game, "chat_id", None)
+        effective_chat_id = chat_id if chat_id is not None else getattr(self, "_chat_id", None)
+        if effective_chat_id is None:
+            effective_chat_id = getattr(game, "chat_id", None)
+
+        if isinstance(effective_chat_id, str) and effective_chat_id.isdigit():
+            effective_chat_id = int(effective_chat_id)
 
         # Edit existing message or send new
         if game.has_group_message():
             updated = await self._view.update_game_state(
-                chat_id=chat_id,
+                chat_id=effective_chat_id,
                 message_id=game.group_message_id,
                 game=game,
                 current_player=current_player,
@@ -76,7 +81,7 @@ class GameCoordinator:
             )
 
         message_id = await self._view.send_game_state(
-            chat_id=chat_id,
+            chat_id=effective_chat_id,
             game=game,
             current_player=current_player,
             action_prompt=action_prompt,
@@ -168,8 +173,7 @@ class GameCoordinator:
         )
 
         self.player_raise_bet(game, game.players[0], small_blind)
-        big_blind_raise = max(big_blind_amount - game.max_round_rate, 0)
-        self.player_raise_bet(game, game.players[1], big_blind_raise)
+        self.player_raise_bet(game, game.players[1], big_blind_amount)
 
     def player_raise_bet(
         self,
@@ -179,18 +183,32 @@ class GameCoordinator:
     ) -> Money:
         """Handle raise/bet action for a player."""
 
-        total_amount = amount + (game.max_round_rate - player.round_rate)
+        call_amount = max(game.max_round_rate - player.round_rate, 0)
+        raise_increment = max(amount - game.max_round_rate, 0)
+        total_needed = call_amount + raise_increment
+
+        logger.debug(
+            "Player %s raising: call=%s, raise_increment=%s, total=%s",
+            player.user_id,
+            call_amount,
+            raise_increment,
+            total_needed,
+        )
+
+        if total_needed <= 0:
+            return 0
 
         player.wallet.authorize(
             game_id=game.id,
-            amount=total_amount,
+            amount=total_needed,
         )
-        player.round_rate += total_amount
+        player.round_rate += total_needed
 
-        game.max_round_rate = player.round_rate
-        game.trading_end_user_id = player.user_id
+        if player.round_rate > game.max_round_rate:
+            game.max_round_rate = player.round_rate
+            game.trading_end_user_id = player.user_id
 
-        return total_amount
+        return total_needed
 
     def player_call_or_check(self, game: Game, player: Player) -> Money:
         """Handle call/check action for a player."""

@@ -113,7 +113,7 @@ class SidePotCalculator:
                     share = side_pot.amount / len(pot_winners)
 
                     for player, hand in pot_winners:
-                        win_amount = round(share)
+                        win_amount = int(round(share))
                         player.wallet.inc(win_amount)
                         results.append((player, hand, win_amount))
 
