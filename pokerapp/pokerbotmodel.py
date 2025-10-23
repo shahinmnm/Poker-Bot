@@ -2625,7 +2625,10 @@ class PokerBotModel:
         try:
             chat_id_int = int(chat_id)
         except (TypeError, ValueError):
-            logger.warning("Invalid chat_id provided for action buttons: %s", chat_id)
+            logger.warning(
+                "Invalid chat_id provided for action buttons: %s",
+                chat_id,
+            )
             return False
 
         chat_data = self._application.chat_data.get(chat_id_int, {})
@@ -2762,7 +2765,8 @@ class PokerBotModel:
                     for _ in range(cards_to_deal):
                         if not game.remain_cards:
                             logger.debug(
-                                "Attempted to deal community card but deck empty"
+                                "Attempted to deal community card but deck "
+                                "empty",
                             )
                             break
 
