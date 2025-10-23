@@ -3,7 +3,7 @@
 from abc import abstractmethod
 import enum
 import datetime
-from typing import Tuple, List, Optional, Dict
+from typing import Tuple, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 from uuid import uuid4

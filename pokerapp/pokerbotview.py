@@ -2,7 +2,7 @@
 
 import logging
 
-from typing import List, Optional, Dict
+from typing import List, Optional
 
 from telegram import (
     Message,
@@ -120,7 +120,10 @@ class PokerBotViewer:
             GameState.FINISHED: "FINISHED",
         }.get(game.state, "STARTING")
 
-        lines.append(f"🃏 <b>POKER GAME #{game.id[:8].upper()} - {round_name}</b>")
+        game_header = (
+            f"🃏 <b>POKER GAME #{game.id[:8].upper()} - {round_name}</b>"
+        )
+        lines.append(game_header)
 
         big_blind = game.table_stake * 2
 
@@ -136,7 +139,8 @@ class PokerBotViewer:
             lines.append(self._format_board_cards(game.cards_table))
             lines.append("")
 
-        lines.append(f"👥 <b>Players ({len(game.players)}):</b>")
+        player_count = len(game.players)
+        lines.append(f"👥 <b>Players ({player_count})</b>")
 
         for _, player in enumerate(game.players):
             if current_player and player.user_id == current_player.user_id:
@@ -202,20 +206,29 @@ class PokerBotViewer:
         player_balance = current_player.wallet.value()
         call_amount = current_bet - player_bet
 
+        game_id_str = str(game.id)
+
         row1 = []
         if call_amount == 0:
             row1.append(
-                InlineKeyboardButton("✅ Check", callback_data=f"action:check:{game.id}")
+                InlineKeyboardButton(
+                    "✅ Check",
+                    callback_data=":".join(["action", "check", game_id_str]),
+                )
             )
         elif call_amount < player_balance:
             row1.append(
                 InlineKeyboardButton(
-                    f"💵 Call ${call_amount}", callback_data=f"action:call:{game.id}"
+                    f"💵 Call ${call_amount}",
+                    callback_data=":".join(["action", "call", game_id_str]),
                 )
             )
 
         row1.append(
-            InlineKeyboardButton("❌ Fold", callback_data=f"action:fold:{game.id}")
+            InlineKeyboardButton(
+                "❌ Fold",
+                callback_data=":".join(["action", "fold", game_id_str]),
+            )
         )
         buttons.append(row1)
 
@@ -228,7 +241,9 @@ class PokerBotViewer:
                 row2.append(
                     InlineKeyboardButton(
                         f"📈 Raise ${min_raise}",
-                        callback_data=f"action:raise:{min_raise}:{game.id}",
+                        callback_data=":".join(
+                            ["action", "raise", str(min_raise), game_id_str]
+                        ),
                     )
                 )
 
@@ -237,7 +252,14 @@ class PokerBotViewer:
                     row2.append(
                         InlineKeyboardButton(
                             f"📊 Raise ${pot_raise}",
-                            callback_data=f"action:raise:{pot_raise}:{game.id}",
+                            callback_data=":".join(
+                                [
+                                    "action",
+                                    "raise",
+                                    str(pot_raise),
+                                    game_id_str,
+                                ]
+                            ),
                         )
                     )
 
@@ -245,7 +267,9 @@ class PokerBotViewer:
                 row2.append(
                     InlineKeyboardButton(
                         f"🔥 All-In ${player_balance}",
-                        callback_data=f"action:allin:{game.id}",
+                        callback_data=":".join(
+                            ["action", "allin", game_id_str]
+                        ),
                     )
                 )
 
