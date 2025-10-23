@@ -473,7 +473,7 @@ Send 💰 /money once per day for free chips!
                     "call": PlayerAction.CALL,
                     "fold": PlayerAction.FOLD,
                     "raise": PlayerAction.RAISE_RATE,
-                    "all_in": PlayerAction.ALL_IN,
+                    "allin": PlayerAction.ALL_IN,
                 }
 
                 player_action = legacy_map.get(action_type)
