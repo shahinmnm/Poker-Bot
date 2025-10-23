@@ -2566,7 +2566,9 @@ class PokerBotModel:
                 # Deal community cards if needed
                 if cards_to_deal > 0:
                     for _ in range(cards_to_deal):
-                        game.cards_table.append(game.cards_deck.pop(0))
+                        if not game.remain_cards:
+                            break
+                        game.cards_table.append(game.remain_cards.pop())
 
                 # Check if game is now finished (river complete)
                 if new_state == GameState.FINISHED:
@@ -2615,7 +2617,10 @@ class PokerBotModel:
 
                     # Award entire pot to last standing player
                     self._coordinator.commit_round_bets(game)
-                    winner.wallet.win(game.id, game.pot)
+                    if game.pot:
+                        winner.wallet.inc(game.pot)
+                    for player in game.players:
+                        player.wallet.approve(game.id)
 
                     # Update UI
                     if hasattr(self._coordinator, "_view") and self._coordinator._view:
