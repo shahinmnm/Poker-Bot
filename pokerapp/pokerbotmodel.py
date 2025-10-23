@@ -783,6 +783,22 @@ class PokerBotModel:
             return False
 
         total_required = call_amount + raise_amount
+        min_raise_increment = self._minimum_raise_increment(game)
+
+        if raise_amount < min_raise_increment:
+            if player.wallet.value() <= total_required:
+                await self.all_in(update, context)
+                return True
+
+            await self._view.send_message(
+                chat_id=update.effective_message.chat_id,
+                text=(
+                    "Minimum raise is "
+                    f"${current_max + min_raise_increment}."
+                ),
+            )
+
+            return False
 
         if player.wallet.value() <= total_required:
             await self.all_in(update, context)
@@ -811,6 +827,12 @@ class PokerBotModel:
         await self._start_betting_round(game, chat_id)
 
         return True
+
+    def _minimum_raise_increment(self, game: Game) -> int:
+        base = game.table_stake * 2 if game.table_stake else 0
+        last_raise = getattr(game, "last_raise_amount", 0)
+
+        return max(last_raise, base)
 
     async def ban_player(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
