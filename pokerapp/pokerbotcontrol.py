@@ -62,7 +62,7 @@ class PokerBotController:
         application.add_handler(
             CommandHandler("leave", self._handle_leave_private)
         )
-        # Register callback query handlers with specific patterns before fallback
+        # Register callback query handlers before the fallback handler
         application.add_handler(
             CallbackQueryHandler(
                 self._handle_stake_selection,
@@ -577,9 +577,15 @@ Send 💰 /money once per day for free chips!
             if success:
                 await query.answer()  # Silent success
             else:
-                await query.answer("❌ Action failed - not your turn or invalid action")
+                await query.answer(
+                    "❌ Action failed - not your turn or invalid action"
+                )
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.error("Error handling action button: %s", exc, exc_info=True)
+            logger.error(
+                "Error handling action button: %s",
+                exc,
+                exc_info=True,
+            )
             await query.answer("❌ An error occurred")
 
     async def _handle_stake_selection(
@@ -602,4 +608,3 @@ Send 💰 /money once per day for free chips!
         await self._model.create_private_game_with_stake(
             update, context, stake_level
         )
-

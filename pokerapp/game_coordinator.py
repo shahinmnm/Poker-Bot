@@ -55,9 +55,18 @@ class GameCoordinator:
 
         chat_id = getattr(self, "_chat_id", None) or getattr(game, "chat_id", None)
 
-        if chat_id is None:
-            logger.warning("Chat ID not set; cannot update game state UI")
-            return
+        # Add custom prompt if provided
+        if action_prompt:
+            state_text += f"\n\n{action_prompt}"
+
+        # Build action buttons if a player is acting
+        reply_markup = None
+
+        if current_player is not None:
+            reply_markup = self._view.build_action_buttons(
+                game,
+                current_player,
+            )
 
         # Edit existing message or send new
         if game.has_group_message():

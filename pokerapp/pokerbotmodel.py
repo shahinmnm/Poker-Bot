@@ -3,7 +3,6 @@
 import asyncio
 import datetime
 import html
-import inspect
 import json
 import logging
 import secrets
@@ -251,7 +250,10 @@ class PokerBotModel:
             return
 
         if chat_id is not None and game is not None:
-            chat_data = self._application.chat_data.setdefault(int(chat_id), {})
+            chat_data = self._application.chat_data.setdefault(
+                int(chat_id),
+                {},
+            )
             chat_data[KEY_CHAT_DATA_GAME] = game
             logger.debug("Saved game %s to chat %s", game.id, chat_id)
             return
@@ -273,8 +275,9 @@ class PokerBotModel:
         Args:
             chat_id: Chat identifier
             game: Completed game instance
-            winners_results: Either a score→players map or legacy
-                list of (player, hand_cards, winnings) tuples.
+            winners_results: Dict mapping scores to list of (Player, Cards)
+                tuples
+                Format: {score: [(player, hand_cards), ...], ...}
         """
 
         try:
@@ -341,7 +344,10 @@ class PokerBotModel:
                 hand_name = get_combination_name(score)
 
                 if rank == 1:
-                    lines.append(f"🥇 <b>Winner(s) - {html.escape(hand_name)}</b>")
+                    winner_heading = (
+                        f"🥇 <b>Winner(s) - {html.escape(hand_name)}</b>"
+                    )
+                    lines.append(winner_heading)
                 else:
                     lines.append(f"\n{rank}. {html.escape(hand_name)}")
 
@@ -2592,7 +2598,6 @@ class PokerBotModel:
             can_start=False,
         )
 
-
     async def handle_player_action(
         self,
         user_id: int,
@@ -2609,7 +2614,8 @@ class PokerBotModel:
         Args:
             user_id: Telegram user ID (int)
             chat_id: Chat ID where game is happening (int)
-            action_type: Action as string ("fold", "call", "check", "raise", "all_in")
+            action_type: Action as string
+                ("fold", "call", "check", "raise", "all_in")
             raise_amount: Amount for raise actions (optional)
 
         Returns:
@@ -2651,7 +2657,10 @@ class PokerBotModel:
             )
             return False
 
-        if current_player.state not in (PlayerState.ACTIVE, PlayerState.ALL_IN):
+        if current_player.state not in (
+            PlayerState.ACTIVE,
+            PlayerState.ALL_IN,
+        ):
             logger.warning(
                 "User %s in invalid state %s for action",
                 user_id_str,
@@ -2679,7 +2688,9 @@ class PokerBotModel:
                 call_amount = self._coordinator.player_call_or_check(
                     game, current_player
                 )
-                action_text = f"{current_player.name} called ${call_amount}"
+                action_text = (
+                    f"{current_player.name} called ${call_amount}"
+                )
 
             elif action_type == "raise":
                 if raise_amount is None or raise_amount <= 0:
@@ -2700,17 +2711,23 @@ class PokerBotModel:
                     )
                     return False
 
-                total_raised = self._coordinator.player_raise_bet(
-                    game, current_player, raise_amount
+                self._coordinator.player_raise_bet(
+                    game,
+                    current_player,
+                    raise_amount,
                 )
-                action_text = f"{current_player.name} raised to ${raise_amount}"
+                action_text = (
+                    f"{current_player.name} raised to ${raise_amount}"
+                )
 
             elif action_type == "all_in":
                 all_in_amount = self._coordinator.player_all_in(
                     game, current_player
                 )
                 current_player.state = PlayerState.ALL_IN
-                action_text = f"{current_player.name} went all-in for ${all_in_amount}"
+                action_text = (
+                    f"{current_player.name} went all-in for ${all_in_amount}"
+                )
 
             else:
                 logger.warning("Unknown action_type: %s", action_type)
@@ -2720,7 +2737,9 @@ class PokerBotModel:
 
             self._save_game(chat_id_int, game)
 
-            turn_result, next_player = self._coordinator.process_game_turn(game)
+            turn_result, next_player = self._coordinator.process_game_turn(
+                game
+            )
 
             if turn_result == TurnResult.CONTINUE_ROUND:
                 await self._coordinator._send_or_update_game_state(
@@ -2729,7 +2748,10 @@ class PokerBotModel:
                 )
 
             elif turn_result == TurnResult.END_ROUND:
-                new_state, cards_to_deal = self._coordinator.advance_game_street(game)
+                (
+                    new_state,
+                    cards_to_deal,
+                ) = self._coordinator.advance_game_street(game)
 
                 game.state = new_state
 
@@ -2739,7 +2761,6 @@ class PokerBotModel:
                     game.remain_cards = game.remain_cards[cards_to_deal:]
 
                 self._coordinator.commit_round_bets(game)
-
                 self._save_game(chat_id_int, game)
 
                 await self._coordinator._send_or_update_game_state(
@@ -2748,10 +2769,11 @@ class PokerBotModel:
                 )
 
             elif turn_result == TurnResult.END_GAME:
-                winners_results = self._coordinator.finish_game_with_winners(game)
+                winners_results = self._coordinator.finish_game_with_winners(
+                    game
+                )
 
                 game.state = GameState.FINISHED
-
                 self._save_game(chat_id_int, game)
 
                 await self._show_game_results(
