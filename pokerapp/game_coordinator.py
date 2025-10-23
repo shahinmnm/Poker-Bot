@@ -63,7 +63,10 @@ class GameCoordinator:
         reply_markup = None
 
         if current_player is not None:
-            reply_markup = self._view.build_action_buttons(game, current_player)
+            reply_markup = self._view.build_action_buttons(
+                game,
+                current_player,
+            )
 
         # Edit existing message or send new one
         if game.has_group_message():
