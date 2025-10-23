@@ -2603,7 +2603,7 @@ class PokerBotModel:
 
             game.add_action(action_text)
 
-            await self._save_game(game)
+            self._save_game(game)
 
             turn_result, next_player = self._coordinator.process_game_turn(game)
 
@@ -2624,7 +2624,7 @@ class PokerBotModel:
 
                 self._coordinator.commit_round_bets(game)
 
-                await self._save_game(game)
+                self._save_game(game)
 
                 await self._coordinator._send_or_update_game_state(
                     game=game,
@@ -2636,7 +2636,7 @@ class PokerBotModel:
 
                 game.state = GameState.FINISHED
 
-                await self._save_game(game)
+                self._save_game(game)
 
                 await self._show_game_results(
                     chat_id=chat_id_str,
