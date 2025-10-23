@@ -55,7 +55,9 @@ class GameCoordinator:
             logger.warning("View not initialized; cannot update game state UI")
             return
 
-        effective_chat_id = chat_id if chat_id is not None else getattr(self, "_chat_id", None)
+        effective_chat_id = (
+            chat_id if chat_id is not None else getattr(self, "_chat_id", None)
+        )
         if effective_chat_id is None:
             effective_chat_id = getattr(game, "chat_id", None)
 
