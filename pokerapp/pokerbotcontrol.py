@@ -63,11 +63,13 @@ class PokerBotController:
             CommandHandler("leave", self._handle_leave_private)
         )
         application.add_handler(
-            CallbackQueryHandler(self._handle_callback_query)
+            CallbackQueryHandler(
+                self.handle_action_button,
+                pattern=r"^action:",
+            )
         )
-        # Register callback query handler for action buttons
         application.add_handler(
-            CallbackQueryHandler(self.handle_action_button)
+            CallbackQueryHandler(self._handle_callback_query)
         )
 
         application.post_init = self._post_init
@@ -459,9 +461,6 @@ Send 💰 /money once per day for free chips!
             game_id = parts[2]
             amount = 0
 
-        # Validate user
-        user_id = str(query.from_user.id)
-
         try:
             # Map action types to PlayerAction enum
             action_map = {
@@ -480,8 +479,8 @@ Send 💰 /money once per day for free chips!
 
             # Process action through model
             success = await self._model.handle_player_action(
-                user_id=user_id,
-                chat_id=str(query.message.chat_id),
+                update=update,
+                context=context,
                 game_id=game_id,
                 action=player_action,
                 amount=amount,
