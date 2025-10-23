@@ -297,11 +297,13 @@ class PokerBotModel:
 
                 for player, hand_cards, amount in winners_results:
                     try:
-                        score = self._coordinator.winner_determine._check_hand_get_score(  # type: ignore[attr-defined]
+                        determine = self._coordinator.winner_determine
+                        # type: ignore[attr-defined]
+                        score = determine._check_hand_get_score(
                             hand_cards
                         )
                     except Exception:
-                        # Fallback: treat all winners as same score if scoring fails
+                        # Fallback: use same score when scoring fails
                         score = 0
 
                     player_entries = aggregated[score]
