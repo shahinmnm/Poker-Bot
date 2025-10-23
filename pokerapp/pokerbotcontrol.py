@@ -62,6 +62,43 @@ class PokerBotController:
         application.add_handler(
             CommandHandler("leave", self._handle_leave_private)
         )
+        # Register callback query handlers with specific patterns before fallback
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_stake_selection,
+                pattern=r"^stake:",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_invite_accept_callback,
+                pattern=r"^invite_accept:",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_invite_decline_callback,
+                pattern=r"^invite_decline:",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_private_start_callback,
+                pattern=r"^private_start:",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_private_leave_callback,
+                pattern=r"^private_leave:",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_action_button,
+                pattern=r"^action:",
+            )
+        )
         application.add_handler(
             CallbackQueryHandler(self._handle_callback_query)
         )
@@ -348,12 +385,72 @@ Send 💰 /money once per day for free chips!
 
         await self._model.leave_private_game(update, context)
 
+    async def _handle_invite_accept_callback(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle invitation acceptance via inline button."""
+
+        query = update.callback_query
+
+        if not query or not query.data:
+            return
+
+        await query.answer()
+        await self._model.accept_invitation(update, context)
+
+    async def _handle_invite_decline_callback(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle invitation decline via inline button."""
+
+        query = update.callback_query
+
+        if not query or not query.data:
+            return
+
+        await query.answer()
+        await self._model.decline_invitation(update, context)
+
+    async def _handle_private_start_callback(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle private game start button callback."""
+
+        query = update.callback_query
+
+        if not query or not query.data:
+            return
+
+        await query.answer()
+        await self._model.start_private_game(update, context)
+
+    async def _handle_private_leave_callback(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle private game leave button callback."""
+
+        query = update.callback_query
+
+        if not query or not query.data:
+            return
+
+        await query.answer()
+        await self._model.leave_private_game(update, context)
+
     async def _handle_callback_query(
         self,
         update: Update,
         context: CallbackContext,
     ) -> None:
-        """Route callback queries from inline keyboard buttons."""
+        """Handle legacy callback data fallback."""
         query = update.callback_query
 
         if not query or not query.data:
@@ -364,39 +461,24 @@ Send 💰 /money once per day for free chips!
 
         callback_data = query.data
 
-        # Route to appropriate handler based on callback data prefix
-        if callback_data.startswith("stake:"):
-            await self._handle_stake_selection(update, context)
-        elif callback_data.startswith("invite_accept:"):
-            await self._model.accept_invitation(update, context)
-        elif callback_data.startswith("invite_decline:"):
-            await self._model.decline_invitation(update, context)
-        elif callback_data.startswith("private_start:"):
-            await self._model.start_private_game(update, context)
-        elif callback_data.startswith("private_leave:"):
-            await self._model.leave_private_game(update, context)
-        elif callback_data.startswith("action:"):
-            # New action button format: action:TYPE:GAME_ID or action:raise:AMOUNT:GAME_ID
-            await self._handle_action_button(update, context)
-        else:
-            # Legacy fallback for old button format
-            player_action_callbacks = {
-                PlayerAction.CHECK.value,
-                PlayerAction.CALL.value,
-                PlayerAction.FOLD.value,
-                PlayerAction.ALL_IN.value,
-                str(PlayerAction.SMALL.value),
-                str(PlayerAction.NORMAL.value),
-                str(PlayerAction.BIG.value),
-            }
+        # Legacy fallback for old button format
+        player_action_callbacks = {
+            PlayerAction.CHECK.value,
+            PlayerAction.CALL.value,
+            PlayerAction.FOLD.value,
+            PlayerAction.ALL_IN.value,
+            str(PlayerAction.SMALL.value),
+            str(PlayerAction.NORMAL.value),
+            str(PlayerAction.BIG.value),
+        }
 
-            if callback_data in player_action_callbacks:
-                await self._model.middleware_user_turn(
-                    self._handle_button_clicked
-                )(update, context)
-            else:
-                # Unknown callback - ignore silently
-                logger.warning("Unknown callback data: %s", callback_data)
+        if callback_data in player_action_callbacks:
+            await self._model.middleware_user_turn(
+                self._handle_button_clicked
+            )(update, context)
+        else:
+            # Unknown callback - ignore silently
+            logger.warning("Unknown callback data: %s", callback_data)
 
     async def _handle_action_button(
         self,
@@ -510,6 +592,8 @@ Send 💰 /money once per day for free chips!
 
         if not query or not query.data:
             return
+
+        await query.answer()
 
         # Parse stake level from callback data (e.g., "stake:low" → "low")
         stake_level = query.data.split(":", 1)[1]
