@@ -427,7 +427,9 @@ class GameEngine:
             return
 
         try:
-            self._table_message_id = await self._view.send_or_update_table_cards(
+            send_table_cards = self._view.send_or_update_table_cards
+
+            self._table_message_id = await send_table_cards(
                 chat_id=self._chat_id,
                 cards=self._game.cards_table,
                 pot=self._game.pot,
