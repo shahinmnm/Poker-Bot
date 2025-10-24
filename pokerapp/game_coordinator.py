@@ -279,7 +279,13 @@ class GameCoordinator:
             player.round_rate = 0
 
         game.max_round_rate = 0
-        game.trading_end_user_id = game.players[0].user_id
+
+        if game.players:
+            dealer_index = game.dealer_index % len(game.players)
+            dealer_player = game.players[dealer_index]
+            game.trading_end_user_id = dealer_player.user_id
+        else:
+            game.trading_end_user_id = 0
 
     def _format_action_text(
         self,

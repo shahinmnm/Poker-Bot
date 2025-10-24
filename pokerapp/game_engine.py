@@ -98,6 +98,9 @@ class PokerEngine:
             for p in active_players
         )
 
+        if not getattr(game, "round_has_started", False):
+            return False
+
         # Check if we've completed the circle back to last raiser
         current_player = game.players[game.current_player_index]
         at_round_initiator = (
@@ -139,6 +142,7 @@ class PokerEngine:
 
         # Update game state to next player's turn and continue the round
         game.current_player_index = game.players.index(next_player)
+        game.round_has_started = True
 
         return TurnResult.CONTINUE_ROUND
 
@@ -170,9 +174,17 @@ class PokerEngine:
             player.round_rate = 0
         game.max_round_rate = 0
 
-        # Set first active player for new round
-        game.current_player_index = 0
-        game.trading_end_user_id = game.players[0].user_id
+        # Set the dealer as the reference point so the next player to act is
+        # the seat immediately to their left (small blind / first to act).
+        if game.players:
+            dealer_index = game.dealer_index % len(game.players)
+            game.current_player_index = dealer_index
+            game.trading_end_user_id = game.players[dealer_index].user_id
+        else:
+            game.current_player_index = -1
+            game.trading_end_user_id = 0
+
+        game.round_has_started = False
 
         return new_state
 
@@ -266,6 +278,7 @@ class GameEngine:
         self._game.current_player_index = 0
         self._game.remain_cards = []
         self._game.trading_end_user_id = 0
+        self._game.round_has_started = False
 
     def _align_players_with_dealer(self) -> None:
         """Rotate the seating order so blinds follow the dealer."""
