@@ -117,6 +117,7 @@ class Game:
         self.stake_config: Optional[StakeConfig] = None
         self.group_message_id = None
         self.recent_actions = []
+        self.round_has_started = False
 
     def players_by(self, states: Tuple[PlayerState]) -> List[Player]:
         return list(filter(lambda p: p.state in states, self.players))
