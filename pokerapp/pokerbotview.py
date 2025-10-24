@@ -9,6 +9,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
     Bot,
     InputMediaPhoto,
 )
@@ -500,6 +501,170 @@ class PokerBotViewer:
             send_kwargs["reply_to_message_id"] = ready_message_id
 
         await self._bot.send_message(**send_kwargs)
+
+    async def send_player_turn_with_cards(
+        self,
+        chat_id: int,
+        player: Player,
+        game: Game,
+        mention: str,
+    ) -> None:
+        """Send turn notification with Reply Keyboard showing player's private cards.
+
+        Args:
+            chat_id: Group chat ID where the game is running.
+            player: Current player whose turn it is.
+            game: Current game state.
+            mention: Player mention Markdown (e.g. @username).
+        """
+
+        card_display = " ".join(
+            self._format_card(card) for card in player.cards
+        )
+
+        wallet = player.wallet.value()
+        to_call = game.max_round_rate - player.round_rate
+
+        keyboard_text = (
+            "🃏 YOUR HAND\n"
+            f"{card_display}\n"
+            f"💰 Chips: ${wallet}"
+        )
+
+        if to_call > 0:
+            keyboard_text += f" | To call: ${to_call}"
+
+        reply_keyboard = ReplyKeyboardMarkup(
+            keyboard=[[keyboard_text]],
+            resize_keyboard=True,
+            one_time_keyboard=False,
+            selective=True,
+        )
+
+        inline_keyboard = self._build_action_inline_keyboard(player, game)
+
+        to_call_text = f"\n💵 To call: ${to_call}" if to_call > 0 else ""
+        message_text = f"🎯 {mention} - Your turn!{to_call_text}"
+
+        try:
+            await self._bot.send_message(
+                chat_id=chat_id,
+                text=message_text,
+                reply_markup=reply_keyboard,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+
+            await self._bot.send_message(
+                chat_id=chat_id,
+                text="Choose your action:",
+                reply_markup=inline_keyboard,
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to send turn prompt to {player.user_id}: {e}"
+            )
+
+    async def remove_player_keyboard(
+        self,
+        chat_id: int,
+        player_user_id: int,
+    ) -> None:
+        """Remove Reply Keyboard from a player's screen after they take action.
+
+        Args:
+            chat_id: Group chat ID.
+            player_user_id: User ID of the player whose keyboard should be removed.
+        """
+
+        try:
+            await self._bot.send_message(
+                chat_id=chat_id,
+                text="✅ Action recorded",
+                reply_markup=ReplyKeyboardRemove(selective=True),
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to remove keyboard for {player_user_id}: {e}"
+            )
+
+    def _build_action_inline_keyboard(
+        self,
+        player: Player,
+        game: Game,
+    ) -> InlineKeyboardMarkup:
+        """Build inline keyboard with contextual action buttons.
+
+        Args:
+            player: Current player whose turn it is.
+            game: Current game state.
+
+        Returns:
+            InlineKeyboardMarkup containing action options.
+        """
+
+        buttons = []
+
+        to_call = game.max_round_rate - player.round_rate
+        wallet = player.wallet.value()
+        game_id = str(game.id)
+
+        row1 = []
+        if to_call == 0:
+            row1.append(
+                InlineKeyboardButton(
+                    text="✅ Check",
+                    callback_data=f"action:check:{game_id}",
+                )
+            )
+        else:
+            if wallet >= to_call:
+                row1.append(
+                    InlineKeyboardButton(
+                        text=f"💵 Call ${to_call}",
+                        callback_data=f"action:call:{game_id}",
+                    )
+                )
+
+        row1.append(
+            InlineKeyboardButton(
+                text="❌ Fold",
+                callback_data=f"action:fold:{game_id}",
+            )
+        )
+        buttons.append(row1)
+
+        if wallet > to_call:
+            row2 = []
+            small_raise = game.table_stake
+            if wallet >= to_call + small_raise:
+                row2.append(
+                    InlineKeyboardButton(
+                        text=f"📈 Raise +${small_raise}",
+                        callback_data=f"action:raise:{small_raise}:{game_id}",
+                    )
+                )
+
+            medium_raise = game.table_stake * 3
+            if wallet >= to_call + medium_raise:
+                row2.append(
+                    InlineKeyboardButton(
+                        text=f"📈 Raise +${medium_raise}",
+                        callback_data=f"action:raise:{medium_raise}:{game_id}",
+                    )
+                )
+
+            if row2:
+                buttons.append(row2)
+
+        if wallet > 0:
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"🚀 All-In (${wallet})",
+                    callback_data=f"action:all_in:{game_id}",
+                )
+            ])
+
+        return InlineKeyboardMarkup(buttons)
 
     @ staticmethod
     def define_check_call_action(
