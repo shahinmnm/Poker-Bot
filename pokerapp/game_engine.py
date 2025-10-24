@@ -252,6 +252,7 @@ class GameEngine:
         self._game.players = self._players
         self._game.table_stake = self._small_blind
         self._game.ready_users = {player.user_id for player in self._players}
+        self._table_message_id: Optional[int] = None
 
     @property
     def game(self) -> Game:
@@ -339,16 +340,16 @@ class GameEngine:
             return
 
         async def send_to_player(player: Player) -> None:
-            card_text = " ".join(player.cards)
-            message = (
-                "🃏 *Your Hand*\n\n"
-                f"Cards: {card_text}\n"
-                f"Blinds: {self._small_blind}/{self._big_blind}"
-            )
             try:
-                await self._view.send_message(
+                await self._view.send_or_update_private_hand(
                     chat_id=player.user_id,
-                    text=message,
+                    cards=player.cards,
+                    table_cards=self._game.cards_table,
+                    mention_markdown=player.mention_markdown,
+                    disable_notification=False,
+                    footer=(
+                        f"Blinds: {self._small_blind}/{self._big_blind}"
+                    ),
                 )
             except Exception as exc:  # pragma: no cover - network issues
                 self._logger.warning(
@@ -425,12 +426,12 @@ class GameEngine:
         if self._view is None or not self._game.cards_table:
             return
 
-        caption = f"Current pot: {self._game.pot}$"
         try:
-            await self._view.send_desk_cards_img(
+            self._table_message_id = await self._view.send_or_update_table_cards(
                 chat_id=self._chat_id,
                 cards=self._game.cards_table,
-                caption=caption,
+                pot=self._game.pot,
+                message_id=getattr(self, "_table_message_id", None),
             )
         except Exception as exc:  # pragma: no cover - Telegram failures
             self._logger.warning(

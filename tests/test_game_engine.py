@@ -1,5 +1,6 @@
 import json
 import unittest
+from typing import Optional
 
 from pokerapp.entities import GameState, Player, PlayerState, Wallet
 from pokerapp.game_engine import GameEngine
@@ -50,10 +51,24 @@ class DummyView:
     def __init__(self) -> None:
         self.sent_messages: list[tuple[int, str]] = []
         self.turn_prompts: list[tuple[int, int, int]] = []
-        self.table_updates: list[tuple[int, list[str]]] = []
+        self.table_updates: list[tuple[int, list[str], Optional[int], Optional[int]]] = []
 
     async def send_message(self, chat_id: int, text: str, **kwargs) -> None:
         self.sent_messages.append((chat_id, text))
+
+    async def send_or_update_private_hand(
+        self,
+        chat_id: int,
+        cards,
+        *,
+        table_cards=None,
+        mention_markdown: Optional[str] = None,
+        message_id: Optional[int] = None,
+        disable_notification: bool = True,
+        footer: Optional[str] = None,
+    ) -> Optional[int]:
+        self.sent_messages.append((chat_id, "private"))
+        return message_id or 456
 
     async def send_turn_actions(
         self,
@@ -64,13 +79,16 @@ class DummyView:
     ) -> None:
         self.turn_prompts.append((chat_id, player.user_id, money))
 
-    async def send_desk_cards_img(
+    async def send_or_update_table_cards(
         self,
         chat_id: int,
         cards,
-        caption: str = "",
-    ) -> None:
-        self.table_updates.append((chat_id, list(cards)))
+        *,
+        pot: Optional[int] = None,
+        message_id: Optional[int] = None,
+    ) -> Optional[int]:
+        self.table_updates.append((chat_id, list(cards), pot, message_id))
+        return message_id or 123
 
 
 class GameEngineTests(unittest.IsolatedAsyncioTestCase):

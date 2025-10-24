@@ -19,7 +19,6 @@ from telegram.constants import ParseMode
 from pokerapp.config import Config, STAKE_PRESETS
 from pokerapp.cards import Cards, get_shuffled_deck
 from pokerapp.privatechatmodel import UserPrivateChatModel
-from pokerapp.desk import KEY_CHAT_DATA_GAME, KEY_OLD_PLAYERS
 from pokerapp.entities import (
     Game,
     GameMode,
@@ -50,6 +49,8 @@ DICE_DELAY_SEC = 5
 BONUSES = (5, 20, 40, 80, 160, 320)
 DICES = "⚀⚁⚂⚃⚄⚅"
 
+KEY_CHAT_DATA_GAME = "game"
+KEY_OLD_PLAYERS = "old_players"
 KEY_LAST_TIME_ADD_MONEY = "last_time"
 KEY_NOW_TIME_ADD_MONEY = "now_time"
 
@@ -83,6 +84,7 @@ class PokerBotModel:
 
         self._readyMessages = {}
         self._username_cache: Dict[int, str] = {}
+        self._table_messages: Dict[int, int] = {}
 
     async def _ensure_minimum_balance(
         self,
@@ -536,7 +538,6 @@ class PokerBotModel:
             chat_id=chat_id,
             text=text,
         )
-        await self._view.send_photo(chat_id=chat_id)
 
     async def _start_game(
         self,
@@ -683,45 +684,42 @@ class PokerBotModel:
                     if isinstance(private_chat_id, bytes):
                         private_chat_id = private_chat_id.decode('utf-8')
 
-                    message = await self._view.send_desk_cards_img(
+                    existing_message_id_raw = private_chat.pop_message()
+                    existing_message_id: Optional[int] = None
+
+                    if existing_message_id_raw is not None:
+                        try:
+                            if isinstance(existing_message_id_raw, bytes):
+                                existing_message_id_raw = (
+                                    existing_message_id_raw.decode('utf-8')
+                                )
+                            existing_message_id = int(existing_message_id_raw)
+                        except (TypeError, ValueError):
+                            existing_message_id = None
+
+                    new_message_id = await self._view.send_or_update_private_hand(
                         chat_id=private_chat_id,
                         cards=player.cards,
-                        caption="Your cards",
+                        mention_markdown=player.mention_markdown,
+                        table_cards=None,
+                        message_id=existing_message_id,
                         disable_notification=False,
                     )
 
-                    try:
-                        rm_msg_id = private_chat.pop_message()
-                        while rm_msg_id is not None:
-                            try:
-                                rm_msg_id_str = (
-                                    rm_msg_id
-                                    if isinstance(rm_msg_id, str)
-                                    else rm_msg_id.decode('utf-8')
-                                )
-                                await self._view.remove_message(
-                                    chat_id=private_chat_id,
-                                    message_id=rm_msg_id_str,
-                                )
-                            except Exception as exc:
-                                logger.debug(
-                                    "Failed to remove old card message "
-                                    "for %s: %s",
-                                    player.user_id,
-                                    exc,
-                                )
-                            rm_msg_id = private_chat.pop_message()
-
-                        private_chat.push_message(
-                            message_id=message.message_id
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "Failed to update private chat cache "
-                            "for %s: %s",
-                            player.user_id,
-                            exc,
-                        )
+                    if new_message_id is not None:
+                        private_chat.push_message(new_message_id)
+                    elif existing_message_id is not None:
+                        try:
+                            await self._view.remove_message(
+                                chat_id=private_chat_id,
+                                message_id=existing_message_id,
+                            )
+                        except Exception as exc:
+                            logger.debug(
+                                "Failed to remove stale private hand message for %s: %s",
+                                player.user_id,
+                                exc,
+                            )
                     return
             except Exception as exc:
                 logger.warning(
@@ -763,32 +761,31 @@ class PokerBotModel:
     ) -> None:
         """Send private cards either via chat or direct messages."""
 
-        if hasattr(destination, "bot"):
-            context = destination
-
-            for player in game.players:
-                try:
-                    card_image = self._view.generate_hand_image(player.cards)
-                    await context.bot.send_photo(
-                        chat_id=player.user_id,
-                        photo=card_image,
-                        caption=(
-                            "🃏 **Your Cards** 🃏\n\n"
-                            "Game starting in group chat!\n"
-                            f"Table stake: {game.table_stake}"
-                        ),
-                        parse_mode="Markdown",
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "Failed to send cards to %s: %s",
-                        player.user_id,
-                        exc,
-                    )
-
+        if self._view is None:
             return
 
-        await self._send_cards_batch(game.players, destination)
+        if isinstance(destination, str) or isinstance(destination, int):
+            # Destination is a chat_id - fall back to legacy reply keyboard flow.
+            await self._send_cards_batch(game.players, destination)
+            return
+
+        # Destination is likely a CallbackContext; send direct messages.
+        for player in game.players:
+            try:
+                await self._view.send_or_update_private_hand(
+                    chat_id=player.user_id,
+                    cards=player.cards,
+                    table_cards=game.cards_table,
+                    mention_markdown=player.mention_markdown,
+                    disable_notification=False,
+                    footer=f"Table stake: {game.table_stake}",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to send cards to %s: %s",
+                    player.user_id,
+                    exc,
+                )
 
     async def _divide_cards(self, game: Game, chat_id: ChatId) -> None:
         self._deal_cards_to_players(game)
@@ -908,11 +905,30 @@ class PokerBotModel:
             game.cards_table.append(card)
             logger.debug("Dealt community card %s", card)
 
-        await self._view.send_desk_cards_img(
-            chat_id=chat_id,
-            cards=game.cards_table,
-            caption=f"Current pot: {game.pot}$",
-        )
+        if self._view is not None:
+            try:
+                try:
+                    chat_key = int(chat_id)
+                except (TypeError, ValueError):
+                    chat_key = chat_id
+
+                existing_message_id = self._table_messages.get(chat_key)
+
+                new_message_id = await self._view.send_or_update_table_cards(
+                    chat_id=chat_id,
+                    cards=game.cards_table,
+                    pot=game.pot,
+                    message_id=existing_message_id,
+                )
+
+                if new_message_id is not None:
+                    self._table_messages[chat_key] = new_message_id
+            except Exception as exc:
+                logger.debug(
+                    "Failed to update table cards for chat %s: %s",
+                    chat_id,
+                    exc,
+                )
 
     async def _finish_game(self, game: Game, chat_id: int) -> None:
         """Finish game using coordinator (REPLACES old _finish)"""
