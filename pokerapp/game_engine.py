@@ -366,16 +366,51 @@ class GameEngine:
         )
 
     async def _send_turn_prompt(self, player: Player) -> None:
+        """Send turn notification to current player.
+
+        Uses new hybrid UI (Reply Keyboard for cards + Inline Keyboard for actions)
+        if available, otherwise falls back to legacy inline keyboard method.
+
+        Args:
+            player: Current player whose turn it is
+        """
+
         if self._view is None:
             return
 
         try:
-            await self._view.send_turn_actions(
-                chat_id=self._chat_id,
-                game=self._game,
-                player=player,
-                money=player.wallet.value(),
-            )
+            # Track message IDs so they can be cleaned up after the turn ends.
+            self._turn_prompt_message_ids = []
+
+            # Try new hybrid UI method first
+            if hasattr(self._view, "send_player_turn_with_cards"):
+                mention = player.mention_markdown
+                message_ids = await self._view.send_player_turn_with_cards(
+                    chat_id=self._chat_id,
+                    player=player,
+                    game=self._game,
+                    mention=mention,
+                )
+
+                if message_ids:
+                    if isinstance(message_ids, Sequence):
+                        self._turn_prompt_message_ids = list(message_ids)
+                    else:
+                        self._turn_prompt_message_ids = [message_ids]
+            else:
+                # Fallback to legacy method
+                message = await self._view.send_turn_actions(
+                    chat_id=self._chat_id,
+                    game=self._game,
+                    player=player,
+                    money=player.wallet.value(),
+                )
+
+                if message:
+                    if isinstance(message, Sequence):
+                        self._turn_prompt_message_ids = list(message)
+                    else:
+                        self._turn_prompt_message_ids = [message]
         except Exception as exc:  # pragma: no cover - Telegram failures
             self._logger.warning(
                 "Failed to send turn prompt to %s: %s", player.user_id, exc
