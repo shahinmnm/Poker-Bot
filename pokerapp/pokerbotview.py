@@ -11,12 +11,8 @@ from telegram import (
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
     Bot,
-    InputMediaPhoto,
 )
 from telegram.constants import ParseMode
-from io import BytesIO
-
-from pokerapp.desk import DeskImageGenerator
 from pokerapp.cards import Card, Cards
 from pokerapp.entities import (
     Game,
@@ -37,7 +33,40 @@ logger = logging.getLogger(__name__)
 class PokerBotViewer:
     def __init__(self, bot: Bot):
         self._bot = bot
-        self._desk_generator = DeskImageGenerator()
+
+    _SUIT_EMOJIS = {
+        "spades": "♠️",
+        "hearts": "♥️",
+        "diamonds": "♦️",
+        "clubs": "♣️",
+        "♠": "♠️",
+        "♥": "♥️",
+        "♦": "♦️",
+        "♣": "♣️",
+        "S": "♠️",
+        "H": "♥️",
+        "D": "♦️",
+        "C": "♣️",
+    }
+
+    _HAND_INDENT = "     "
+
+    @classmethod
+    def _extract_rank_and_suit(cls, card: Card) -> tuple[str, str]:
+        card_text = str(card)
+        if not card_text:
+            return "?", "?"
+
+        rank = card_text[:-1] or card_text
+        suit = card_text[-1]
+
+        # Handle cards defined with descriptive suit names.
+        if suit not in cls._SUIT_EMOJIS and ":" in card_text:
+            parts = card_text.split(":", maxsplit=1)
+            rank = parts[0]
+            suit = parts[1]
+
+        return rank.upper(), suit
 
     @staticmethod
     def _format_card(card: Card) -> str:
@@ -51,30 +80,17 @@ class PokerBotViewer:
             Formatted string like "A♠" or "K♥"
         """
 
-        # Support both descriptive suit names and cards that already use
-        # Unicode suit symbols.
-        suit_symbols = {
-            'spades': '♠',
-            'hearts': '♥',
-            'diamonds': '♦',
-            'clubs': '♣',
-            '♠': '♠',
-            '♥': '♥',
-            '♦': '♦',
-            '♣': '♣',
-        }
+        rank_str, suit_key = PokerBotViewer._extract_rank_and_suit(card)
+        suit_emoji = PokerBotViewer._SUIT_EMOJIS.get(suit_key, "?")
 
-        rank_display = {
-            1: 'A',
-            11: 'J',
-            12: 'Q',
-            13: 'K'
-        }
+        return f"{suit_emoji}{rank_str}"
 
-        rank_str = rank_display.get(card.rank, str(card.rank))
-        suit_str = suit_symbols.get(card.suit, '?')
+    @classmethod
+    def _format_cards_line(cls, cards: List[Card]) -> str:
+        if not cards:
+            return ""
 
-        return f"{rank_str}{suit_str}"
+        return "  ".join(cls._format_card(card) for card in cards)
 
     @staticmethod
     def _format_board_cards(cards: List[Card]) -> str:
@@ -88,10 +104,50 @@ class PokerBotViewer:
             Formatted string like "A♠ K♥ J♣"
         """
 
-        if not cards:
-            return "Waiting for flop…"
+        line = PokerBotViewer._format_cards_line(cards)
+        return line if line else "Waiting for flop…"
 
-        return " ".join(PokerBotViewer._format_card(card) for card in cards)
+    @classmethod
+    def build_hand_panel(
+        cls,
+        hand_cards: Optional[List[Card]] = None,
+        board_cards: Optional[List[Card]] = None,
+        *,
+        include_table: bool = True,
+        pot: Optional[int] = None,
+    ) -> str:
+        """Construct the emoji-based panel used across private and group UIs."""
+
+        lines: List[str] = []
+
+        if hand_cards is not None:
+            lines.append(f"{cls._HAND_INDENT}🃏 Your hand:")
+            hand_line = cls._format_cards_line(hand_cards) or "—"
+            lines.append(f"{cls._HAND_INDENT}{hand_line}")
+
+        if include_table:
+            if lines:
+                lines.append("")
+            lines.append(f"{cls._HAND_INDENT}🧩 Table:")
+            board_line = cls._format_cards_line(board_cards or [])
+            if not board_line:
+                board_line = "Waiting for flop…"
+            lines.append(f"{cls._HAND_INDENT}{board_line}")
+
+        if pot is not None:
+            lines.append("")
+            lines.append(f"{cls._HAND_INDENT}💰 Pot: ${pot}")
+
+        return "\n".join(lines)
+
+    @classmethod
+    def build_table_panel(cls, cards: List[Card], pot: Optional[int]) -> str:
+        return cls.build_hand_panel(
+            hand_cards=None,
+            board_cards=cards,
+            include_table=True,
+            pot=pot,
+        )
 
     def format_game_state(
         self,
@@ -377,16 +433,6 @@ class PokerBotViewer:
             disable_web_page_preview=True,
         )
 
-    async def send_photo(self, chat_id: ChatId) -> None:
-        # TODO: photo to args.
-        with open("./assets/poker_hand.jpg", 'rb') as photo:
-            await self._bot.send_photo(
-                chat_id=chat_id,
-                photo=photo,
-                parse_mode=ParseMode.MARKDOWN,
-                disable_notification=True,
-            )
-
     async def send_dice_reply(
         self,
         chat_id: ChatId,
@@ -414,28 +460,42 @@ class PokerBotViewer:
             disable_notification=True,
         )
 
-    async def send_desk_cards_img(
+    async def send_or_update_table_cards(
         self,
         chat_id: ChatId,
         cards: Cards,
-        caption: str = "",
-        disable_notification: bool = True,
-    ) -> Message:
-        im_cards = self._desk_generator.generate_desk(cards)
-        bio = BytesIO()
-        bio.name = 'desk.png'
-        im_cards.save(bio, 'PNG')
-        bio.seek(0)
-        return await self._bot.send_media_group(
-            chat_id=chat_id,
-            media=[
-                InputMediaPhoto(
-                    media=bio,
-                    caption=caption,
-                ),
-            ],
-            disable_notification=disable_notification,
-        )[0]
+        *,
+        pot: Optional[int] = None,
+        message_id: Optional[int] = None,
+    ) -> Optional[int]:
+        """Send or edit the emoji-based community card panel."""
+
+        text = self.build_table_panel(list(cards), pot)
+
+        try:
+            if message_id is not None:
+                await self._bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=text,
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+                return message_id
+
+            message = await self._bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN,
+                disable_notification=True,
+            )
+            return message.message_id
+        except Exception as exc:  # pragma: no cover - Telegram failures
+            logger.warning(
+                "Failed to update table cards for chat %s: %s",
+                chat_id,
+                exc,
+            )
+            return message_id
 
     @staticmethod
     def _get_cards_markup(cards: Cards) -> ReplyKeyboardMarkup:
@@ -489,9 +549,15 @@ class PokerBotViewer:
             ready_message_id: Optional[MessageId],
     ) -> None:
         markup = PokerBotViewer._get_cards_markup(cards)
+        panel_text = self.build_hand_panel(hand_cards=list(cards), board_cards=[])
+        message_text = (
+            f"{mention_markdown}\n\n{panel_text}"
+            if mention_markdown else panel_text
+        )
+
         send_kwargs = dict(
             chat_id=chat_id,
-            text="Showing cards to " + mention_markdown,
+            text=message_text,
             reply_markup=markup,
             parse_mode=ParseMode.MARKDOWN,
             disable_notification=True,
@@ -501,6 +567,60 @@ class PokerBotViewer:
             send_kwargs["reply_to_message_id"] = ready_message_id
 
         await self._bot.send_message(**send_kwargs)
+
+    async def send_or_update_private_hand(
+        self,
+        chat_id: ChatId,
+        cards: Cards,
+        *,
+        table_cards: Optional[Cards] = None,
+        mention_markdown: Optional[str] = None,
+        message_id: Optional[int] = None,
+        disable_notification: bool = True,
+        footer: Optional[str] = None,
+    ) -> Optional[int]:
+        """Send or edit a player's private hand panel in direct chats."""
+
+        panel_text = self.build_hand_panel(
+            hand_cards=list(cards),
+            board_cards=list(table_cards or []),
+            include_table=True,
+        )
+        message_text = (
+            f"{mention_markdown}\n\n{panel_text}"
+            if mention_markdown else panel_text
+        )
+
+        if footer:
+            message_text = f"{message_text}\n\n{footer}"
+
+        reply_markup = PokerBotViewer._get_cards_markup(cards)
+
+        try:
+            if message_id is not None:
+                await self._bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=message_text,
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+                return message_id
+
+            message = await self._bot.send_message(
+                chat_id=chat_id,
+                text=message_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN,
+                disable_notification=disable_notification,
+            )
+            return message.message_id
+        except Exception as exc:  # pragma: no cover - Telegram failures
+            logger.warning(
+                "Failed to deliver private hand to %s: %s",
+                chat_id,
+                exc,
+            )
+            return message_id
 
     async def send_player_turn_with_cards(
         self,
@@ -519,16 +639,12 @@ class PokerBotViewer:
             mention: Player mention Markdown (e.g. @username).
         """
 
-        card_display = " ".join(
-            self._format_card(card) for card in player.cards
-        )
-
         wallet = player.wallet.value()
         to_call = game.max_round_rate - player.round_rate
 
         keyboard_text = (
             "🃏 YOUR HAND\n"
-            f"{card_display}\n"
+            f"{self._format_cards_line(list(player.cards)) or '—'}\n"
             f"💰 Chips: ${wallet}"
         )
 
@@ -545,7 +661,14 @@ class PokerBotViewer:
         inline_keyboard = self._build_action_inline_keyboard(player, game)
 
         to_call_text = f"\n💵 To call: ${to_call}" if to_call > 0 else ""
-        message_text = f"🎯 {mention} - Your turn!{to_call_text}"
+        hand_panel = self.build_hand_panel(
+            hand_cards=list(player.cards),
+            board_cards=list(game.cards_table),
+            include_table=True,
+        )
+        message_text = (
+            f"🎯 {mention} - Your turn!{to_call_text}\n\n{hand_panel}"
+        )
 
         try:
             await self._bot.send_message(
