@@ -859,9 +859,9 @@ class PokerBotModel:
             game: Current game state
         """
 
-        if hasattr(self._viewer, "remove_player_keyboard"):
+        if hasattr(self._view, "remove_player_keyboard"):
             try:
-                await self._viewer.remove_player_keyboard(
+                await self._view.remove_player_keyboard(
                     chat_id=chat_id,
                     player_user_id=player_user_id,
                 )
@@ -878,7 +878,7 @@ class PokerBotModel:
                 current_player = game.players[game.current_player_index]
 
             try:
-                await self._viewer.update_game_state(
+                await self._view.update_game_state(
                     chat_id=chat_id,
                     message_id=game.group_message_id,
                     game=game,
