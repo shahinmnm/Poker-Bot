@@ -368,8 +368,9 @@ class GameEngine:
     async def _send_turn_prompt(self, player: Player) -> None:
         """Send turn notification to current player.
 
-        Uses new hybrid UI (Reply Keyboard for cards + Inline Keyboard for actions)
-        if available, otherwise falls back to legacy inline keyboard method.
+        Uses new hybrid UI (Reply Keyboard for cards + Inline Keyboard for
+        actions) if available, otherwise falls back to legacy inline keyboard
+        method.
 
         Args:
             player: Current player whose turn it is
