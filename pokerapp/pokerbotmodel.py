@@ -75,6 +75,7 @@ class PokerBotModel:
         self._kv = ensure_kv(kv)
         self._cfg: Config = cfg
         self._application = application
+        self._logger = logging.getLogger(__name__)
 
         # NEW: Replace old logic with coordinator
         self._coordinator = GameCoordinator(view=view)
@@ -842,6 +843,54 @@ class PokerBotModel:
                 )
                 return
 
+    async def _cleanup_player_turn_ui(
+        self,
+        chat_id: int,
+        player_user_id: int,
+        game: Game,
+    ) -> None:
+        """Clean up UI elements after player completes their action.
+
+        Removes the player's Reply Keyboard and updates the live table message.
+
+        Args:
+            chat_id: Group chat ID
+            player_user_id: User ID of player who just acted
+            game: Current game state
+        """
+
+        if hasattr(self._viewer, "remove_player_keyboard"):
+            try:
+                await self._viewer.remove_player_keyboard(
+                    chat_id=chat_id,
+                    player_user_id=player_user_id,
+                )
+            except Exception as e:
+                self._logger.warning(
+                    "Failed to remove keyboard for %s: %s",
+                    player_user_id,
+                    e,
+                )
+
+        if game.has_group_message():
+            current_player = None
+            if 0 <= game.current_player_index < len(game.players):
+                current_player = game.players[game.current_player_index]
+
+            try:
+                await self._viewer.update_game_state(
+                    chat_id=chat_id,
+                    message_id=game.group_message_id,
+                    game=game,
+                    current_player=current_player,
+                    action_prompt="",
+                )
+            except Exception as e:
+                self._logger.warning(
+                    "Failed to update game state message: %s",
+                    e,
+                )
+
     async def add_cards_to_table(
         self,
         count: int,
@@ -957,6 +1006,7 @@ class PokerBotModel:
     ) -> None:
         game = self._game_from_context(context)
         player = self._current_turn_player(game)
+        user_id = player.user_id
 
         player.state = PlayerState.FOLD
 
@@ -965,7 +1015,13 @@ class PokerBotModel:
             text=f"{player.mention_markdown} {PlayerAction.FOLD.value}"
         )
 
-        await self._start_betting_round(game, update.effective_message.chat_id)
+        chat_id = update.effective_message.chat_id
+        await self._start_betting_round(game, chat_id)
+        await self._cleanup_player_turn_ui(
+            chat_id=chat_id,
+            player_user_id=user_id,
+            game=game,
+        )
 
     async def call_check(
         self,
@@ -975,6 +1031,7 @@ class PokerBotModel:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
+        user_id = player.user_id
 
         action = PlayerAction.CALL.value
         if player.round_rate == game.max_round_rate:
@@ -998,6 +1055,11 @@ class PokerBotModel:
             return
 
         await self._start_betting_round(game, chat_id)
+        await self._cleanup_player_turn_ui(
+            chat_id=chat_id,
+            player_user_id=user_id,
+            game=game,
+        )
 
     async def raise_rate_bet(
         self,
@@ -1008,6 +1070,7 @@ class PokerBotModel:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
+        user_id = player.user_id
 
         try:
             action = PlayerAction.RAISE_RATE
@@ -1037,6 +1100,11 @@ class PokerBotModel:
             return
 
         await self._start_betting_round(game, chat_id)
+        await self._cleanup_player_turn_ui(
+            chat_id=chat_id,
+            player_user_id=user_id,
+            game=game,
+        )
 
     async def all_in(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -1044,6 +1112,7 @@ class PokerBotModel:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
+        user_id = player.user_id
         mention = player.mention_markdown
         amount = self._coordinator.player_all_in(game, player)
         await self._view.send_message(
@@ -1052,6 +1121,11 @@ class PokerBotModel:
         )
         player.state = PlayerState.ALL_IN
         await self._start_betting_round(game, chat_id)
+        await self._cleanup_player_turn_ui(
+            chat_id=chat_id,
+            player_user_id=user_id,
+            game=game,
+        )
 
     async def create_private_game(
         self,
