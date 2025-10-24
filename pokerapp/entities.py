@@ -149,6 +149,11 @@ class Game:
 
         return self.group_message_id is not None
 
+    def get_recent_actions_text(self) -> str:
+        """Return a newline separated string of the most recent actions."""
+
+        return "\n".join(self.recent_actions)
+
 
 class GameState(enum.Enum):
     INITIAL = 0
