@@ -50,7 +50,7 @@ class DummyWallet(Wallet):
 class DummyView:
     def __init__(self) -> None:
         self.sent_messages: list[tuple[int, str]] = []
-        self.turn_prompts: list[tuple[int, int, int]] = []
+        self.turn_prompts: list[tuple[int, int, str]] = []
         self.table_updates: list[tuple[
             int,
             list[str],
@@ -75,14 +75,14 @@ class DummyView:
         self.sent_messages.append((chat_id, "private"))
         return message_id or 456
 
-    async def send_turn_actions(
+    async def send_player_turn_with_cards(
         self,
         chat_id: int,
-        game,
         player,
-        money: int,
+        game,
+        mention: str,
     ) -> None:
-        self.turn_prompts.append((chat_id, player.user_id, money))
+        self.turn_prompts.append((chat_id, player.user_id, mention))
 
     async def send_or_update_table_cards(
         self,

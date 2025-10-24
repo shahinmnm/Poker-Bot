@@ -17,13 +17,11 @@ from pokerapp.cards import Card, Cards
 from pokerapp.entities import (
     Game,
     Player,
-    PlayerAction,
     PlayerState,
     GameState,
     MessageId,
     ChatId,
     Mention,
-    Money,
 )
 
 
@@ -505,42 +503,6 @@ class PokerBotViewer:
             resize_keyboard=True,
         )
 
-    @ staticmethod
-    def _get_turns_markup(
-        check_call_action: PlayerAction
-    ) -> InlineKeyboardMarkup:
-        keyboard = [[
-            InlineKeyboardButton(
-                text=PlayerAction.FOLD.value,
-                callback_data=PlayerAction.FOLD.value,
-            ),
-            InlineKeyboardButton(
-                text=PlayerAction.ALL_IN.value,
-                callback_data=PlayerAction.ALL_IN.value,
-            ),
-            InlineKeyboardButton(
-                text=check_call_action.value,
-                callback_data=check_call_action.value,
-            ),
-        ], [
-            InlineKeyboardButton(
-                text=str(PlayerAction.SMALL.value) + "$",
-                callback_data=str(PlayerAction.SMALL.value)
-            ),
-            InlineKeyboardButton(
-                text=str(PlayerAction.NORMAL.value) + "$",
-                callback_data=str(PlayerAction.NORMAL.value)
-            ),
-            InlineKeyboardButton(
-                text=str(PlayerAction.BIG.value) + "$",
-                callback_data=str(PlayerAction.BIG.value)
-            ),
-        ]]
-
-        return InlineKeyboardMarkup(
-            inline_keyboard=keyboard
-        )
-
     async def send_cards(
             self,
             chat_id: ChatId,
@@ -797,49 +759,6 @@ class PokerBotViewer:
             ])
 
         return InlineKeyboardMarkup(buttons)
-
-    @ staticmethod
-    def define_check_call_action(
-        game: Game,
-        player: Player,
-    ) -> PlayerAction:
-        if player.round_rate == game.max_round_rate:
-            return PlayerAction.CHECK
-        return PlayerAction.CALL
-
-    async def send_turn_actions(
-            self,
-            chat_id: ChatId,
-            game: Game,
-            player: Player,
-            money: Money,
-    ) -> None:
-        if len(game.cards_table) == 0:
-            cards_table = "no cards"
-        else:
-            cards_table = " ".join(game.cards_table)
-        text = (
-            "Turn of {}\n" +
-            "{}\n" +
-            "Money: *{}$*\n" +
-            "Max round rate: *{}$*"
-        ).format(
-            player.mention_markdown,
-            cards_table,
-            money,
-            game.max_round_rate,
-        )
-        check_call_action = PokerBotViewer.define_check_call_action(
-            game, player
-        )
-        markup = PokerBotViewer._get_turns_markup(check_call_action)
-        await self._bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=markup,
-            parse_mode=ParseMode.MARKDOWN,
-            disable_notification=True,
-        )
 
     async def remove_markup(
         self,
