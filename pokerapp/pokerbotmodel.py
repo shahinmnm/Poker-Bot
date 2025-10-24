@@ -836,12 +836,20 @@ class PokerBotModel:
 
             if result == TurnResult.CONTINUE_ROUND and next_player:
                 game.last_turn_time = dt.now()
-                await self._view.send_turn_actions(
-                    chat_id=chat_id,
-                    game=game,
-                    player=next_player,
-                    money=next_player.wallet.value(),
-                )
+                if hasattr(self._view, "send_player_turn_with_cards"):
+                    await self._view.send_player_turn_with_cards(
+                        chat_id=chat_id,
+                        player=next_player,
+                        game=game,
+                        mention=next_player.mention_markdown,
+                    )
+                else:
+                    await self._view.send_message(
+                        chat_id=chat_id,
+                        text=(
+                            f"🎯 {next_player.mention_markdown} - Your turn!"
+                        ),
+                    )
                 return
 
     async def _cleanup_player_turn_ui(
