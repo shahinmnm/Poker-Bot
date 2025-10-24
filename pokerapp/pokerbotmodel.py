@@ -697,17 +697,19 @@ class PokerBotModel:
                         except (TypeError, ValueError):
                             existing_message_id = None
 
-                    new_message_id = await self._view.send_or_update_private_hand(
-                        chat_id=private_chat_id,
-                        cards=player.cards,
-                        mention_markdown=player.mention_markdown,
-                        table_cards=None,
-                        message_id=existing_message_id,
-                        disable_notification=False,
-                    )
+                        view = self._view
 
-                    if new_message_id is not None:
-                        private_chat.push_message(new_message_id)
+                        new_msg_id = await view.send_or_update_private_hand(
+                            chat_id=private_chat_id,
+                            cards=player.cards,
+                            mention_markdown=player.mention_markdown,
+                            table_cards=None,
+                            message_id=existing_message_id,
+                            disable_notification=False,
+                        )
+
+                    if new_msg_id is not None:
+                        private_chat.push_message(new_msg_id)
                     elif existing_message_id is not None:
                         try:
                             await self._view.remove_message(
@@ -716,7 +718,8 @@ class PokerBotModel:
                             )
                         except Exception as exc:
                             logger.debug(
-                                "Failed to remove stale private hand message for %s: %s",
+                                "Failed to remove stale private hand "
+                                "message for %s: %s",
                                 player.user_id,
                                 exc,
                             )
@@ -765,7 +768,8 @@ class PokerBotModel:
             return
 
         if isinstance(destination, str) or isinstance(destination, int):
-            # Destination is a chat_id - fall back to legacy reply keyboard flow.
+            # Destination is a chat_id - fall back to the legacy
+            # reply keyboard flow.
             await self._send_cards_batch(game.players, destination)
             return
 

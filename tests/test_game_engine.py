@@ -51,7 +51,12 @@ class DummyView:
     def __init__(self) -> None:
         self.sent_messages: list[tuple[int, str]] = []
         self.turn_prompts: list[tuple[int, int, int]] = []
-        self.table_updates: list[tuple[int, list[str], Optional[int], Optional[int]]] = []
+        self.table_updates: list[tuple[
+            int,
+            list[str],
+            Optional[int],
+            Optional[int],
+        ]] = []
 
     async def send_message(self, chat_id: int, text: str, **kwargs) -> None:
         self.sent_messages.append((chat_id, text))

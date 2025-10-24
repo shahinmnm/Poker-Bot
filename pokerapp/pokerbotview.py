@@ -116,19 +116,19 @@ class PokerBotViewer:
         include_table: bool = True,
         pot: Optional[int] = None,
     ) -> str:
-        """Construct the emoji-based panel used across private and group UIs."""
+        """Construct the emoji panel used across private and group UIs."""
 
         lines: List[str] = []
 
         if hand_cards is not None:
-            lines.append(f"{cls._HAND_INDENT}🃏 Your hand:")
+            lines.append(f"{cls._HAND_INDENT}🃏 Your hand: ")
             hand_line = cls._format_cards_line(hand_cards) or "—"
             lines.append(f"{cls._HAND_INDENT}{hand_line}")
 
         if include_table:
             if lines:
                 lines.append("")
-            lines.append(f"{cls._HAND_INDENT}🧩 Table:")
+            lines.append(f"{cls._HAND_INDENT}🧩 Table: ")
             board_line = cls._format_cards_line(board_cards or [])
             if not board_line:
                 board_line = "Waiting for flop…"
@@ -549,7 +549,10 @@ class PokerBotViewer:
             ready_message_id: Optional[MessageId],
     ) -> None:
         markup = PokerBotViewer._get_cards_markup(cards)
-        panel_text = self.build_hand_panel(hand_cards=list(cards), board_cards=[])
+        panel_text = self.build_hand_panel(
+            hand_cards=list(cards),
+            board_cards=[],
+        )
         message_text = (
             f"{mention_markdown}\n\n{panel_text}"
             if mention_markdown else panel_text
