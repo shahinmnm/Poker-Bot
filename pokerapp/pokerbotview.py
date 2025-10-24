@@ -437,7 +437,7 @@ class PokerBotViewer:
             disable_notification=disable_notification,
         )[0]
 
-    @ staticmethod
+    @staticmethod
     def _get_cards_markup(cards: Cards) -> ReplyKeyboardMarkup:
         return ReplyKeyboardMarkup(
             keyboard=[cards],
@@ -509,7 +509,8 @@ class PokerBotViewer:
         game: Game,
         mention: str,
     ) -> None:
-        """Send turn notification with Reply Keyboard showing player's private cards.
+        """Send turn notification with Reply Keyboard showing player's
+        private cards.
 
         Args:
             chat_id: Group chat ID where the game is running.
@@ -573,7 +574,8 @@ class PokerBotViewer:
 
         Args:
             chat_id: Group chat ID.
-            player_user_id: User ID of the player whose keyboard should be removed.
+            player_user_id: User ID of the player whose keyboard should be
+                removed.
         """
 
         try:
@@ -613,7 +615,7 @@ class PokerBotViewer:
             row1.append(
                 InlineKeyboardButton(
                     text="✅ Check",
-                    callback_data=f"action:check:{game_id}",
+                    callback_data=":".join(["action", "check", game_id]),
                 )
             )
         else:
@@ -621,14 +623,14 @@ class PokerBotViewer:
                 row1.append(
                     InlineKeyboardButton(
                         text=f"💵 Call ${to_call}",
-                        callback_data=f"action:call:{game_id}",
+                        callback_data=":".join(["action", "call", game_id]),
                     )
                 )
 
         row1.append(
             InlineKeyboardButton(
                 text="❌ Fold",
-                callback_data=f"action:fold:{game_id}",
+                callback_data=":".join(["action", "fold", game_id]),
             )
         )
         buttons.append(row1)
@@ -640,7 +642,9 @@ class PokerBotViewer:
                 row2.append(
                     InlineKeyboardButton(
                         text=f"📈 Raise +${small_raise}",
-                        callback_data=f"action:raise:{small_raise}:{game_id}",
+                        callback_data=":".join(
+                            ["action", "raise", str(small_raise), game_id]
+                        ),
                     )
                 )
 
@@ -649,7 +653,9 @@ class PokerBotViewer:
                 row2.append(
                     InlineKeyboardButton(
                         text=f"📈 Raise +${medium_raise}",
-                        callback_data=f"action:raise:{medium_raise}:{game_id}",
+                        callback_data=":".join(
+                            ["action", "raise", str(medium_raise), game_id]
+                        ),
                     )
                 )
 
@@ -660,7 +666,7 @@ class PokerBotViewer:
             buttons.append([
                 InlineKeyboardButton(
                     text=f"🚀 All-In (${wallet})",
-                    callback_data=f"action:all_in:{game_id}",
+                    callback_data=":".join(["action", "all_in", game_id]),
                 )
             ])
 
