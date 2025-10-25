@@ -50,7 +50,7 @@ class DummyWallet(Wallet):
 class DummyView:
     def __init__(self) -> None:
         self.sent_messages: list[tuple[int, str]] = []
-        self.turn_prompts: list[tuple[int, int, str]] = []
+        self.live_updates: list[tuple[int, int]] = []
         self.table_updates: list[tuple[
             int,
             list[str],
@@ -82,7 +82,17 @@ class DummyView:
         game,
         mention: str,
     ) -> None:
-        self.turn_prompts.append((chat_id, player.user_id, mention))
+        # Legacy compatibility path; should not be used in new flow
+        self.live_updates.append((chat_id, player.user_id))
+
+    async def send_or_update_live_message(
+        self,
+        chat_id: int,
+        game,
+        current_player,
+    ) -> Optional[int]:
+        self.live_updates.append((chat_id, current_player.user_id))
+        return game.group_message_id
 
     async def send_or_update_table_cards(
         self,
@@ -147,9 +157,9 @@ class GameEngineTests(unittest.IsolatedAsyncioTestCase):
 
         # Private hands sent and the first turn announced.
         self.assertEqual(len(view.sent_messages), len(players))
-        self.assertEqual(len(view.turn_prompts), 1)
-        self.assertEqual(view.turn_prompts[0][0], 42)
-        self.assertEqual(view.turn_prompts[0][1], players[0].user_id)
+        self.assertEqual(len(view.live_updates), 1)
+        self.assertEqual(view.live_updates[0][0], 42)
+        self.assertEqual(view.live_updates[0][1], players[0].user_id)
 
         # Game state persisted to Redis-compatible KV store.
         raw_state = kv.get("game_state:test-game")
