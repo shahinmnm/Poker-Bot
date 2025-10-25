@@ -126,7 +126,7 @@ class Game:
         return "{}({!r})".format(self.__class__.__name__, self.__dict__)
 
     def add_action(self, action_text: str) -> None:
-        """Record a human-readable action and keep the trailing three entries."""
+        """Record a human-readable action and keep the last three entries."""
 
         action = action_text.strip()
         if not action:
