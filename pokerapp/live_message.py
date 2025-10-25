@@ -148,54 +148,55 @@ class LiveMessageManager:
         player_bet = player.round_rate
         player_balance = player.wallet.value()
         call_amount = max(current_bet - player_bet, 0)
-        player_id = str(player.user_id)
+        game_id = str(game.id)
 
         first_row: List[InlineKeyboardButton] = []
         if call_amount == 0:
             first_row.append(
                 InlineKeyboardButton(
                     "✅ Check",
-                    callback_data=f"action_check_{player_id}",
+                    callback_data=":".join(["action", "check", game_id]),
                 )
             )
         elif call_amount < player_balance:
             first_row.append(
                 InlineKeyboardButton(
                     f"💵 Call ${call_amount}",
-                    callback_data=f"action_call_{player_id}",
-                )
-            )
-        else:
-            first_row.append(
-                InlineKeyboardButton(
-                    f"🔥 All-In (${player_balance})",
-                    callback_data=f"action_allin_{player_id}",
+                    callback_data=":".join(["action", "call", game_id]),
                 )
             )
 
         first_row.append(
             InlineKeyboardButton(
                 "🚪 Fold",
-                callback_data=f"action_fold_{player_id}",
+                callback_data=":".join(["action", "fold", game_id]),
             )
         )
         buttons.append(first_row)
 
         big_blind = game.table_stake * 2 if game.table_stake else 0
         min_raise = max(current_bet * 2, big_blind)
-        can_raise = player_balance > max(call_amount, min_raise)
+        can_raise = player_balance > call_amount and player_balance >= min_raise
 
         if can_raise:
             buttons.append(
                 [
                     InlineKeyboardButton(
                         f"📈 Raise (min ${min_raise})",
-                        callback_data=f"action_raise_{player_id}",
-                    ),
+                        callback_data=":".join(
+                            ["action", "raise", str(min_raise), game_id]
+                        ),
+                    )
+                ]
+            )
+
+        if player_balance > 0:
+            buttons.append(
+                [
                     InlineKeyboardButton(
                         f"💥 All-In (${player_balance})",
-                        callback_data=f"action_allin_{player_id}",
-                    ),
+                        callback_data=":".join(["action", "all_in", game_id]),
+                    )
                 ]
             )
 
