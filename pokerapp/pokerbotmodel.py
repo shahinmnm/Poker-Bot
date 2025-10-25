@@ -84,8 +84,6 @@ class PokerBotModel:
 
         self._readyMessages = {}
         self._username_cache: Dict[int, str] = {}
-        # Legacy community-card messages retained for backward compatibility.
-        self._legacy_table_messages: Dict[int, int] = {}
 
     async def _ensure_minimum_balance(
         self,
@@ -943,44 +941,7 @@ class PokerBotModel:
         if dealt_cards == 0:
             return
 
-        live_updated = await self._update_live_message(game, chat_id)
-
-        if live_updated or self._view is None:
-            return
-
-        try:
-            send_table_cards = getattr(
-                self._view, "send_or_update_table_cards"
-            )
-        except AttributeError:
-            return
-
-        if not callable(send_table_cards):
-            return
-
-        try:
-            try:
-                chat_key = int(chat_id)
-            except (TypeError, ValueError):
-                chat_key = chat_id
-
-            existing_message_id = self._legacy_table_messages.get(chat_key)
-
-            new_message_id = await send_table_cards(
-                chat_id=chat_id,
-                cards=game.cards_table,
-                pot=game.pot,
-                message_id=existing_message_id,
-            )
-
-            if new_message_id is not None:
-                self._legacy_table_messages[chat_key] = new_message_id
-        except Exception as exc:
-            self._logger.debug(
-                "Failed to update table cards for chat %s: %s",
-                chat_id,
-                exc,
-            )
+        await self._update_live_message(game, chat_id)
 
     async def _finish_game(self, game: Game, chat_id: int) -> None:
         """Finish game using coordinator (REPLACES old _finish)"""

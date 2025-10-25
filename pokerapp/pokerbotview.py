@@ -490,43 +490,6 @@ class PokerBotViewer:
             disable_notification=True,
         )
 
-    async def send_or_update_table_cards(
-        self,
-        chat_id: ChatId,
-        cards: Cards,
-        *,
-        pot: Optional[int] = None,
-        message_id: Optional[int] = None,
-    ) -> Optional[int]:
-        """Send or edit the emoji-based community card panel."""
-
-        text = self.build_table_panel(list(cards), pot)
-
-        try:
-            if message_id is not None:
-                await self._bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=text,
-                    parse_mode=ParseMode.MARKDOWN,
-                )
-                return message_id
-
-            message = await self._bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                parse_mode=ParseMode.MARKDOWN,
-                disable_notification=True,
-            )
-            return message.message_id
-        except Exception as exc:  # pragma: no cover - Telegram failures
-            logger.warning(
-                "Failed to update table cards for chat %s: %s",
-                chat_id,
-                exc,
-            )
-            return message_id
-
     @staticmethod
     def _get_cards_markup(cards: Cards) -> ReplyKeyboardMarkup:
         return ReplyKeyboardMarkup(
