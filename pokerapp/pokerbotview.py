@@ -13,7 +13,6 @@ from telegram import (
 )
 from telegram.constants import ParseMode
 from pokerapp.cards import Card, Cards
-from pokerapp.desk_image import DeskImageGenerator
 from pokerapp.entities import (
     Game,
     Player,
@@ -32,7 +31,6 @@ logger = logging.getLogger(__name__)
 class PokerBotViewer:
     def __init__(self, bot: Bot):
         self._bot = bot
-        self._desk_image_generator = DeskImageGenerator()
         self._live_manager = LiveMessageManager(bot=bot)
 
     _SUIT_EMOJIS = {
