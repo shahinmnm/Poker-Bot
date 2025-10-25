@@ -283,7 +283,9 @@ class PokerBotViewer:
         # Determine raise eligibility and build amount list for rows 3+
         big_blind = game.table_stake * 2
         min_raise = max(current_bet * 2, big_blind)
-        can_raise = player_balance > call_amount and player_balance >= min_raise
+        can_raise = (
+            player_balance > call_amount and player_balance >= min_raise
+        )
 
         raise_amounts: List[int] = []
         if can_raise:
@@ -325,7 +327,8 @@ class PokerBotViewer:
         if extra_amounts:
             for i in range(0, len(extra_amounts), 2):
                 row: List[InlineKeyboardButton] = []
-                for amount in extra_amounts[i : i + 2]:
+                chunk = extra_amounts[i:i + 2]
+                for amount in chunk:
                     row.append(
                         InlineKeyboardButton(
                             f"${amount}",
