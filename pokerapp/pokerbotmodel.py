@@ -440,6 +440,11 @@ class PokerBotModel:
 
         return f"User {player.user_id}"
 
+    def _get_safe_player_name(self, player: Player) -> str:
+        """Return an HTML-escaped name for recent action logs."""
+
+        return html.escape(self._get_player_name(player), quote=False)
+
     async def ready(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
@@ -1077,7 +1082,7 @@ class PokerBotModel:
 
         player.state = PlayerState.FOLD
 
-        player_name = self._get_player_name(player)
+        player_name = self._get_safe_player_name(player)
         game.add_action(f"{player_name} folded")
 
         await self._view.send_message(
@@ -1097,7 +1102,7 @@ class PokerBotModel:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
-        player_name = self._get_player_name(player)
+        player_name = self._get_safe_player_name(player)
 
         action = PlayerAction.CALL.value
         if player.round_rate == game.max_round_rate:
@@ -1138,7 +1143,7 @@ class PokerBotModel:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
-        player_name = self._get_player_name(player)
+        player_name = self._get_safe_player_name(player)
 
         try:
             action = PlayerAction.RAISE_RATE
@@ -1178,7 +1183,7 @@ class PokerBotModel:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
-        player_name = self._get_player_name(player)
+        player_name = self._get_safe_player_name(player)
         mention = player.mention_markdown
         amount = self._coordinator.player_all_in(game, player)
         await self._view.send_message(
@@ -2786,7 +2791,7 @@ class PokerBotModel:
             return False
 
         current_player = game.players[game.current_player_index]
-        player_name = self._get_player_name(current_player)
+        player_name = self._get_safe_player_name(current_player)
 
         if current_player.user_id != user_id_str:
             logger.warning(
