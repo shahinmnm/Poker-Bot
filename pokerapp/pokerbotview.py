@@ -274,7 +274,7 @@ class PokerBotViewer:
                     callback_data=":".join(["action", "check", game_id_str]),
                 )
             )
-        elif call_amount < player_balance:
+        elif call_amount <= player_balance:
             row1.append(
                 InlineKeyboardButton(
                     f"💵 Call ${call_amount}",
@@ -290,8 +290,9 @@ class PokerBotViewer:
         )
         buttons.append(row1)
 
+        row2 = []
+
         if player_balance > call_amount:
-            row2 = []
             big_blind = game.table_stake * 2
             min_raise = max(current_bet * 2, big_blind)
 
@@ -321,16 +322,17 @@ class PokerBotViewer:
                         )
                     )
 
-            if player_balance > 0:
-                row2.append(
-                    InlineKeyboardButton(
-                        f"🔥 All-In ${player_balance}",
-                        callback_data=":".join(
-                            ["action", "allin", game_id_str]
-                        ),
-                    )
+        if player_balance > 0:
+            row2.append(
+                InlineKeyboardButton(
+                    f"🔥 All-In ${player_balance}",
+                    callback_data=":".join(
+                        ["action", "all_in", game_id_str]
+                    ),
                 )
+            )
 
+        if row2:
             buttons.append(row2)
 
         return InlineKeyboardMarkup(buttons)
