@@ -100,6 +100,24 @@ class PokerBotController:
             )
         )
         application.add_handler(
+            CallbackQueryHandler(
+                self._handle_lobby_sit,
+                pattern=r"^lobby_sit$",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_lobby_leave,
+                pattern=r"^lobby_leave$",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_lobby_start,
+                pattern=r"^lobby_start$",
+            )
+        )
+        application.add_handler(
             CallbackQueryHandler(self._handle_callback_query)
         )
 
@@ -111,7 +129,7 @@ class PokerBotController:
         """Set up bot command descriptions in Telegram UI."""
         commands = [
             BotCommand("start", "🎰 Start a new poker game"),
-            BotCommand("ready", "✋ Join the next round"),
+            BotCommand("ready", "✋ Join lobby / Sit at table"),
             BotCommand(
                 "private",
                 "🔒 Create private game (Coming Soon)",
@@ -217,9 +235,16 @@ class PokerBotController:
 
 🏛️ GROUP GAME COMMANDS:
 
-🎰 /start - Start a new game
-✋ /ready - Join the next round
+✋ /ready - Join lobby (sit at table)
+🎰 /start - Start game (or use lobby button)
 🛑 /stop - Leave current game
+
+🎲 LOBBY SYSTEM:
+
+Use /ready to join the lobby
+Interactive buttons to sit/leave/start
+Lobby shows all seated players
+Minimum 2 players to start game
 
 🔒 PRIVATE GAME COMMANDS (Coming Soon):
 
@@ -317,6 +342,56 @@ Send 💰 /money once per day for free chips!
             )
         elif query_data == PlayerAction.ALL_IN.value:
             await self._model.all_in(update, context)
+
+    async def _handle_lobby_sit(
+        self, update: Update, context: CallbackContext
+    ) -> None:
+        """Handle lobby "Sit at Table" button."""
+
+        query = update.callback_query
+        if query is None:
+            return
+
+        await query.answer()
+        await self._model.ready(update, context)
+
+    async def _handle_lobby_leave(
+        self, update: Update, context: CallbackContext
+    ) -> None:
+        """Handle lobby "Leave Table" button."""
+
+        query = update.callback_query
+        if query is None:
+            return
+
+        chat = update.effective_chat
+        user = query.from_user
+
+        if chat is None or user is None:
+            await query.answer()
+            return
+
+        await self._model.remove_lobby_player(
+            context=context,
+            chat_id=chat.id,
+            user_id=user.id,
+        )
+        await query.answer(
+            text="🚶 You left the table. Use /ready to rejoin!",
+            show_alert=False,
+        )
+
+    async def _handle_lobby_start(
+        self, update: Update, context: CallbackContext
+    ) -> None:
+        """Handle lobby "Start Game" button."""
+
+        query = update.callback_query
+        if query is None:
+            return
+
+        await query.answer()
+        await self._model.start(update, context)
 
     async def _handle_private(
         self,
