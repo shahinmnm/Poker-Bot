@@ -252,7 +252,6 @@ class GameEngine:
         self._game.players = self._players
         self._game.table_stake = self._small_blind
         self._game.ready_users = {player.user_id for player in self._players}
-        self._table_message_id: Optional[int] = None
 
     @property
     def game(self) -> Game:
@@ -434,6 +433,33 @@ class GameEngine:
                 exc,
             )
 
+    def _deal_community_cards(self, count: int) -> int:
+        """Deal community cards from the deck to the table.
+
+        Args:
+            count: Number of cards to deal
+
+        Returns:
+            Number of cards successfully dealt
+        """
+
+        dealt = 0
+
+        for _ in range(count):
+            if not self._game.remain_cards:
+                self._logger.warning(
+                    "No cards remaining when attempting to deal %d community cards",
+                    count,
+                )
+                break
+
+            card = self._game.remain_cards.pop()
+            self._game.cards_table.append(card)
+            dealt += 1
+            self._logger.debug("Dealt community card: %s", card)
+
+        return dealt
+
     def _snapshot_players(self) -> Iterable[dict[str, object]]:
         for player in self._players:
             yield {
@@ -551,43 +577,38 @@ class GameEngine:
                 self._persist_state({"state": new_state.name})
 
                 if cards_count > 0:
-                    for _ in range(cards_count):
-                        if self._game.remain_cards:
-                            self._game.cards_table.append(
-                                self._game.remain_cards.pop()
-                            )
-
-                    if self._view is not None and self._game.cards_table:
-                        try:
-                            send_table_cards = (
-                                self._view.send_or_update_table_cards
-                            )
-                        except AttributeError:
-                            send_table_cards = None
-
-                        if send_table_cards is not None:
-                            try:
-                                send_result = await send_table_cards(
-                                    chat_id=self._chat_id,
-                                    cards=self._game.cards_table,
-                                    pot=self._game.pot,
-                                    message_id=getattr(
-                                        self, "_table_message_id", None
-                                    ),
-                                )
-                                self._table_message_id = send_result
-                            except Exception as exc:  # pragma: no cover
-                                warning_msg = (
-                                    "Community card broadcast failed "
-                                    "for %s: %s"
-                                )
-                                self._logger.warning(
-                                    warning_msg,
-                                    self._game_id,
-                                    exc,
-                                )
-
+                    dealt_count = self._deal_community_cards(cards_count)
                     self._persist_state()
+
+                    if dealt_count > 0 and self._view is not None:
+                        try:
+                            send_live = getattr(
+                                self._view,
+                                "send_or_update_live_message",
+                                None,
+                            )
+
+                            if callable(send_live):
+                                next_to_act = None
+
+                                if (
+                                    0 <= self._game.current_player_index
+                                    < len(self._players)
+                                ):
+                                    next_to_act = self._players[
+                                        self._game.current_player_index
+                                    ]
+
+                                await send_live(
+                                    chat_id=self._chat_id,
+                                    game=self._game,
+                                    current_player=next_to_act,
+                                )
+                        except Exception as exc:  # pragma: no cover
+                            self._logger.warning(
+                                "Failed to update live message after dealing cards: %s",
+                                exc,
+                            )
 
                 if new_state == GameState.FINISHED:
                     await self._finish_hand()
