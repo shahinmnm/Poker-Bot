@@ -34,6 +34,7 @@ from pokerapp.entities import (
     Score,
 )
 from pokerapp.game_coordinator import GameCoordinator
+from pokerapp.group_lobby import GroupLobbyManager
 from pokerapp.game_engine import TurnResult
 from pokerapp.pokerbotview import PokerBotViewer
 from pokerapp.kvstore import ensure_kv
@@ -83,6 +84,12 @@ class PokerBotModel:
 
         self._readyMessages = {}
         self._username_cache: Dict[int, str] = {}
+
+        self._lobby_manager = GroupLobbyManager(
+            bot=self._bot,
+            kvstore=self._kv,
+            logger=self._logger,
+        )
 
     async def _ensure_minimum_balance(
         self,
@@ -440,65 +447,93 @@ class PokerBotModel:
     async def ready(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
+        chat = update.effective_chat
+        message = update.effective_message
+        user = update.effective_user
+
+        if chat is None or user is None or message is None:
+            return
+
+        chat_id = chat.id
         game = self._game_from_context(context)
-        chat_id = update.effective_message.chat_id
 
-        if game.state != GameState.INITIAL:
-            await self._view.send_message_reply(
-                chat_id=chat_id,
-                message_id=update.effective_message.message_id,
-                text="The game is already started. Wait!",
+        if chat.type in ("group", "supergroup"):
+            if game.state != GameState.INITIAL:
+                await self._view.send_message_reply(
+                    chat_id=chat_id,
+                    message_id=message.message_id,
+                    text="🎮 Game in progress! Please wait for the next round.",
+                )
+                return
+
+            if len(game.players) >= MAX_PLAYERS:
+                await self._view.send_message_reply(
+                    chat_id=chat_id,
+                    message_id=message.message_id,
+                    text="The room is full",
+                )
+                return
+
+            if user.id in game.ready_users:
+                await self._view.send_message_reply(
+                    chat_id=chat_id,
+                    message_id=message.message_id,
+                    text="You are already ready",
+                )
+                return
+
+            wallet = WalletManagerModel(user.id, self._kv)
+
+            if not BalanceValidator.can_afford_table(
+                balance=wallet.value(),
+                stake_config=STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL],
+            ):
+                await self._view.send_message_reply(
+                    chat_id=chat_id,
+                    message_id=message.message_id,
+                    text="You don't have enough money for this table",
+                )
+                return
+
+            player = Player(
+                user_id=user.id,
+                mention_markdown=user.mention_markdown(),
+                wallet=wallet,
+                ready_message_id=message.message_id,
             )
+
+            game.ready_users.add(user.id)
+            # Ensure latest details overwrite any stale entry.
+            game.players = [p for p in game.players if p.user_id != user.id]
+            game.players.append(player)
+
+            display_name = user.first_name or user.full_name or user.username
+            if not display_name:
+                display_name = str(user.id)
+
+            await self._lobby_manager.add_player(
+                chat_id=chat_id,
+                user_id=user.id,
+                user_name=display_name,
+            )
+
             return
 
-        if len(game.players) > MAX_PLAYERS:
-            await self._view.send_message_reply(
-                chat_id=chat_id,
-                text="The room is full",
-                message_id=update.effective_message.message_id,
-            )
-            return
+        await self.show_help(update, context)
 
-        user = update.effective_message.from_user
+    async def remove_lobby_player(
+        self,
+        context: ContextTypes.DEFAULT_TYPE,
+        chat_id: int,
+        user_id: int,
+    ) -> None:
+        """Remove player from lobby and internal ready cache."""
 
-        if user.id in game.ready_users:
-            await self._view.send_message_reply(
-                chat_id=chat_id,
-                message_id=update.effective_message.message_id,
-                text="You are already ready",
-            )
-            return
+        game = self._game_from_context(context)
+        game.ready_users.discard(user_id)
+        game.players = [p for p in game.players if p.user_id != user_id]
 
-        player = Player(
-            user_id=user.id,
-            mention_markdown=user.mention_markdown(),
-            wallet=WalletManagerModel(user.id, self._kv),
-            ready_message_id=update.effective_message.message_id,
-        )
-
-        if not BalanceValidator.can_afford_table(
-            balance=player.wallet.value(),
-            stake_config=STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL]
-        ):
-            await self._view.send_message_reply(
-                chat_id=chat_id,
-                message_id=update.effective_message.message_id,
-                text="You don't have enough money for this table",
-            )
-            return
-
-        game.ready_users.add(user.id)
-
-        game.players.append(player)
-
-        members_count = await self._bot.get_chat_member_count(chat_id)
-        players_active = len(game.players)
-        # One is the bot.
-        if (
-            players_active == members_count - 1
-            and players_active >= self._min_players
-        ):
-            await self._start_game(context=context, game=game, chat_id=chat_id)
+        await self._lobby_manager.remove_player(chat_id, user_id)
 
     async def stop(self, user_id: UserId) -> None:
         UserPrivateChatModel(user_id=user_id, kv=self._kv).delete()
@@ -506,39 +541,125 @@ class PokerBotModel:
     async def start(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        game = self._game_from_context(context)
-        chat_id = update.effective_message.chat_id
+        chat = update.effective_chat
+        message = update.effective_message
+
         user = update.effective_user
-        self._track_user(user.id, user.username)
-        user_id = user.id
+
+        if user is not None:
+            self._track_user(user.id, getattr(user, "username", None))
+
+        if chat is None or message is None:
+            return
+
+        chat_id = chat.id
+        game = self._game_from_context(context)
 
         if game.state not in (GameState.INITIAL, GameState.FINISHED):
             await self._view.send_message(
                 chat_id=chat_id,
-                text="The game is already in progress"
+                text="🎮 Game in progress! Please wait for the next round.",
             )
             return
 
-        # One is the bot.
-        members_count = (await self._bot.get_chat_member_count(chat_id)) - 1
-        if members_count == 1:
-            await self.show_help(update, context)
+        if chat.type in ("group", "supergroup"):
+            seated_players = self._lobby_manager.get_seated_players(chat_id)
+            if seated_players and len(seated_players) >= self._min_players:
+                await self._start_game_from_lobby(
+                    update=update,
+                    context=context,
+                    chat_id=chat_id,
+                    player_ids=list(seated_players),
+                )
+                return
 
-            if update.effective_chat.type == 'private':
-                UserPrivateChatModel(user_id=user_id, kv=self._kv) \
-                    .set_chat_id(chat_id=chat_id)
-
-            return
-
-        players_active = len(game.players)
-        if players_active >= self._min_players:
-            await self._start_game(context=context, game=game, chat_id=chat_id)
-        else:
             await self._view.send_message(
                 chat_id=chat_id,
-                text="Not enough player"
+                text="❌ Not enough players!\n\nAt least 2 players must /ready first.",
             )
-        return
+            return
+
+        await self.show_help(update, context)
+
+    async def _start_game_from_lobby(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        chat_id: int,
+        player_ids: List[int],
+    ) -> None:
+        """Initialize a group game using players from the lobby."""
+
+        game = self._game_from_context(context)
+        valid_players: List[Player] = []
+        missing_funds: List[str] = []
+
+        for user_id in player_ids:
+            wallet = WalletManagerModel(user_id, self._kv)
+            balance_ok = BalanceValidator.can_afford_table(
+                balance=wallet.value(),
+                stake_config=STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL],
+            )
+
+            try:
+                member = await self._bot.get_chat_member(chat_id, user_id)
+                member_user = getattr(member, "user", None)
+            except Exception as exc:  # pragma: no cover - Telegram API
+                self._logger.error(
+                    "Failed to fetch chat member %s in %s: %s",
+                    user_id,
+                    chat_id,
+                    exc,
+                )
+                member_user = None
+
+            display_name = getattr(member_user, "first_name", None) or (
+                getattr(member_user, "full_name", None)
+            ) or getattr(member_user, "username", None) or str(user_id)
+
+            if not balance_ok:
+                missing_funds.append(display_name)
+                continue
+
+            mention = (
+                member_user.mention_markdown()
+                if member_user is not None
+                else f"User {user_id}"
+            )
+
+            valid_players.append(
+                Player(
+                    user_id=user_id,
+                    mention_markdown=mention,
+                    wallet=wallet,
+                    ready_message_id=None,
+                )
+            )
+
+        if missing_funds:
+            await self._view.send_message(
+                chat_id=chat_id,
+                text=(
+                    "❌ The following players don't have enough money for this table: "
+                    + ", ".join(missing_funds)
+                ),
+            )
+            return
+
+        if len(valid_players) < self._min_players:
+            await self._view.send_message(
+                chat_id=chat_id,
+                text="❌ Not enough players!\n\nAt least 2 players must /ready first.",
+            )
+            return
+
+        game.reset()
+        game.players = valid_players
+        game.ready_users = {player.user_id for player in valid_players}
+
+        await self._lobby_manager.delete_lobby(chat_id)
+
+        await self._start_game(context=context, game=game, chat_id=chat_id)
 
     async def show_help(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE

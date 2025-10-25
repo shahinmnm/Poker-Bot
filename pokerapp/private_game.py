@@ -2,6 +2,7 @@
 
 """Handles stake selection, player invites, and private chat game state."""
 
+import asyncio
 import datetime
 import json
 import logging
@@ -10,8 +11,12 @@ from enum import Enum
 from typing import Dict, List, Optional, Set
 
 from pokerapp.entities import ChatId, StakeConfig, STAKE_PRESETS, UserId
+from pokerapp.kvstore import ensure_kv
 
 logger = logging.getLogger(__name__)
+
+
+DEFAULT_WALLET_BALANCE = 1000
 
 
 class PrivateGameState(Enum):
@@ -390,3 +395,43 @@ class PrivateGameManager:
             ):
                 sessions.append(session)
         return sessions
+
+
+class PrivateGameModel:
+    """Lightweight player registry used for public/private lobby flows."""
+
+    def __init__(self, kvstore, logger: logging.Logger):
+        self._kv = ensure_kv(kvstore)
+        self._logger = logger
+        self._chat_players: Dict[int, Set[int]] = {}
+
+    async def register_player(self, chat_id: int, user_id: int, view) -> bool:
+        """Register a player for a chat lobby and ensure wallet exists."""
+
+        players = self._chat_players.setdefault(chat_id, set())
+        if user_id in players:
+            return False
+
+        try:
+            await asyncio.to_thread(self._ensure_wallet, user_id)
+        except Exception as exc:  # pragma: no cover - Redis failure
+            self._logger.error(
+                "Failed to create wallet for user %s in chat %s: %s",
+                user_id,
+                chat_id,
+                exc,
+            )
+            return False
+
+        players.add(user_id)
+        return True
+
+    def get_registered_players(self, chat_id: int) -> Set[int]:
+        """Return registered player IDs for a chat lobby."""
+
+        return set(self._chat_players.get(chat_id, set()))
+
+    def _ensure_wallet(self, user_id: int) -> None:
+        key = f"pokerbot:{user_id}"
+        if self._kv.get(key) is None:
+            self._kv.set(key, DEFAULT_WALLET_BALANCE)
