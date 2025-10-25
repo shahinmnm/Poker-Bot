@@ -567,7 +567,7 @@ class GameEngine:
 
                         if send_table_cards is not None:
                             try:
-                                self._table_message_id = await send_table_cards(
+                                send_result = await send_table_cards(
                                     chat_id=self._chat_id,
                                     cards=self._game.cards_table,
                                     pot=self._game.pot,
@@ -575,9 +575,14 @@ class GameEngine:
                                         self, "_table_message_id", None
                                     ),
                                 )
+                                self._table_message_id = send_result
                             except Exception as exc:  # pragma: no cover
+                                warning_msg = (
+                                    "Community card broadcast failed "
+                                    "for %s: %s"
+                                )
                                 self._logger.warning(
-                                    "Failed to broadcast community cards for %s: %s",
+                                    warning_msg,
                                     self._game_id,
                                     exc,
                                 )

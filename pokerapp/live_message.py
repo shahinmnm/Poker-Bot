@@ -42,8 +42,12 @@ class LiveMessageManager:
                         reply_markup=reply_markup,
                         disable_web_page_preview=True,
                     )
-                    message_id = getattr(message, "message_id", game.group_message_id)
-                except TelegramError as exc:  # pragma: no cover - network interaction
+                    message_id = getattr(
+                        message,
+                        "message_id",
+                        game.group_message_id,
+                    )
+                except TelegramError as exc:  # pragma: no cover
                     self._logger.warning(
                         "Failed to edit live game message %s: %s",
                         game.group_message_id,
@@ -68,8 +72,10 @@ class LiveMessageManager:
                     disable_web_page_preview=True,
                 )
                 message_id = getattr(message, "message_id", None)
-        except TelegramError as exc:  # pragma: no cover - network interaction
-            self._logger.error("Unable to send or update live message: %s", exc)
+        except TelegramError as exc:  # pragma: no cover
+            self._logger.error(
+                "Unable to send or update live message: %s", exc
+            )
             return None
 
         if message_id is not None:
@@ -77,7 +83,9 @@ class LiveMessageManager:
 
         return message_id
 
-    def _build_game_state_text(self, game: Game, current_player: Player) -> str:
+    def _build_game_state_text(
+        self, game: Game, current_player: Player
+    ) -> str:
         """Construct the full text body shown in the live game message."""
 
         round_labels = {
@@ -99,7 +107,9 @@ class LiveMessageManager:
         lines.append(f"💵 To Call: ${to_call}")
 
         if game.cards_table:
-            community_cards = " ".join(html.escape(str(card)) for card in game.cards_table)
+            community_cards = " ".join(
+                html.escape(str(card)) for card in game.cards_table
+            )
             lines.append(f"🃏 Community: {community_cards}")
         else:
             lines.append("🃏 Community: Waiting for cards…")
@@ -121,7 +131,9 @@ class LiveMessageManager:
             if player.round_rate > 0:
                 status_bits.append(f"In for ${player.round_rate}")
 
-            status_suffix = f" ({', '.join(status_bits)})" if status_bits else ""
+            status_suffix = (
+                f" ({', '.join(status_bits)})" if status_bits else ""
+            )
             lines.append(f"{icon} <b>{name}</b> — ${balance}{status_suffix}")
 
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
@@ -186,15 +198,17 @@ class LiveMessageManager:
         can_raise = player_balance > max(call_amount, min_raise)
 
         if can_raise:
+            all_in_callback = f"action_allin_{player_id}"
+            raise_callback = f"action_raise_{player_id}"
             buttons.append(
                 [
                     InlineKeyboardButton(
                         f"📈 Raise (min ${min_raise})",
-                        callback_data=f"action_raise_{player_id}",
+                        **{"callback_data": raise_callback},
                     ),
                     InlineKeyboardButton(
                         f"💥 All-In (${player_balance})",
-                        callback_data=f"action_allin_{player_id}",
+                        **{"callback_data": all_in_callback},
                     ),
                 ]
             )
@@ -210,7 +224,8 @@ class LiveMessageManager:
 
         mention = mention_markdown.replace("`", "").strip()
         if mention.startswith("[") and "]" in mention:
-            mention = mention[1 : mention.index("]")]
+            end_index = mention.index("]")
+            mention = mention[1:end_index]
 
         return html.escape(mention)
 
