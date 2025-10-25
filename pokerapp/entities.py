@@ -126,33 +126,33 @@ class Game:
         return "{}({!r})".format(self.__class__.__name__, self.__dict__)
 
     def add_action(self, action_text: str) -> None:
-        """
-        Add action to recent activity feed.
+        """Record a human-readable action and keep the trailing three entries."""
 
-        Keeps only last 3 actions.
+        action = action_text.strip()
+        if not action:
+            return
 
-        Args:
-            action_text: Human-readable action description
-        """
-
-        self.recent_actions.append(action_text)
+        self.recent_actions.append(action)
         if len(self.recent_actions) > 3:
             self.recent_actions.pop(0)
 
     def set_group_message(self, message_id: int) -> None:
-        """Store the living message ID for future edits."""
+        """Store the persistent live message identifier."""
 
         self.group_message_id = message_id
 
     def has_group_message(self) -> bool:
-        """Check if we have a message to edit."""
+        """Return ``True`` when a live message has already been created."""
 
         return self.group_message_id is not None
 
     def get_recent_actions_text(self) -> str:
-        """Return a newline separated string of the most recent actions."""
+        """Return a bulleted list summarizing the most recent actions."""
 
-        return "\n".join(self.recent_actions)
+        if not self.recent_actions:
+            return "No actions yet."
+
+        return "\n".join(f"• {action}" for action in self.recent_actions)
 
 
 class GameState(enum.Enum):
