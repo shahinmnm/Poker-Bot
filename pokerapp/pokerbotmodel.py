@@ -908,7 +908,7 @@ class PokerBotModel:
 
         for _ in range(count):
             if not game.remain_cards:
-                logger.debug(
+                self._logger.debug(
                     "No more cards remaining when attempting to deal to table"
                 )
                 break
@@ -916,7 +916,7 @@ class PokerBotModel:
             card = game.remain_cards.pop()
             game.cards_table.append(card)
             dealt_cards += 1
-            logger.debug("Dealt community card %s", card)
+            self._logger.debug("Dealt community card %s", card)
 
         if dealt_cards == 0:
             return
@@ -954,7 +954,7 @@ class PokerBotModel:
             if new_message_id is not None:
                 self._legacy_table_messages[chat_key] = new_message_id
         except Exception as exc:
-            logger.debug(
+            self._logger.debug(
                 "Failed to update table cards for chat %s: %s",
                 chat_id,
                 exc,
