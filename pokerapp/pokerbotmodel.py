@@ -418,6 +418,28 @@ class PokerBotModel:
         i = game.current_player_index % len(game.players)
         return game.players[i]
 
+    def _get_player_name(self, player: Player) -> str:
+        """Extract display name from player for action descriptions.
+
+        Args:
+            player: Player whose name to extract
+
+        Returns:
+            First name or user_id as fallback
+        """
+
+        mention = getattr(player, "mention_markdown", None)
+
+        if mention and mention.startswith("[") and "](" in mention:
+            try:
+                name = mention.split("]")[0][1:]
+                if name:
+                    return name
+            except (IndexError, AttributeError):
+                pass
+
+        return f"User {player.user_id}"
+
     async def ready(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
@@ -1055,6 +1077,9 @@ class PokerBotModel:
 
         player.state = PlayerState.FOLD
 
+        player_name = self._get_player_name(player)
+        game.add_action(f"{player_name} folded")
+
         await self._view.send_message(
             chat_id=update.effective_message.chat_id,
             text=f"{player.mention_markdown} {PlayerAction.FOLD.value}"
@@ -1072,6 +1097,7 @@ class PokerBotModel:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
+        player_name = self._get_player_name(player)
 
         action = PlayerAction.CALL.value
         if player.round_rate == game.max_round_rate:
@@ -1088,8 +1114,14 @@ class PokerBotModel:
                 chat_id=chat_id,
                 text=f"{mention_markdown} {action}"
             )
+            call_amount = self._coordinator.player_call_or_check(game, player)
 
-            self._coordinator.player_call_or_check(game, player)
+            if action == PlayerAction.CHECK.value:
+                action_text = f"{player_name} checked"
+            else:
+                action_text = f"{player_name} called ${call_amount}"
+
+            game.add_action(action_text)
         except UserException as e:
             await self._view.send_message(chat_id=chat_id, text=str(e))
             return
@@ -1106,6 +1138,7 @@ class PokerBotModel:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
+        player_name = self._get_player_name(player)
 
         try:
             action = PlayerAction.RAISE_RATE
@@ -1114,6 +1147,7 @@ class PokerBotModel:
 
             call_amount = max(game.max_round_rate - player.round_rate, 0)
             total_required = call_amount + raise_bet_rate.value
+            target_amount = game.max_round_rate + raise_bet_rate.value
 
             if player.wallet.value() < total_required:
                 await self.all_in(update=update, context=context)
@@ -1128,8 +1162,9 @@ class PokerBotModel:
             self._coordinator.player_raise_bet(
                 game=game,
                 player=player,
-                amount=game.max_round_rate + raise_bet_rate.value,
+                amount=target_amount,
             )
+            game.add_action(f"{player_name} raised to ${target_amount}")
         except UserException as e:
             await self._view.send_message(chat_id=chat_id, text=str(e))
             return
@@ -1143,6 +1178,7 @@ class PokerBotModel:
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
+        player_name = self._get_player_name(player)
         mention = player.mention_markdown
         amount = self._coordinator.player_all_in(game, player)
         await self._view.send_message(
@@ -1150,6 +1186,7 @@ class PokerBotModel:
             text=f"{mention} {PlayerAction.ALL_IN.value} {amount}$"
         )
         player.state = PlayerState.ALL_IN
+        game.add_action(f"{player_name} went ALL-IN (${amount})")
         await self._start_betting_round(game, chat_id)
         await self._update_live_message(game, chat_id)
 
@@ -2749,6 +2786,7 @@ class PokerBotModel:
             return False
 
         current_player = game.players[game.current_player_index]
+        player_name = self._get_player_name(current_player)
 
         if current_player.user_id != user_id_str:
             logger.warning(
@@ -2780,7 +2818,7 @@ class PokerBotModel:
         try:
             if action_type == "fold":
                 current_player.state = PlayerState.FOLD
-                action_text = f"{current_player.name} folded"
+                action_text = f"{player_name} folded"
 
             elif action_type == "check":
                 if game.max_round_rate > current_player.round_rate:
@@ -2791,15 +2829,13 @@ class PokerBotModel:
                     )
                     return False
 
-                action_text = f"{current_player.name} checked"
+                action_text = f"{player_name} checked"
 
             elif action_type == "call":
                 call_amount = self._coordinator.player_call_or_check(
                     game, current_player
                 )
-                action_text = (
-                    f"{current_player.name} called ${call_amount}"
-                )
+                action_text = f"{player_name} called ${call_amount}"
 
             elif action_type == "raise":
                 if raise_amount is None or raise_amount <= 0:
@@ -2825,9 +2861,7 @@ class PokerBotModel:
                     current_player,
                     raise_amount,
                 )
-                action_text = (
-                    f"{current_player.name} raised to ${raise_amount}"
-                )
+                action_text = f"{player_name} raised to ${raise_amount}"
 
             elif action_type == "all_in":
                 all_in_amount = self._coordinator.player_all_in(
@@ -2835,7 +2869,7 @@ class PokerBotModel:
                 )
                 current_player.state = PlayerState.ALL_IN
                 action_text = (
-                    f"{current_player.name} went all-in for ${all_in_amount}"
+                    f"{player_name} went ALL-IN (${all_in_amount})"
                 )
 
             else:
