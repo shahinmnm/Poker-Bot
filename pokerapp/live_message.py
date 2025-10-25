@@ -155,21 +155,21 @@ class LiveMessageManager:
             first_row.append(
                 InlineKeyboardButton(
                     "✅ Check",
-                    callback_data=":".join(["action", "check", game_id]),
+                    callback_data=self._format_action_callback("check", game_id),
                 )
             )
         elif call_amount < player_balance:
             first_row.append(
                 InlineKeyboardButton(
                     f"💵 Call ${call_amount}",
-                    callback_data=":".join(["action", "call", game_id]),
+                    callback_data=self._format_action_callback("call", game_id),
                 )
             )
 
         first_row.append(
             InlineKeyboardButton(
                 "🚪 Fold",
-                callback_data=":".join(["action", "fold", game_id]),
+                callback_data=self._format_action_callback("fold", game_id),
             )
         )
         buttons.append(first_row)
@@ -178,29 +178,37 @@ class LiveMessageManager:
         min_raise = max(current_bet * 2, big_blind)
         can_raise = player_balance > call_amount and player_balance >= min_raise
 
+        second_row: List[InlineKeyboardButton] = []
+
         if can_raise:
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        f"📈 Raise (min ${min_raise})",
-                        callback_data=":".join(
-                            ["action", "raise", str(min_raise), game_id]
-                        ),
-                    )
-                ]
+            second_row.append(
+                InlineKeyboardButton(
+                    f"📈 Raise (min ${min_raise})",
+                    callback_data=self._format_action_callback(
+                        "raise", game_id, str(min_raise)
+                    ),
+                )
             )
 
         if player_balance > 0:
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        f"💥 All-In (${player_balance})",
-                        callback_data=":".join(["action", "all_in", game_id]),
-                    )
-                ]
+            second_row.append(
+                InlineKeyboardButton(
+                    f"💥 All-In (${player_balance})",
+                    callback_data=self._format_action_callback("all_in", game_id),
+                )
             )
 
+        if second_row:
+            buttons.append(second_row)
+
         return InlineKeyboardMarkup(buttons)
+
+    @staticmethod
+    def _format_action_callback(action: str, game_id: str, *extra: str) -> str:
+        """Return callback payload in the expected controller format."""
+
+        parts = ["action", action, *extra, game_id]
+        return ":".join(str(part) for part in parts)
 
     @staticmethod
     def _extract_display_name(mention_markdown: str) -> str:
