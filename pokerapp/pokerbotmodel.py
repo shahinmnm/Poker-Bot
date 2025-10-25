@@ -14,7 +14,6 @@ import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
 from telegram.ext import Application, CallbackContext, ContextTypes
 from telegram.helpers import escape_markdown
-from telegram.constants import ParseMode
 
 from pokerapp.config import Config, STAKE_PRESETS
 from pokerapp.cards import Cards, get_shuffled_deck
@@ -316,7 +315,7 @@ class PokerBotModel:
                 await self._bot.send_message(
                     chat_id=int(chat_id),
                     text="🎲 Game ended with no winners (all folded).",
-                    parse_mode=ParseMode.HTML,
+                    parse_mode="HTML",
                 )
                 return
 
@@ -368,7 +367,7 @@ class PokerBotModel:
             await self._bot.send_message(
                 chat_id=int(chat_id),
                 text=result_text,
-                parse_mode=ParseMode.HTML,
+                parse_mode="HTML",
             )
 
             logger.info(
@@ -387,7 +386,7 @@ class PokerBotModel:
             await self._bot.send_message(
                 chat_id=int(chat_id),
                 text="❌ Error displaying results. Check logs.",
-                parse_mode=ParseMode.HTML,
+                parse_mode="HTML",
             )
 
         finally:
