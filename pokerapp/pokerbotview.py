@@ -255,7 +255,7 @@ class PokerBotViewer:
             InlineKeyboardMarkup with action buttons
         """
 
-        buttons = []
+        buttons: List[List[InlineKeyboardButton]] = []
 
         current_bet = game.max_round_rate
         player_bet = current_player.round_rate
@@ -264,8 +264,9 @@ class PokerBotViewer:
 
         game_id_str = str(game.id)
 
-        row1 = []
-        if call_amount == 0:
+        # Row 1 – primary defensive options (Check/Call + Fold)
+        row1: List[InlineKeyboardButton] = []
+        if call_amount <= 0:
             row1.append(
                 InlineKeyboardButton(
                     "✅ Check",
@@ -288,12 +289,26 @@ class PokerBotViewer:
         )
         buttons.append(row1)
 
-        if player_balance > call_amount:
-            row2 = []
-            big_blind = game.table_stake * 2
-            min_raise = max(current_bet * 2, big_blind)
+        # Determine raise eligibility and build amount list for rows 3+
+        big_blind = game.table_stake * 2
+        min_raise = max(current_bet * 2, big_blind)
+        can_raise = player_balance > call_amount and player_balance >= min_raise
 
-            if player_balance >= min_raise:
+        raise_amounts: List[int] = []
+        if can_raise:
+            raise_amounts.append(min_raise)
+
+            pot_raise = game.pot
+            if pot_raise > min_raise and player_balance >= pot_raise:
+                raise_amounts.append(pot_raise)
+
+        # Row 2 – aggressive actions (Raise + All-in)
+        # All-in remains visible whenever the player still has chips, even if
+        # they cannot make a traditional raise.
+        if player_balance > 0:
+            row2: List[InlineKeyboardButton] = []
+
+            if can_raise:
                 row2.append(
                     InlineKeyboardButton(
                         f"📈 Raise ${min_raise}",
@@ -303,33 +318,32 @@ class PokerBotViewer:
                     )
                 )
 
-                pot_raise = game.pot
-                if pot_raise > min_raise and player_balance >= pot_raise:
-                    row2.append(
+            row2.append(
+                InlineKeyboardButton(
+                    "🚀 All-in",
+                    callback_data=":".join(["action", "all_in", game_id_str]),
+                )
+            )
+
+            buttons.append(row2)
+
+        # Row 3+ – additional raise options in a 2-column grid.
+        # Skip the first raise amount because it is already displayed as the
+        # primary raise button on row 2.
+        extra_amounts = raise_amounts[1:]
+        if extra_amounts:
+            for i in range(0, len(extra_amounts), 2):
+                row: List[InlineKeyboardButton] = []
+                for amount in extra_amounts[i : i + 2]:
+                    row.append(
                         InlineKeyboardButton(
-                            f"📊 Raise ${pot_raise}",
+                            f"${amount}",
                             callback_data=":".join(
-                                [
-                                    "action",
-                                    "raise",
-                                    str(pot_raise),
-                                    game_id_str,
-                                ]
+                                ["action", "raise", str(amount), game_id_str]
                             ),
                         )
                     )
-
-            if player_balance > 0:
-                row2.append(
-                    InlineKeyboardButton(
-                        f"🔥 All-In ${player_balance}",
-                        callback_data=":".join(
-                            ["action", "allin", game_id_str]
-                        ),
-                    )
-                )
-
-            buttons.append(row2)
+                buttons.append(row)
 
         return InlineKeyboardMarkup(buttons)
 
