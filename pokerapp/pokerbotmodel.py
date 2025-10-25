@@ -2861,7 +2861,8 @@ class PokerBotModel:
                     current_player,
                     raise_amount,
                 )
-                action_text = f"{player_name} raised to ${raise_amount}"
+                target_amount = current_player.round_rate
+                action_text = f"{player_name} raised to ${target_amount}"
 
             elif action_type == "all_in":
                 all_in_amount = self._coordinator.player_all_in(
