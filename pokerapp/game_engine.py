@@ -366,49 +366,72 @@ class GameEngine:
             return_exceptions=True,
         )
 
-    async def _send_turn_prompt(self, player: Player) -> None:
-        """Send turn notification to current player.
-
-        Uses new hybrid UI (Reply Keyboard for cards + Inline Keyboard for
-        actions) if available, otherwise falls back to a simple text prompt.
-
-        Args:
-            player: Current player whose turn it is
-        """
+    async def _notify_next_player_turn(self, player: Player) -> None:
+        """Update live message or fall back to legacy turn prompts."""
 
         if self._view is None:
             return
 
         try:
-            # Track message IDs so they can be cleaned up after the turn ends.
-            self._turn_prompt_message_ids = []
+            send_live_message = getattr(
+                self._view, "send_or_update_live_message"
+            )
+        except AttributeError:
+            send_live_message = None
 
-            mention = player.mention_markdown
+        if callable(send_live_message):
+            try:
+                await send_live_message(
+                    chat_id=self._chat_id,
+                    game=self._game,
+                    current_player=player,
+                )
+                return
+            except Exception as exc:  # pragma: no cover - Telegram failures
+                self._logger.warning(
+                    "Failed to update live message for %s: %s",
+                    player.user_id,
+                    exc,
+                )
 
-            if hasattr(self._view, "send_player_turn_with_cards"):
-                message_ids = await self._view.send_player_turn_with_cards(
+        try:
+            send_turn_with_cards = getattr(
+                self._view, "send_player_turn_with_cards"
+            )
+        except AttributeError:
+            send_turn_with_cards = None
+
+        if callable(send_turn_with_cards):
+            try:
+                await send_turn_with_cards(
                     chat_id=self._chat_id,
                     player=player,
                     game=self._game,
-                    mention=mention,
+                    mention=player.mention_markdown,
                 )
-            else:
-                prompt_text = (
-                    f"🎯 {mention} - Your turn!"
-                )
-                message_ids = await self._view.send_message(
-                    chat_id=self._chat_id,
-                    text=prompt_text,
+                return
+            except Exception as exc:  # pragma: no cover - Telegram failures
+                self._logger.warning(
+                    "Failed to send hybrid turn prompt to %s: %s",
+                    player.user_id,
+                    exc,
                 )
 
-            if message_ids:
-                if isinstance(message_ids, Sequence):
-                    self._turn_prompt_message_ids = list(message_ids)
-                else:
-                    self._turn_prompt_message_ids = [message_ids]
+        try:
+            send_message = getattr(self._view, "send_message")
+        except AttributeError:
+            return
+
+        try:
+            await send_message(
+                chat_id=self._chat_id,
+                text=f"🎯 {player.mention_markdown} - Your turn!",
+            )
         except Exception as exc:  # pragma: no cover - Telegram failures
             self._logger.warning(
-                "Failed to send turn prompt to %s: %s", player.user_id, exc
+                "Failed to send fallback turn prompt to %s: %s",
+                player.user_id,
+                exc,
             )
 
     def _snapshot_players(self) -> Iterable[dict[str, object]]:
@@ -569,7 +592,7 @@ class GameEngine:
 
             if result == TurnResult.CONTINUE_ROUND and next_player is not None:
                 self._game.last_turn_time = datetime.datetime.now()
-                await self._send_turn_prompt(next_player)
+                await self._notify_next_player_turn(next_player)
                 self._persist_state()
                 return
 

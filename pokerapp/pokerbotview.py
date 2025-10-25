@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 class PokerBotViewer:
     def __init__(self, bot: Bot):
         self._bot = bot
-        self._live_manager = LiveMessageManager(bot=bot)
+        self._live_manager = LiveMessageManager(bot=bot, logger=logger)
 
     _SUIT_EMOJIS = {
         "spades": "♠️",
@@ -373,6 +373,23 @@ class PokerBotViewer:
         except Exception as e:
             logger.error(f"Failed to send game state: {e}")
             return None
+
+    async def send_or_update_live_message(
+        self,
+        chat_id: ChatId,
+        game: Game,
+        current_player: Player,
+    ) -> Optional[int]:
+        """Bridge helper for LiveMessageManager updates."""
+
+        if self._live_manager is None:
+            return None
+
+        return await self._live_manager.send_or_update_game_state(
+            chat_id=chat_id,
+            game=game,
+            current_player=current_player,
+        )
 
     async def update_game_state(
         self,
