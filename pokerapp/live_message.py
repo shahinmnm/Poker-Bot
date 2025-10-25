@@ -300,4 +300,3 @@ class LiveMessageManager:
             )
 
         return InlineKeyboardMarkup(buttons)
-
