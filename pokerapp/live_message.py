@@ -159,7 +159,11 @@ class LiveMessageManager:
 
         lines = [f"\n\n👥 PLAYERS ({active_count} active)"]
 
-        current_player_id = game.players[game.player_iter].user_id
+        current_index = getattr(game, "current_player_index", -1)
+        if 0 <= current_index < len(game.players):
+            current_player_id = game.players[current_index].user_id
+        else:
+            current_player_id = None
 
         for player in game.players:
             player_name = self._get_player_name(player)
@@ -171,7 +175,10 @@ class LiveMessageManager:
             elif player.state == PlayerState.ALL_IN:
                 line = f"🚀 {player_name} - ${chips} ALL-IN!"
             else:
-                is_current = (player.user_id == current_player_id)
+                is_current = (
+                    current_player_id is not None
+                    and player.user_id == current_player_id
+                )
                 icon = "▶️" if is_current else "✅"
                 line = f"{icon} {player_name} - ${chips}"
                 if bet > 0:
@@ -200,13 +207,18 @@ class LiveMessageManager:
 
     def _build_turn_indicator(self, game: Game) -> str:
         """Build current turn indicator."""
-        current_player = game.players[game.player_iter]
-        player_name = self._get_player_name(current_player)
-        chips = current_player.wallet.value()
+        current_index = getattr(game, "current_player_index", -1)
+        if 0 <= current_index < len(game.players):
+            current_player = game.players[current_index]
+            player_name = self._get_player_name(current_player)
+            chips = current_player.wallet.value()
+            turn_line = f"{player_name}'s Turn - ${chips} available"
+        else:
+            turn_line = "Waiting for the next player"
 
         return (
             f"\n\n⏱️ CURRENT TURN\n"
-            f"{player_name}'s Turn - ${chips} available\n"
+            f"{turn_line}\n"
             f"\n⬇️ Choose your action below ⬇️"
         )
 
