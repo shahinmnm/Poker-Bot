@@ -139,15 +139,6 @@ class PokerBotViewer:
 
         return "\n".join(lines)
 
-    @classmethod
-    def build_table_panel(cls, cards: List[Card], pot: Optional[int]) -> str:
-        return cls.build_hand_panel(
-            hand_cards=None,
-            board_cards=cards,
-            include_table=True,
-            pot=pot,
-        )
-
     def format_game_state(
         self,
         game: Game,
