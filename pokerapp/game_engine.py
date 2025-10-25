@@ -448,7 +448,10 @@ class GameEngine:
         for _ in range(count):
             if not self._game.remain_cards:
                 self._logger.warning(
-                    "No cards remaining when attempting to deal %d community cards",
+                    (
+                        "No cards remaining when attempting to deal %d "
+                        "community cards"
+                    ),
                     count,
                 )
                 break
@@ -606,7 +609,10 @@ class GameEngine:
                                 )
                         except Exception as exc:  # pragma: no cover
                             self._logger.warning(
-                                "Failed to update live message after dealing cards: %s",
+                                (
+                                    "Failed to update live message after "
+                                    "dealing cards: %s"
+                                ),
                                 exc,
                             )
 
