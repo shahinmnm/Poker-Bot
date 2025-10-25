@@ -3,18 +3,32 @@
 
 from __future__ import annotations
 
-import html
 from typing import List, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ParseMode
 from telegram.error import TelegramError
 
-from pokerapp.entities import Game, GameState, Player, PlayerState
+from pokerapp.entities import Game, Player, PlayerState
 
 
 class LiveMessageManager:
     """Manage the single live game message shown in group chats."""
+
+    # Stage emojis for card reveals
+    STAGE_EMOJIS = {
+        0: "🔒",  # Pre-flop
+        3: "🌄",  # Flop
+        4: "🌇",  # Turn
+        5: "🌃",  # River
+    }
+
+    # Stage names
+    STAGE_NAMES = {
+        0: "Pre-flop",
+        3: "Flop",
+        4: "Turn",
+        5: "River",
+    }
 
     def __init__(self, bot, logger):
         self._bot = bot
@@ -38,7 +52,6 @@ class LiveMessageManager:
                         chat_id=chat_id,
                         message_id=game.group_message_id,
                         text=message_text,
-                        parse_mode=ParseMode.HTML,
                         reply_markup=reply_markup,
                         disable_web_page_preview=True,
                     )
@@ -56,7 +69,6 @@ class LiveMessageManager:
                     message = await self._bot.send_message(
                         chat_id=chat_id,
                         text=message_text,
-                        parse_mode=ParseMode.HTML,
                         reply_markup=reply_markup,
                         disable_notification=True,
                         disable_web_page_preview=True,
@@ -66,7 +78,6 @@ class LiveMessageManager:
                 message = await self._bot.send_message(
                     chat_id=chat_id,
                     text=message_text,
-                    parse_mode=ParseMode.HTML,
                     reply_markup=reply_markup,
                     disable_notification=True,
                     disable_web_page_preview=True,
@@ -84,68 +95,143 @@ class LiveMessageManager:
         return message_id
 
     def _build_game_state_text(
-        self, game: Game, current_player: Player
+        self, game: Game, _current_player: Player
     ) -> str:
         """Construct the full text body shown in the live game message."""
 
-        round_labels = {
-            GameState.INITIAL: "Waiting",
-            GameState.ROUND_PRE_FLOP: "Pre-Flop",
-            GameState.ROUND_FLOP: "Flop",
-            GameState.ROUND_TURN: "Turn",
-            GameState.ROUND_RIVER: "River",
-            GameState.FINISHED: "Showdown",
-        }
+        return self._format_game_state(game)
 
-        lines: List[str] = ["<b>🃏 Texas Hold'em Poker</b>"]
+    def _get_player_name(self, player: Player) -> str:
+        """Extract display name from player for UI display."""
+        mention = getattr(player, "mention_markdown", None)
 
-        lines.append(f"💰 Pot: <b>${game.pot}</b>")
-        round_label = round_labels.get(game.state, "Unknown")
-        lines.append(f"🎲 Round: {round_label}")
+        if mention and mention.startswith("[") and "](" in mention:
+            try:
+                name = mention.split("]")[0][1:]
+                if name:
+                    return name
+            except (IndexError, AttributeError):
+                pass
 
-        to_call = max(game.max_round_rate - current_player.round_rate, 0)
-        lines.append(f"💵 To Call: ${to_call}")
+        return f"User {player.user_id}"
 
-        if game.cards_table:
-            community_cards = " ".join(
-                html.escape(str(card)) for card in game.cards_table
-            )
-            lines.append(f"🃏 Community: {community_cards}")
+    def _build_header(self) -> str:
+        """Build simple header with title."""
+        return "🎴 TEXAS HOLD'EM 🎴"
+
+    def _build_cards_section(self, game: Game) -> str:
+        """Build community cards section with stage indicator."""
+        num_cards = len(game.cards_table)
+        emoji = self.STAGE_EMOJIS.get(num_cards, "🎴")
+        stage_name = self.STAGE_NAMES.get(num_cards, "Unknown")
+
+        if num_cards == 0:
+            cards_text = "🔒 Cards will be revealed during betting rounds"
         else:
-            lines.append("🃏 Community: Waiting for cards…")
+            cards = " ".join(game.cards_table)
+            cards_text = f"{emoji} {stage_name}: {cards}"
 
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append("<b>Players</b>")
+        return (
+            f"\n\n🃏 COMMUNITY CARDS\n"
+            f"{cards_text}"
+        )
+
+    def _build_pot_section(self, game: Game) -> str:
+        """Build pot and betting information section."""
+        pot_indicator = "💰"
+        if game.pot >= 1000:
+            pot_indicator = "💰💰💰"
+        elif game.pot >= 500:
+            pot_indicator = "💰💰"
+
+        return (
+            f"\n\n{pot_indicator} POT & BETS\n"
+            f"💵 Total Pot: ${game.pot}\n"
+            f"🎯 Current Bet: ${game.max_round_rate}"
+        )
+
+    def _build_players_section(self, game: Game) -> str:
+        """Build player list with status indicators."""
+        active_count = sum(
+            1 for p in game.players
+            if p.state == PlayerState.ACTIVE
+        )
+
+        lines = [f"\n\n👥 PLAYERS ({active_count} active)"]
+
+        current_player_id = game.players[game.player_iter].user_id
 
         for player in game.players:
-            icon = self._status_icon(player, current_player)
-            name = self._extract_display_name(player.mention_markdown)
-            balance = player.wallet.value()
+            player_name = self._get_player_name(player)
+            chips = player.wallet.value()
+            bet = player.round_rate
 
-            status_bits: List[str] = []
-            if player.state == PlayerState.ALL_IN:
-                status_bits.append("All-In")
-            elif player.state == PlayerState.FOLD:
-                status_bits.append("Folded")
+            if player.state == PlayerState.FOLD:
+                line = f"❌ {player_name} - Folded"
+            elif player.state == PlayerState.ALL_IN:
+                line = f"🚀 {player_name} - ${chips} ALL-IN!"
+            else:
+                is_current = (player.user_id == current_player_id)
+                icon = "▶️" if is_current else "✅"
+                line = f"{icon} {player_name} - ${chips}"
+                if bet > 0:
+                    line += f" (bet: ${bet})"
 
-            if player.round_rate > 0:
-                status_bits.append(f"In for ${player.round_rate}")
-
-            status_suffix = (
-                f" ({', '.join(status_bits)})" if status_bits else ""
-            )
-            lines.append(f"{icon} <b>{name}</b> — ${balance}{status_suffix}")
-
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append("📢 <b>Recent Actions</b>")
-
-        recent_lines = game.get_recent_actions_text().splitlines()
-        if not recent_lines:
-            recent_lines = ["No actions yet."]
-
-        lines.extend(html.escape(line) for line in recent_lines)
+            lines.append(line)
 
         return "\n".join(lines)
+
+    def _build_activity_section(self, game: Game) -> str:
+        """Build recent activity feed from game.recent_actions."""
+        if game.recent_actions:
+            recent = list(reversed(game.recent_actions[-5:]))
+            activity_lines = [
+                f"{i}. {action}"
+                for i, action in enumerate(recent, 1)
+            ]
+            activity_text = "\n".join(activity_lines)
+        else:
+            activity_text = "No recent activity yet"
+
+        return (
+            f"\n\n📋 RECENT ACTIVITY\n"
+            f"{activity_text}"
+        )
+
+    def _build_turn_indicator(self, game: Game) -> str:
+        """Build current turn indicator."""
+        current_player = game.players[game.player_iter]
+        player_name = self._get_player_name(current_player)
+        chips = current_player.wallet.value()
+
+        return (
+            f"\n\n⏱️ CURRENT TURN\n"
+            f"{player_name}'s Turn - ${chips} available\n"
+            f"\n⬇️ Choose your action below ⬇️"
+        )
+
+    def _format_game_state(self, game: Game) -> str:
+        """
+        Format game state as plain text for live message display.
+        Uses emojis and smart spacing for readability.
+        Persian font compatible (no HTML/Markdown).
+
+        Args:
+            game: Current game state
+
+        Returns:
+            Plain text formatted string for Telegram message
+        """
+        sections = [
+            self._build_header(),
+            self._build_cards_section(game),
+            self._build_pot_section(game),
+            self._build_players_section(game),
+            self._build_activity_section(game),
+            self._build_turn_indicator(game),
+        ]
+
+        return "".join(sections)
 
     def _build_action_inline_keyboard(
         self,
@@ -215,28 +301,3 @@ class LiveMessageManager:
 
         return InlineKeyboardMarkup(buttons)
 
-    @staticmethod
-    def _extract_display_name(mention_markdown: str) -> str:
-        """Convert markdown mention into a safe plain-text name."""
-
-        if not mention_markdown:
-            return "Unknown"
-
-        mention = mention_markdown.replace("`", "").strip()
-        if mention.startswith("[") and "]" in mention:
-            end_index = mention.index("]")
-            mention = mention[1:end_index]
-
-        return html.escape(mention)
-
-    @staticmethod
-    def _status_icon(player: Player, current_player: Player) -> str:
-        """Return the correct status indicator for a player."""
-
-        if player.state == PlayerState.FOLD:
-            return "⚫"
-        if player.state == PlayerState.ALL_IN:
-            return "🔴"
-        if player.user_id == current_player.user_id:
-            return "🟢"
-        return "🔵"
