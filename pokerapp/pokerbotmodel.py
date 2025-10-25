@@ -84,7 +84,8 @@ class PokerBotModel:
 
         self._readyMessages = {}
         self._username_cache: Dict[int, str] = {}
-        self._table_messages: Dict[int, int] = {}
+        # Legacy community-card messages retained for backward compatibility.
+        self._legacy_table_messages: Dict[int, int] = {}
 
     async def _ensure_minimum_balance(
         self,
@@ -826,7 +827,11 @@ class PokerBotModel:
                 )
 
                 if cards_count > 0:
-                    await self.add_cards_to_table(cards_count, game, chat_id)
+                    await self._deal_community_cards(
+                        game=game,
+                        chat_id=chat_id,
+                        count=cards_count,
+                    )
 
                 if new_state == GameState.FINISHED:
                     await self._finish_game(game, chat_id)
@@ -849,29 +854,29 @@ class PokerBotModel:
         chat_id: int,
         *,
         current_player: Optional[Player] = None,
-    ) -> None:
+    ) -> bool:
         """Update the shared live game message if supported by the view."""
 
         try:
             send_live = getattr(self._view, "send_or_update_live_message")
         except AttributeError:
-            return
+            return False
 
         if not callable(send_live):
-            return
+            return False
 
         if current_player is None:
             if not game.players:
-                return
+                return False
 
             index = game.current_player_index
             if index < 0 or index >= len(game.players):
-                return
+                return False
 
             current_player = game.players[index]
 
         if current_player is None or game.state == GameState.FINISHED:
-            return
+            return False
 
         try:
             await send_live(
@@ -885,13 +890,22 @@ class PokerBotModel:
                 current_player.user_id,
                 exc,
             )
+            return False
 
-    async def add_cards_to_table(
+        return True
+
+    async def _deal_community_cards(
         self,
-        count: int,
+        *,
         game: Game,
         chat_id: ChatId,
+        count: int,
     ) -> None:
+        if count <= 0:
+            return
+
+        dealt_cards = 0
+
         for _ in range(count):
             if not game.remain_cards:
                 logger.debug(
@@ -901,32 +915,50 @@ class PokerBotModel:
 
             card = game.remain_cards.pop()
             game.cards_table.append(card)
+            dealt_cards += 1
             logger.debug("Dealt community card %s", card)
 
-        if self._view is not None:
+        if dealt_cards == 0:
+            return
+
+        live_updated = await self._update_live_message(game, chat_id)
+
+        if live_updated or self._view is None:
+            return
+
+        try:
+            send_table_cards = getattr(
+                self._view, "send_or_update_table_cards"
+            )
+        except AttributeError:
+            return
+
+        if not callable(send_table_cards):
+            return
+
+        try:
             try:
-                try:
-                    chat_key = int(chat_id)
-                except (TypeError, ValueError):
-                    chat_key = chat_id
+                chat_key = int(chat_id)
+            except (TypeError, ValueError):
+                chat_key = chat_id
 
-                existing_message_id = self._table_messages.get(chat_key)
+            existing_message_id = self._legacy_table_messages.get(chat_key)
 
-                new_message_id = await self._view.send_or_update_table_cards(
-                    chat_id=chat_id,
-                    cards=game.cards_table,
-                    pot=game.pot,
-                    message_id=existing_message_id,
-                )
+            new_message_id = await send_table_cards(
+                chat_id=chat_id,
+                cards=game.cards_table,
+                pot=game.pot,
+                message_id=existing_message_id,
+            )
 
-                if new_message_id is not None:
-                    self._table_messages[chat_key] = new_message_id
-            except Exception as exc:
-                logger.debug(
-                    "Failed to update table cards for chat %s: %s",
-                    chat_id,
-                    exc,
-                )
+            if new_message_id is not None:
+                self._legacy_table_messages[chat_key] = new_message_id
+        except Exception as exc:
+            logger.debug(
+                "Failed to update table cards for chat %s: %s",
+                chat_id,
+                exc,
+            )
 
     async def _finish_game(self, game: Game, chat_id: int) -> None:
         """Finish game using coordinator (REPLACES old _finish)"""
