@@ -411,30 +411,6 @@ class GameEngine:
                 "Failed to send turn prompt to %s: %s", player.user_id, exc
             )
 
-    async def _send_table_cards(self, count: int) -> None:
-        for _ in range(count):
-            if self._game.remain_cards:
-                self._game.cards_table.append(self._game.remain_cards.pop())
-
-        if self._view is None or not self._game.cards_table:
-            return
-
-        try:
-            send_table_cards = self._view.send_or_update_table_cards
-
-            self._table_message_id = await send_table_cards(
-                chat_id=self._chat_id,
-                cards=self._game.cards_table,
-                pot=self._game.pot,
-                message_id=getattr(self, "_table_message_id", None),
-            )
-        except Exception as exc:  # pragma: no cover - Telegram failures
-            self._logger.warning(
-                "Failed to broadcast community cards for %s: %s",
-                self._game_id,
-                exc,
-            )
-
     def _snapshot_players(self) -> Iterable[dict[str, object]]:
         for player in self._players:
             yield {
@@ -552,7 +528,37 @@ class GameEngine:
                 self._persist_state({"state": new_state.name})
 
                 if cards_count > 0:
-                    await self._send_table_cards(cards_count)
+                    for _ in range(cards_count):
+                        if self._game.remain_cards:
+                            self._game.cards_table.append(
+                                self._game.remain_cards.pop()
+                            )
+
+                    if self._view is not None and self._game.cards_table:
+                        try:
+                            send_table_cards = (
+                                self._view.send_or_update_table_cards
+                            )
+                        except AttributeError:
+                            send_table_cards = None
+
+                        if send_table_cards is not None:
+                            try:
+                                self._table_message_id = await send_table_cards(
+                                    chat_id=self._chat_id,
+                                    cards=self._game.cards_table,
+                                    pot=self._game.pot,
+                                    message_id=getattr(
+                                        self, "_table_message_id", None
+                                    ),
+                                )
+                            except Exception as exc:  # pragma: no cover
+                                self._logger.warning(
+                                    "Failed to broadcast community cards for %s: %s",
+                                    self._game_id,
+                                    exc,
+                                )
+
                     self._persist_state()
 
                 if new_state == GameState.FINISHED:

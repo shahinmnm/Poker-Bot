@@ -1,6 +1,5 @@
 python-telegram-bot[rate-limiter,webhooks]==21.2
 flake8==4.0.1
-pillow==9.3.0
 PySocks==1.7.1
 redis==4.5.4
 python-dotenv==0.20.0
