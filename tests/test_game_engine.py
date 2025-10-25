@@ -51,12 +51,6 @@ class DummyView:
     def __init__(self) -> None:
         self.sent_messages: list[tuple[int, str]] = []
         self.live_updates: list[tuple[int, int]] = []
-        self.table_updates: list[tuple[
-            int,
-            list[str],
-            Optional[int],
-            Optional[int],
-        ]] = []
 
     async def send_message(self, chat_id: int, text: str, **kwargs) -> None:
         self.sent_messages.append((chat_id, text))
@@ -93,17 +87,6 @@ class DummyView:
     ) -> Optional[int]:
         self.live_updates.append((chat_id, current_player.user_id))
         return game.group_message_id
-
-    async def send_or_update_table_cards(
-        self,
-        chat_id: int,
-        cards,
-        *,
-        pot: Optional[int] = None,
-        message_id: Optional[int] = None,
-    ) -> Optional[int]:
-        self.table_updates.append((chat_id, list(cards), pot, message_id))
-        return message_id or 123
 
 
 class GameEngineTests(unittest.IsolatedAsyncioTestCase):

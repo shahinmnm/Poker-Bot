@@ -40,6 +40,22 @@ The winner is determinated by various combinations of Poker hands rank from five
 **Telegram chat example**\
 ![chat example](https://raw.githubusercontent.com/thaithimyduyen/Poker-Telegram-Bot/master/assets/chatexample.png "Chat example")
 
+## Live Message System
+
+The bot uses a single persistent message per game that updates in real-time to display:
+- Community cards (flop, turn, river)
+- Current pot and player balances
+- Active players and their status
+- Recent actions (last 5 moves)
+- Turn indicator
+
+This eliminates message spam and provides a clean, responsive UI.
+
+**Technical Details:**
+- Implementation: `pokerapp/live_message.py` (`LiveMessageManager`)
+- Rendering: Plain text + emojis (no HTML/Markdown for Persian font compatibility)
+- Action buttons: 2-column layout for mobile usability
+
 ### How to use ?
 
 1. Ensure you have `docker`, `docker-compose`, and `make` installed.
@@ -58,10 +74,10 @@ The winner is determinated by various combinations of Poker hands rank from five
 1. It shows `not enough players` after `/start`.
    All players need to send `/ready`.
    The command `/start` starts a game only for ready players.
-2. I don't see my cards.
-   All cards are sent in the inline keyboard, if you don't see them, try
-   to send `/cards` to the chat.
-   There is a bug on iOS about hiding inline keyboard.
+2. I don't see the game state message.
+   The table state lives in a single live message pinned to the bottom of the chat.
+   Scroll down or send `/status` to refresh the message if your Telegram client lost it.
+   Private hole cards are still delivered via inline keyboard; try `/cards` if they are hidden.
 3. My cards are overlaped with someone else on MacOS Telegram.
    It is a bug of [MacOS desktop client](https://github.com/overtake/TelegramSwift/issues/575).
 4. How bonus is calculated?
