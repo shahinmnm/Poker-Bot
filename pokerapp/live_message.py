@@ -30,6 +30,8 @@ class LiveMessageManager:
         5: "River",
     }
 
+    PARSE_MODE = "HTML"
+
     def __init__(self, bot, logger):
         self._bot = bot
         self._logger = logger
@@ -81,7 +83,7 @@ class LiveMessageManager:
                         message_id=game.group_message_id,
                         text=message_text,
                         reply_markup=reply_markup,
-                        parse_mode="HTML",
+                        parse_mode=self.PARSE_MODE,
                         disable_web_page_preview=True,
                     )
                     message_id = getattr(
@@ -99,7 +101,7 @@ class LiveMessageManager:
                         chat_id=chat_id,
                         text=message_text,
                         reply_markup=reply_markup,
-                        parse_mode="HTML",
+                        parse_mode=self.PARSE_MODE,
                         disable_notification=True,
                         disable_web_page_preview=True,
                     )
@@ -109,7 +111,7 @@ class LiveMessageManager:
                     chat_id=chat_id,
                     text=message_text,
                     reply_markup=reply_markup,
-                    parse_mode="HTML",
+                    parse_mode=self.PARSE_MODE,
                     disable_notification=True,
                     disable_web_page_preview=True,
                 )
