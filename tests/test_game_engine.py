@@ -2,8 +2,8 @@ import json
 import unittest
 from typing import Optional
 
-from pokerapp.entities import GameState, Player, PlayerState, Wallet
-from pokerapp.game_engine import GameEngine, TurnResult
+from pokerapp.entities import Game, GameState, Player, PlayerState, Wallet
+from pokerapp.game_engine import GameEngine, PokerEngine, TurnResult
 from pokerapp.kvstore import InMemoryKV
 
 
@@ -208,6 +208,67 @@ class GameEngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, TurnResult.END_ROUND)
         self.assertIsNone(next_player)
 
+
+class PokerEngineRoundTests(unittest.TestCase):
+    def _create_player(self, user_id: int) -> Player:
+        return Player(
+            user_id=user_id,
+            mention_markdown=f"@player{user_id}",
+            wallet=DummyWallet(1_000),
+            ready_message_id=None,
+        )
+
+    def test_heads_up_post_flop_checks_end_round(self) -> None:
+        engine = PokerEngine()
+        game = Game()
+        players = [self._create_player(1), self._create_player(2)]
+
+        game.players = players
+        game.state = GameState.ROUND_PRE_FLOP
+        game.dealer_index = 0
+
+        new_state = engine.advance_to_next_street(game)
+
+        self.assertEqual(new_state, GameState.ROUND_FLOP)
+        self.assertEqual(game.current_player_index, 0)
+        self.assertEqual(game.trading_end_user_id, players[1].user_id)
+
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.CONTINUE_ROUND)
+        self.assertEqual(game.current_player_index, 1)
+
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.END_ROUND)
+
+    def test_multiway_post_flop_turn_rotation(self) -> None:
+        engine = PokerEngine()
+        game = Game()
+        players = [
+            self._create_player(1),
+            self._create_player(2),
+            self._create_player(3),
+        ]
+
+        game.players = players
+        game.state = GameState.ROUND_PRE_FLOP
+        game.dealer_index = 2
+
+        new_state = engine.advance_to_next_street(game)
+
+        self.assertEqual(new_state, GameState.ROUND_FLOP)
+        self.assertEqual(game.current_player_index, 0)
+        self.assertEqual(game.trading_end_user_id, players[2].user_id)
+
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.CONTINUE_ROUND)
+        self.assertEqual(game.current_player_index, 1)
+
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.CONTINUE_ROUND)
+        self.assertEqual(game.current_player_index, 2)
+
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.END_ROUND)
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
