@@ -575,7 +575,10 @@ class PokerBotModel:
 
             await self._view.send_message(
                 chat_id=chat_id,
-                text="❌ Not enough players!\n\nAt least 2 players must /ready first.",
+                text=(
+                    "❌ Not enough players!\n\n"
+                    "At least 2 players must /ready first."
+                ),
             )
             return
 
@@ -637,19 +640,27 @@ class PokerBotModel:
             )
 
         if missing_funds:
+            base_message = (
+                "❌ The following players don't have enough money for this "
+                "table: "
+            )
+            insufficient_funds_message = (
+                base_message + ", ".join(missing_funds)
+            )
+
             await self._view.send_message(
                 chat_id=chat_id,
-                text=(
-                    "❌ The following players don't have enough money for this table: "
-                    + ", ".join(missing_funds)
-                ),
+                text=insufficient_funds_message,
             )
             return
 
         if len(valid_players) < self._min_players:
             await self._view.send_message(
                 chat_id=chat_id,
-                text="❌ Not enough players!\n\nAt least 2 players must /ready first.",
+                text=(
+                    "❌ Not enough players!\n\n"
+                    "At least 2 players must /ready first."
+                ),
             )
             return
 
@@ -2422,7 +2433,7 @@ class PokerBotModel:
         if isinstance(game_code, bytes):
             game_code = game_code.decode("utf-8")
 
-        lobby_key = f"private_game:{game_code}"
+        lobby_key = "private_game:" + str(game_code)
 
         logger.info(
             "Cleaning up private game lobby: chat=%s, code=%s",
@@ -2447,7 +2458,8 @@ class PokerBotModel:
 
                 # Ensure all IDs are integers
                 player_ids = [
-                    int(pid) for pid in player_ids
+                    int(pid)
+                    for pid in player_ids
                     if pid is not None
                 ]
 
@@ -2517,7 +2529,7 @@ class PokerBotModel:
         # === STEP 3: DELETE USER MAPPING KEYS ===
 
         for player_id in player_ids:
-            user_game_key = f"user:{player_id}:private_game"
+            user_game_key = "user:" + str(player_id) + ":private_game"
 
             try:
                 deleted = self._kv.delete(user_game_key)
@@ -2540,16 +2552,19 @@ class PokerBotModel:
         # === STEP 4: CLEAR PENDING INVITE SETS ===
 
         for player_id in player_ids:
-            pending_key = f"user:{player_id}:pending_invites"
+            pending_key = "user:" + str(player_id) + ":pending_invites"
 
             try:
                 removed = 0
 
                 # Prefer set removal when available.
+                backend = getattr(self._kv, "_backend", None)
+                fallback = getattr(self._kv, "_fallback", None)
+
                 srem_candidates = [
                     getattr(self._kv, "srem", None),
-                    getattr(getattr(self._kv, "_backend", None), "srem", None),
-                    getattr(getattr(self._kv, "_fallback", None), "srem", None),
+                    getattr(backend, "srem", None),
+                    getattr(fallback, "srem", None),
                 ]
 
                 for candidate in srem_candidates:
@@ -2584,7 +2599,9 @@ class PokerBotModel:
         # === STEP 5: DELETE INDIVIDUAL INVITE KEYS ===
 
         for player_id in player_ids:
-            invite_key = f"private_invite:{player_id}:{game_code}"
+            invite_key = (
+                "private_invite:" + str(player_id) + ":" + str(game_code)
+            )
 
             try:
                 deleted = self._kv.delete(invite_key)

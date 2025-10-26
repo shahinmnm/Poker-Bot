@@ -432,7 +432,7 @@ class PrivateGameModel:
         return set(self._chat_players.get(chat_id, set()))
 
     def _ensure_wallet(self, user_id: int) -> None:
-        key = f"pokerbot:{user_id}"
+        key = "pokerbot:" + str(user_id)
         setnx = getattr(self._kv, "setnx", None)
         if callable(setnx):
             setnx(key, DEFAULT_WALLET_BALANCE)
