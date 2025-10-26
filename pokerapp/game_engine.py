@@ -177,9 +177,20 @@ class PokerEngine:
         # Set the dealer as the reference point so the next player to act is
         # the seat immediately to their left (small blind / first to act).
         if game.players:
-            dealer_index = game.dealer_index % len(game.players)
-            game.current_player_index = dealer_index
-            game.trading_end_user_id = game.players[dealer_index].user_id
+            players_count = len(game.players)
+            dealer_index = game.dealer_index % players_count
+
+            if players_count == 2:
+                # Heads-up: dealer (small blind) acts first, opponent ends round
+                first_to_act_index = dealer_index
+                last_to_act_user_id = game.players[(dealer_index + 1) % players_count].user_id
+            else:
+                # Multi-way pots: seat to dealer's left acts first, dealer ends round
+                first_to_act_index = (dealer_index + 1) % players_count
+                last_to_act_user_id = game.players[dealer_index].user_id
+
+            game.current_player_index = first_to_act_index
+            game.trading_end_user_id = last_to_act_user_id
         else:
             game.current_player_index = -1
             game.trading_end_user_id = 0
