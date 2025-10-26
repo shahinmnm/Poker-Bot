@@ -64,6 +64,29 @@ class GameCoordinator:
         if isinstance(effective_chat_id, str) and effective_chat_id.isdigit():
             effective_chat_id = int(effective_chat_id)
 
+        live_manager = getattr(self._view, "_live_manager", None)
+        if live_manager is not None:
+            resolved_player = current_player
+            if resolved_player is None and game.players:
+                index = getattr(game, "current_player_index", -1)
+                if 0 <= index < len(game.players):
+                    resolved_player = game.players[index]
+
+            if resolved_player is not None and game.state != GameState.FINISHED:
+                message_id = await live_manager.send_or_update_game_state(
+                    chat_id=effective_chat_id,
+                    game=game,
+                    current_player=resolved_player,
+                )
+
+                if message_id is not None:
+                    return
+
+            logger.debug(
+                "LiveMessageManager unavailable or no player resolved; "
+                "falling back to direct viewer updates",
+            )
+
         # Edit existing message or send new
         if game.has_group_message():
             updated = await self._view.update_game_state(

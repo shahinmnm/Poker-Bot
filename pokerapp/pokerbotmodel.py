@@ -1004,58 +1004,63 @@ class PokerBotModel:
 
             if result == TurnResult.CONTINUE_ROUND and next_player:
                 game.last_turn_time = dt.now()
-                await self._update_live_message(
+                await self._send_live_manager_update(
                     game,
                     chat_id,
                     current_player=next_player,
                 )
                 return
 
-    async def _update_live_message(
+    async def _send_live_manager_update(
         self,
         game: Game,
         chat_id: int,
         *,
         current_player: Optional[Player] = None,
-    ) -> bool:
-        """Update the shared live game message if supported by the view."""
+    ) -> None:
+        """Send the latest game state via LiveMessageManager when available."""
+
+        live_manager = getattr(self._view, "_live_manager", None)
+        if live_manager is None:
+            return
+
+        resolved_player = self._resolve_live_current_player(game, current_player)
+        if resolved_player is None:
+            return
 
         try:
-            send_live = getattr(self._view, "send_or_update_live_message")
-        except AttributeError:
-            return False
-
-        if not callable(send_live):
-            return False
-
-        if current_player is None:
-            if not game.players:
-                return False
-
-            index = game.current_player_index
-            if index < 0 or index >= len(game.players):
-                return False
-
-            current_player = game.players[index]
-
-        if current_player is None or game.state == GameState.FINISHED:
-            return False
-
-        try:
-            await send_live(
+            await live_manager.send_or_update_game_state(
                 chat_id=chat_id,
                 game=game,
-                current_player=current_player,
+                current_player=resolved_player,
             )
-        except Exception as exc:
+        except Exception as exc:  # pragma: no cover - Telegram failures
             self._logger.warning(
                 "Failed to update live message for %s: %s",
-                current_player.user_id,
+                resolved_player.user_id,
                 exc,
             )
-            return False
 
-        return True
+    @staticmethod
+    def _resolve_live_current_player(
+        game: Game, current_player: Optional[Player]
+    ) -> Optional[Player]:
+        """Determine which player should be highlighted in live updates."""
+
+        if game.state == GameState.FINISHED:
+            return None
+
+        if current_player is not None:
+            return current_player
+
+        if not game.players:
+            return None
+
+        index = game.current_player_index
+        if index < 0 or index >= len(game.players):
+            return None
+
+        return game.players[index]
 
     async def _deal_community_cards(
         self,
@@ -1084,7 +1089,7 @@ class PokerBotModel:
         if dealt_cards == 0:
             return
 
-        await self._update_live_message(game, chat_id)
+        await self._send_live_manager_update(game, chat_id)
 
     async def _finish_game(self, game: Game, chat_id: int) -> None:
         """Finish game using coordinator (REPLACES old _finish)"""
@@ -1197,7 +1202,7 @@ class PokerBotModel:
 
         chat_id = update.effective_message.chat_id
         await self._start_betting_round(game, chat_id)
-        await self._update_live_message(game, chat_id)
+        await self._send_live_manager_update(game, chat_id)
 
     async def call_check(
         self,
@@ -1237,7 +1242,7 @@ class PokerBotModel:
             return
 
         await self._start_betting_round(game, chat_id)
-        await self._update_live_message(game, chat_id)
+        await self._send_live_manager_update(game, chat_id)
 
     async def raise_rate_bet(
         self,
@@ -1280,7 +1285,7 @@ class PokerBotModel:
             return
 
         await self._start_betting_round(game, chat_id)
-        await self._update_live_message(game, chat_id)
+        await self._send_live_manager_update(game, chat_id)
 
     async def all_in(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -1298,7 +1303,7 @@ class PokerBotModel:
         player.state = PlayerState.ALL_IN
         game.add_action(f"{player_name} went ALL-IN (${amount})")
         await self._start_betting_round(game, chat_id)
-        await self._update_live_message(game, chat_id)
+        await self._send_live_manager_update(game, chat_id)
 
     async def create_private_game(
         self,
