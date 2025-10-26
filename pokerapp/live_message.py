@@ -231,27 +231,73 @@ class LiveMessageManager:
         )
 
     def _format_game_state(self, game: Game) -> str:
-        """
-        Format game state as plain text for live message display.
-        Uses emojis and smart spacing for readability.
-        Persian font compatible (no HTML/Markdown).
+        """Format the live message using the Phase 8+ layout."""
 
-        Args:
-            game: Current game state
+        lines: List[str] = []
 
-        Returns:
-            Plain text formatted string for Telegram message
-        """
-        sections = [
-            self._build_header(),
-            self._build_cards_section(game),
-            self._build_pot_section(game),
-            self._build_players_section(game),
-            self._build_activity_section(game),
-            self._build_turn_indicator(game),
-        ]
+        # === HEADER ===
+        lines.append("🎴 <b>TEXAS HOLD'EM</b> 🎴")
+        lines.append("")
 
-        return "".join(sections)
+        # === COMMUNITY CARDS ===
+        lines.append("🃏 <b>COMMUNITY CARDS</b>")
+
+        num_cards = len(game.cards_table) if game.cards_table else 0
+        stage_emoji = self.STAGE_EMOJIS.get(num_cards, "🔒")
+        stage_name = self.STAGE_NAMES.get(num_cards, "Pre-flop")
+
+        if num_cards == 0:
+            lines.append(f"{stage_emoji} Cards will be revealed during betting rounds")
+        else:
+            from pokerapp.pokerbotview import PokerBotViewer
+
+            cards_display = PokerBotViewer._format_cards_line(game.cards_table)
+            lines.append(f"{stage_emoji} {stage_name}: {cards_display}")
+
+        lines.append("")
+
+        # === POT & BETS ===
+        lines.append("💰 <b>POT & BETS</b>")
+        lines.append(f"💵 Total Pot: ${game.pot}")
+
+        if game.max_round_rate > 0:
+            lines.append(f"🎯 Current Bet: ${game.max_round_rate}")
+
+        lines.append("")
+
+        # === PLAYERS ===
+        active_count = sum(1 for p in game.players if p.state != PlayerState.FOLD)
+        lines.append(f"👥 <b>PLAYERS ({active_count} active)</b>")
+
+        for player in game.players:
+            name = self._get_player_name(player)
+            balance = player.wallet.value()
+
+            if player.state == PlayerState.FOLD:
+                icon = "❌"
+                status = " (folded)"
+            elif player.state == PlayerState.ALL_IN:
+                icon = "🔥"
+                status = f" (ALL-IN: ${player.round_rate})"
+            elif player.round_rate > 0:
+                icon = "✅"
+                status = f" (bet: ${player.round_rate})"
+            else:
+                icon = "✅"
+                status = ""
+
+            lines.append(f"{icon} {name} - ${balance}{status}")
+
+        lines.append("")
+
+        # === RECENT ACTIVITY ===
+        if game.recent_actions:
+            lines.append("📋 <b>RECENT ACTIVITY</b>")
+            for action in game.recent_actions[-3:]:
+                lines.append(f"{action}")
+            lines.append("")
+
+        return "\n".join(lines)
 
     def _build_action_inline_keyboard(
         self,
