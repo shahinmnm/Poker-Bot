@@ -143,13 +143,16 @@ class GroupLobbyManager:
         """Remove lobby message and Redis state."""
 
         lobby = self._lobbies.pop(chat_id, None)
-        self._kv.delete(f"lobby:{chat_id}")
+        self._kv.delete("lobby:" + str(chat_id))
 
         if not lobby or not lobby.message_id:
             return
 
         try:
-            await self._bot.delete_message(chat_id=chat_id, message_id=lobby.message_id)
+            await self._bot.delete_message(
+                chat_id=chat_id,
+                message_id=lobby.message_id,
+            )
         except TelegramError as exc:  # pragma: no cover - network side effects
             self._logger.warning(
                 "Failed to delete lobby message for %s: %s",
@@ -176,7 +179,10 @@ class GroupLobbyManager:
                 return
             except TelegramError as exc:  # pragma: no cover - Telegram API
                 self._logger.warning(
-                    "Failed to edit lobby message %s in chat %s: %s. Recreating.",
+                    (
+                        "Failed to edit lobby message %s in chat %s: %s. "
+                        "Recreating."
+                    ),
                     lobby.message_id,
                     chat_id,
                     exc,
@@ -228,19 +234,33 @@ class GroupLobbyManager:
 
         return "\n".join(lines)
 
-    def _build_lobby_keyboard(self, lobby: GroupLobbyState) -> InlineKeyboardMarkup:
+    def _build_lobby_keyboard(
+        self,
+        lobby: GroupLobbyState,
+    ) -> InlineKeyboardMarkup:
         """Construct inline keyboard for lobby controls."""
 
         buttons = [
             [
-                InlineKeyboardButton("🪑 Sit at Table", callback_data="lobby_sit"),
-                InlineKeyboardButton("🚶 Leave Table", callback_data="lobby_leave"),
+                InlineKeyboardButton(
+                    "🪑 Sit at Table",
+                    callback_data="lobby_sit",
+                ),
+                InlineKeyboardButton(
+                    "🚶 Leave Table",
+                    callback_data="lobby_leave",
+                ),
             ]
         ]
 
         if lobby.can_start_game():
             buttons.append(
-                [InlineKeyboardButton("🎮 Start Game", callback_data="lobby_start")]
+                [
+                    InlineKeyboardButton(
+                        "🎮 Start Game",
+                        callback_data="lobby_start",
+                    )
+                ]
             )
 
         return InlineKeyboardMarkup(buttons)
@@ -255,7 +275,7 @@ class GroupLobbyManager:
         }
         try:
             self._kv.set(
-                f"lobby:{lobby.chat_id}",
+                "lobby:" + str(lobby.chat_id),
                 json.dumps(payload),
                 ex=3600,
             )
@@ -270,7 +290,7 @@ class GroupLobbyManager:
         """Restore lobby state from Redis if available."""
 
         try:
-            raw = self._kv.get(f"lobby:{chat_id}")
+            raw = self._kv.get("lobby:" + str(chat_id))
         except Exception as exc:  # pragma: no cover - kvstore errors
             self._logger.error(
                 "Failed to load lobby for chat %s: %s",

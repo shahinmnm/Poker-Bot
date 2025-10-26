@@ -11,18 +11,20 @@ class _FailingSetNXBackend:
     def __init__(self) -> None:
         self.calls = 0
 
-    def setnx(self, key, value):  # pragma: no cover - exercised via ResilientKV
+    # pragma: no cover - exercised via ResilientKV
+    def setnx(self, key, value):  # pragma: no cover
         self.calls += 1
         raise redis.exceptions.ConnectionError("network down")
 
 
 class _FailingSetBackend:
-    """Backend that simulates a failure on ``set`` (and any subsequent calls)."""
+    """Backend that simulates failures on ``set`` and subsequent calls."""
 
-    def set(self, key, value, **kwargs):  # pragma: no cover - exercised via ResilientKV
+    # pragma: no cover - exercised via ResilientKV
+    def set(self, key, value, **kwargs):  # pragma: no cover
         raise redis.exceptions.TimeoutError("timed out")
 
-    def get(self, key):  # pragma: no cover - exercised via ResilientKV
+    def get(self, key):  # pragma: no cover
         raise AssertionError("backend should not be used after failure")
 
 
