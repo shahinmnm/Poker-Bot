@@ -393,7 +393,7 @@ class PokerBotViewer:
         if self._live_manager is None:
             return None
 
-        return await self._live_manager.send_or_update_game_state(
+        return await self._live_manager.send_or_update_live_message(
             chat_id=chat_id,
             game=game,
             current_player=current_player,
