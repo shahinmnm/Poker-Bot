@@ -366,69 +366,27 @@ class GameEngine:
         )
 
     async def _notify_next_player_turn(self, player: Player) -> None:
-        """Update live message or fall back to legacy turn prompts."""
+        """Update live message for current player's turn (Phase 8+)."""
 
         if self._view is None:
+            self._logger.warning("View is None, cannot notify player turn")
             return
 
+        # Only use the live message system (no legacy fallbacks)
         try:
-            send_live_message = getattr(
-                self._view, "send_or_update_live_message"
-            )
-        except AttributeError:
-            send_live_message = None
-
-        if callable(send_live_message):
-            try:
-                await send_live_message(
-                    chat_id=self._chat_id,
-                    game=self._game,
-                    current_player=player,
-                )
-                return
-            except Exception as exc:  # pragma: no cover - Telegram failures
-                self._logger.warning(
-                    "Failed to update live message for %s: %s",
-                    player.user_id,
-                    exc,
-                )
-
-        try:
-            send_turn_with_cards = getattr(
-                self._view, "send_player_turn_with_cards"
-            )
-        except AttributeError:
-            send_turn_with_cards = None
-
-        if callable(send_turn_with_cards):
-            try:
-                await send_turn_with_cards(
-                    chat_id=self._chat_id,
-                    player=player,
-                    game=self._game,
-                    mention=player.mention_markdown,
-                )
-                return
-            except Exception as exc:  # pragma: no cover - Telegram failures
-                self._logger.warning(
-                    "Failed to send hybrid turn prompt to %s: %s",
-                    player.user_id,
-                    exc,
-                )
-
-        try:
-            send_message = getattr(self._view, "send_message")
-        except AttributeError:
-            return
-
-        try:
-            await send_message(
+            await self._view.send_or_update_live_message(
                 chat_id=self._chat_id,
-                text=f"🎯 {player.mention_markdown} - Your turn!",
+                game=self._game,
+                current_player=player,
+            )
+        except AttributeError:
+            self._logger.error(
+                "View missing send_or_update_live_message method - "
+                "incompatible view implementation"
             )
         except Exception as exc:  # pragma: no cover - Telegram failures
-            self._logger.warning(
-                "Failed to send fallback turn prompt to %s: %s",
+            self._logger.error(
+                "Failed to update live message for player %s: %s",
                 player.user_id,
                 exc,
             )
