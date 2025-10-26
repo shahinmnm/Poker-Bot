@@ -65,6 +65,14 @@ class LiveMessageManager:
         message_text = self._build_game_state_text(game, current_player)
         reply_markup = self._build_action_inline_keyboard(game, current_player)
 
+        self._logger.info(
+            "🔍 Sending update - has_buttons=%s, button_count=%s",
+            reply_markup is not None,
+            len(reply_markup.inline_keyboard)
+            if getattr(reply_markup, "inline_keyboard", None)
+            else 0,
+        )
+
         try:
             if game.has_group_message():
                 try:
@@ -73,6 +81,7 @@ class LiveMessageManager:
                         message_id=game.group_message_id,
                         text=message_text,
                         reply_markup=reply_markup,
+                        parse_mode="HTML",
                         disable_web_page_preview=True,
                     )
                     message_id = getattr(
@@ -90,6 +99,7 @@ class LiveMessageManager:
                         chat_id=chat_id,
                         text=message_text,
                         reply_markup=reply_markup,
+                        parse_mode="HTML",
                         disable_notification=True,
                         disable_web_page_preview=True,
                     )
@@ -99,6 +109,7 @@ class LiveMessageManager:
                     chat_id=chat_id,
                     text=message_text,
                     reply_markup=reply_markup,
+                    parse_mode="HTML",
                     disable_notification=True,
                     disable_web_page_preview=True,
                 )
