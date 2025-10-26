@@ -34,6 +34,20 @@ class LiveMessageManager:
         self._bot = bot
         self._logger = logger
 
+    async def send_or_update_live_message(
+        self,
+        chat_id: int,
+        game: Game,
+        current_player: Player,
+    ) -> Optional[int]:
+        """Public wrapper maintaining backwards compatibility."""
+
+        return await self.send_or_update_game_state(
+            chat_id=chat_id,
+            game=game,
+            current_player=current_player,
+        )
+
     async def send_or_update_game_state(
         self,
         chat_id: int,
