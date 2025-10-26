@@ -879,25 +879,25 @@ class PokerBotModel:
                 )
                 return
 
-                if private_chat_id and private_chat:
-                    if new_msg_id is not None:
-                        private_chat.push_message(new_msg_id)
-                    elif (
-                        existing_message_id is not None
-                        and message_id is not None
-                    ):
-                        try:
-                            await self._view.remove_message(
-                                chat_id=private_chat_id,
-                                message_id=existing_message_id,
-                            )
-                        except Exception as exc:
-                            logger.debug(
-                                "Failed to remove stale private hand message "
-                                "for %s: %s",
-                                player.user_id,
-                                exc,
-                            )
+            if private_chat_id and private_chat:
+                if new_msg_id is not None:
+                    private_chat.push_message(new_msg_id)
+                elif (
+                    existing_message_id is not None
+                    and message_id is not None
+                ):
+                    try:
+                        await self._view.remove_message(
+                            chat_id=private_chat_id,
+                            message_id=existing_message_id,
+                        )
+                    except Exception as exc:
+                        logger.debug(
+                            "Failed to remove stale private hand message "
+                            "for %s: %s",
+                            player.user_id,
+                            exc,
+                        )
 
         await asyncio.gather(
             *[send_to_player(player) for player in players],
