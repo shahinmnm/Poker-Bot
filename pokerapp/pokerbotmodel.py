@@ -208,7 +208,10 @@ class PokerBotModel:
         return context.chat_data[KEY_CHAT_DATA_GAME]
 
     def _game(self, chat_id: ChatId) -> Game:
-        chat_data = self._application.chat_data.setdefault(chat_id, {})
+        chat_data = self._application.chat_data.get(chat_id)
+        if chat_data is None:
+            self._application.chat_data[chat_id] = {}
+            chat_data = self._application.chat_data[chat_id]
 
         if KEY_CHAT_DATA_GAME not in chat_data:
             chat_data[KEY_CHAT_DATA_GAME] = Game()
@@ -237,10 +240,10 @@ class PokerBotModel:
             return
 
         if chat_id is not None and game is not None:
-            chat_data = self._application.chat_data.setdefault(
-                int(chat_id),
-                {},
-            )
+            chat_data = self._application.chat_data.get(int(chat_id))
+            if chat_data is None:
+                self._application.chat_data[int(chat_id)] = {}
+                chat_data = self._application.chat_data[int(chat_id)]
             chat_data[KEY_CHAT_DATA_GAME] = game
             logger.debug("Saved game %s to chat %s", game.id, chat_id)
             return
