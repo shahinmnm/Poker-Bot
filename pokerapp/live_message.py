@@ -324,7 +324,7 @@ class LiveMessageManager:
         if extra_amounts:
             for i in range(0, len(extra_amounts), 2):
                 row: List[InlineKeyboardButton] = []
-                for amount in extra_amounts[i : i + 2]:
+                for amount in extra_amounts[i:i + 2]:
                     row.append(
                         InlineKeyboardButton(
                             f"${amount}",
