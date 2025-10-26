@@ -372,6 +372,11 @@ class GameEngine:
             self._logger.warning("View is None, cannot notify player turn")
             return
 
+        self._logger.info(
+            "🔍 GameEngine calling send_or_update_live_message for player %s",
+            player.user_id,
+        )
+
         # Only use the live message system (no legacy fallbacks)
         try:
             await self._view.send_or_update_live_message(

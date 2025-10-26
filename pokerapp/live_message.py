@@ -41,7 +41,13 @@ class LiveMessageManager:
         current_player: Player,
     ) -> Optional[int]:
         """Public wrapper maintaining backwards compatibility."""
-
+        game_identifier = getattr(game, "game_id", getattr(game, "id", "?"))
+        self._logger.info(
+            "🔍 LiveMessageManager.send_or_update_live_message called - "
+            "chat_id=%s, game_id=%s",
+            chat_id,
+            game_identifier,
+        )
         return await self.send_or_update_game_state(
             chat_id=chat_id,
             game=game,

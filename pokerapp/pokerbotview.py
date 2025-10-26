@@ -32,6 +32,7 @@ class PokerBotViewer:
     def __init__(self, bot: Bot):
         self._bot = bot
         self._live_manager = LiveMessageManager(bot=bot, logger=logger)
+        logger.info("🔍 PokerBotViewer initialized with LiveMessageManager")
 
     _SUIT_EMOJIS = {
         "spades": "♠️",
@@ -145,90 +146,9 @@ class PokerBotViewer:
         current_player: Optional[Player] = None,
         action_prompt: str = ""
     ) -> str:
-        """
-        Format complete game state for the living message.
+        """Delegate formatting to the LiveMessageManager implementation."""
 
-        Args:
-            game: Current game instance
-            current_player: Player whose turn it is (None if game ended)
-            action_prompt: Text prompting current player's action
-
-        Returns:
-            HTML-formatted message text
-        """
-
-        lines = []
-
-        round_name = {
-            GameState.ROUND_PRE_FLOP: "PRE-FLOP",
-            GameState.ROUND_FLOP: "FLOP",
-            GameState.ROUND_TURN: "TURN",
-            GameState.ROUND_RIVER: "RIVER",
-            GameState.FINISHED: "FINISHED",
-        }.get(game.state, "STARTING")
-
-        game_header = (
-            f"🃏 <b>POKER GAME #{game.id[:8].upper()} - {round_name}</b>"
-        )
-        lines.append(game_header)
-
-        big_blind = game.table_stake * 2
-
-        lines.append(
-            f"💰 Pot: <b>${game.pot}</b> | "
-            f"Stakes: {game.table_stake}/{big_blind}"
-        )
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append("")
-
-        if game.cards_table:
-            lines.append("🎴 <b>Board Cards:</b>")
-            lines.append(self._format_board_cards(game.cards_table))
-            lines.append("")
-
-        player_count = len(game.players)
-        lines.append(f"👥 <b>Players ({player_count})</b>")
-
-        for _, player in enumerate(game.players):
-            if current_player and player.user_id == current_player.user_id:
-                icon = "⏰"
-            elif player.state == PlayerState.FOLD:
-                icon = "❌"
-            elif player.state == PlayerState.ALL_IN:
-                icon = "🔥"
-            else:
-                icon = "✅"
-
-            balance = player.wallet.value()
-
-            bet_display = ""
-            if player.round_rate > 0:
-                if player.state == PlayerState.ALL_IN:
-                    bet_display = f" [ALL-IN ${player.round_rate}]"
-                else:
-                    bet_display = f" [BET ${player.round_rate}]"
-            elif player.state == PlayerState.FOLD:
-                bet_display = " [FOLDED]"
-
-            name = player.mention_markdown.strip('`').split(']')[0].strip('[')
-
-            lines.append(f"{icon} {name} ${balance}{bet_display}")
-
-        lines.append("")
-
-        if game.recent_actions:
-            lines.append("📢 <b>Recent Activity:</b>")
-            for action in game.recent_actions:
-                lines.append(f"• {action}")
-
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append("")
-
-        if action_prompt:
-            lines.append(f"👉 {action_prompt}")
-            lines.append("")
-
-        return "\n".join(lines)
+        return self._live_manager._format_game_state(game)
 
     def build_action_buttons(
         self,
