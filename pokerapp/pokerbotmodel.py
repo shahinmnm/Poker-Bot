@@ -1024,7 +1024,10 @@ class PokerBotModel:
         if live_manager is None:
             return
 
-        resolved_player = self._resolve_live_current_player(game, current_player)
+        resolved_player = self._resolve_live_current_player(
+            game,
+            current_player,
+        )
         if resolved_player is None:
             return
 
