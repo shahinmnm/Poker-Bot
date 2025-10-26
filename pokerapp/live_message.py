@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import html
+
 from typing import List, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -132,6 +134,12 @@ class LiveMessageManager:
 
         return self._format_game_state(game)
 
+    @staticmethod
+    def _escape_html(value) -> str:
+        """Escape text for safe inclusion in Telegram HTML messages."""
+
+        return html.escape(str(value), quote=False)
+
     def _get_player_name(self, player: Player) -> str:
         """Extract display name from player for UI display."""
         mention = getattr(player, "mention_markdown", None)
@@ -170,16 +178,19 @@ class LiveMessageManager:
             from pokerapp.pokerbotview import PokerBotViewer
 
             cards_display = PokerBotViewer._format_cards_line(game.cards_table)
+            cards_display = self._escape_html(cards_display)
             lines.append(f"{stage_emoji} {stage_name}: {cards_display}")
 
         lines.append("")
 
         # === POT & BETS ===
         lines.append("💰 <b>POT & BETS</b>")
-        lines.append(f"💵 Total Pot: ${game.pot}")
+        lines.append(f"💵 Total Pot: ${self._escape_html(game.pot)}")
 
         if game.max_round_rate > 0:
-            lines.append(f"🎯 Current Bet: ${game.max_round_rate}")
+            lines.append(
+                f"🎯 Current Bet: ${self._escape_html(game.max_round_rate)}"
+            )
 
         lines.append("")
 
@@ -190,22 +201,23 @@ class LiveMessageManager:
         lines.append(f"👥 <b>PLAYERS ({active_count} active)</b>")
 
         for player in game.players:
-            name = self._get_player_name(player)
-            balance = player.wallet.value()
+            name = self._escape_html(self._get_player_name(player))
+            balance = self._escape_html(player.wallet.value())
 
             if player.state == PlayerState.FOLD:
                 icon = "❌"
                 status = " (folded)"
             elif player.state == PlayerState.ALL_IN:
                 icon = "🔥"
-                status = f" (ALL-IN: ${player.round_rate})"
+                status = f" (ALL-IN: ${self._escape_html(player.round_rate)})"
             elif player.round_rate > 0:
                 icon = "✅"
-                status = f" (bet: ${player.round_rate})"
+                status = f" (bet: ${self._escape_html(player.round_rate)})"
             else:
                 icon = "✅"
                 status = ""
 
+            status = self._escape_html(status)
             lines.append(f"{icon} {name} - ${balance}{status}")
 
         lines.append("")
@@ -214,7 +226,7 @@ class LiveMessageManager:
         if game.recent_actions:
             lines.append("📋 <b>RECENT ACTIVITY</b>")
             for action in game.recent_actions[-3:]:
-                lines.append(f"{action}")
+                lines.append(self._escape_html(action))
             lines.append("")
 
         return "\n".join(lines)
