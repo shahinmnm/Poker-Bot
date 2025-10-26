@@ -1,15 +1,27 @@
 #!/usr/bin/env python3
 
 import unittest
+from types import SimpleNamespace
 from typing import Dict, Tuple
+from unittest.mock import AsyncMock, MagicMock
 
 import redis
+from telegram import Bot
 
 from pokerapp.cards import Cards, Card
 from pokerapp.config import Config
-from pokerapp.entities import Money, Player, Game, Score
+from pokerapp.entities import (
+    Game,
+    GameState,
+    Money,
+    Player,
+    PlayerState,
+    Score,
+)
 from pokerapp.game_coordinator import GameCoordinator
-from pokerapp.pokerbotmodel import WalletManagerModel
+from pokerapp.game_engine import TurnResult
+from pokerapp.kvstore import InMemoryKV
+from pokerapp.pokerbotmodel import KEY_CHAT_DATA_GAME, PokerBotModel, WalletManagerModel
 
 
 def with_cards(p: Player) -> Tuple[Player, Cards]:
@@ -216,6 +228,100 @@ class TestGameCoordinatorPayouts(unittest.TestCase):
             third_loser,
             fourth_loser,
         )
+
+
+class HandlePlayerActionStateTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.kv_store = InMemoryKV()
+        self.mock_view = MagicMock()
+        self.mock_view.send_message = AsyncMock()
+        self.mock_bot = AsyncMock(spec=Bot)
+        self.mock_bot.send_message = AsyncMock()
+
+        cfg = Config()
+        self.application = SimpleNamespace(chat_data={})
+
+        self.model = PokerBotModel(
+            view=self.mock_view,
+            bot=self.mock_bot,
+            cfg=cfg,
+            kv=self.kv_store,
+            application=self.application,
+        )
+
+        coordinator = MagicMock()
+        coordinator.player_call_or_check = MagicMock(return_value=0)
+        coordinator.player_raise_bet = MagicMock()
+        coordinator.player_all_in = MagicMock(return_value=0)
+        coordinator.process_game_turn = MagicMock(
+            return_value=(TurnResult.CONTINUE_ROUND, None)
+        )
+        coordinator._send_or_update_game_state = AsyncMock()
+        coordinator.advance_game_street = MagicMock(
+            return_value=(GameState.FINISHED, 0)
+        )
+        coordinator.commit_round_bets = MagicMock()
+        coordinator.finish_game_with_winners = MagicMock(return_value=[])
+        self.model._coordinator = coordinator
+
+        self.chat_id = 987654
+        self.game = Game()
+        self.player = Player(
+            user_id=123,
+            mention_markdown="@player",
+            wallet=MagicMock(),
+            ready_message_id=None,
+        )
+        self.player.state = PlayerState.ACTIVE
+        self.player.round_rate = 0
+        self.game.players = [self.player]
+        self.game.current_player_index = 0
+        self.game.max_round_rate = 0
+        self.application.chat_data[self.chat_id] = {
+            KEY_CHAT_DATA_GAME: self.game
+        }
+
+    async def test_blocks_initial_and_finished_states(self) -> None:
+        for state in (GameState.INITIAL, GameState.FINISHED):
+            with self.subTest(state=state):
+                self.game.state = state
+                result = await self.model.handle_player_action(
+                    self.player.user_id,
+                    self.chat_id,
+                    "check",
+                )
+                self.assertFalse(result)
+
+    async def test_allows_actions_during_active_rounds(self) -> None:
+        active_states = (
+            GameState.ROUND_PRE_FLOP,
+            GameState.ROUND_FLOP,
+            GameState.ROUND_TURN,
+            GameState.ROUND_RIVER,
+        )
+
+        for state in active_states:
+            with self.subTest(state=state):
+                self.game.state = state
+                self.player.state = PlayerState.ACTIVE
+                self.player.round_rate = 0
+                self.game.max_round_rate = 0
+                self.game.recent_actions.clear()
+                self.model._coordinator.process_game_turn.reset_mock()
+                self.model._coordinator._send_or_update_game_state.reset_mock()
+
+                result = await self.model.handle_player_action(
+                    self.player.user_id,
+                    self.chat_id,
+                    "check",
+                )
+
+                self.assertTrue(result)
+                self.assertTrue(
+                    any("checked" in action for action in self.game.recent_actions)
+                )
+                self.model._coordinator.process_game_turn.assert_called_once()
+                self.model._coordinator._send_or_update_game_state.assert_awaited()
 
 
 if __name__ == '__main__':
