@@ -574,7 +574,13 @@ class PokerBotViewer:
                 chat_id,
                 exc,
             )
-            return message_id
+            # Returning ``None`` signals to the caller that the existing message
+            # should no longer be reused. When ``message_id`` is provided the
+            # edit may have failed because the message was deleted or can no
+            # longer be edited. Clearing the cached identifier allows the
+            # caller to send a fresh DM in future rounds instead of repeatedly
+            # attempting to edit the stale message.
+            return None
 
     async def remove_markup(
         self,
