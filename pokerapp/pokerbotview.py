@@ -16,8 +16,6 @@ from pokerapp.cards import Card, Cards
 from pokerapp.entities import (
     Game,
     Player,
-    PlayerState,
-    GameState,
     MessageId,
     ChatId,
     Mention,
