@@ -433,5 +433,10 @@ class PrivateGameModel:
 
     def _ensure_wallet(self, user_id: int) -> None:
         key = f"pokerbot:{user_id}"
+        setnx = getattr(self._kv, "setnx", None)
+        if callable(setnx):
+            setnx(key, DEFAULT_WALLET_BALANCE)
+            return
+
         if self._kv.get(key) is None:
             self._kv.set(key, DEFAULT_WALLET_BALANCE)

@@ -33,6 +33,13 @@ class InMemoryKV:
         self._values[key] = value
         return True
 
+    # pragma: no cover - trivial wrapper
+    def setnx(self, key: str, value: Any):
+        if key in self._values:
+            return False
+        self._values[key] = value
+        return True
+
     def exists(self, key: str):  # pragma: no cover - trivial wrapper
         return int(key in self._values or key in self._lists)
 
@@ -108,6 +115,14 @@ class ResilientKV:
         **kwargs: Any,
     ):
         return self._call("set", key, value, **kwargs)
+
+    # pragma: no cover - trivial wrapper
+    def setnx(
+        self,
+        key: str,
+        value: Any,
+    ):
+        return self._call("setnx", key, value)
 
     def exists(
         self,
