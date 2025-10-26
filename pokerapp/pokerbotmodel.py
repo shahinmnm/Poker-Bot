@@ -1142,11 +1142,17 @@ class PokerBotModel:
             if str(current_user_id) != str(current_player.user_id):
                 return
 
+            try:
+                await self._view.remove_markup(
+                    chat_id=update.effective_message.chat_id,
+                    message_id=update.effective_message.message_id,
+                )
+            except Exception as exc:  # pragma: no cover - Telegram failures
+                self._logger.warning(
+                    "Failed to clear markup for user turn: %s", exc
+                )
+
             await fn(update, context)
-            await self._view.remove_markup(
-                chat_id=update.effective_message.chat_id,
-                message_id=update.effective_message.message_id,
-            )
 
         return m
 
