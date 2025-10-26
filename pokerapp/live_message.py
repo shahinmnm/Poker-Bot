@@ -152,7 +152,9 @@ class LiveMessageManager:
         stage_name = self.STAGE_NAMES.get(num_cards, "Pre-flop")
 
         if num_cards == 0:
-            lines.append(f"{stage_emoji} Cards will be revealed during betting rounds")
+            lines.append(
+                f"{stage_emoji} Cards will be revealed during betting rounds"
+            )
         else:
             from pokerapp.pokerbotview import PokerBotViewer
 
@@ -171,7 +173,9 @@ class LiveMessageManager:
         lines.append("")
 
         # === PLAYERS ===
-        active_count = sum(1 for p in game.players if p.state != PlayerState.FOLD)
+        active_count = sum(
+            1 for p in game.players if p.state != PlayerState.FOLD
+        )
         lines.append(f"👥 <b>PLAYERS ({active_count} active)</b>")
 
         for player in game.players:
@@ -275,7 +279,12 @@ class LiveMessageManager:
                     InlineKeyboardButton(
                         f"📈 Raise ${min_raise}",
                         callback_data=":".join(
-                            ["action", "raise", str(min_raise), game_id]
+                            [
+                                "action",
+                                "raise",
+                                str(min_raise),
+                                game_id,
+                            ]
                         ),
                     )
                 )
@@ -300,7 +309,12 @@ class LiveMessageManager:
                         InlineKeyboardButton(
                             f"${amount}",
                             callback_data=":".join(
-                                ["action", "raise", str(amount), game_id]
+                                [
+                                    "action",
+                                    "raise",
+                                    str(amount),
+                                    game_id,
+                                ]
                             ),
                         )
                     )
