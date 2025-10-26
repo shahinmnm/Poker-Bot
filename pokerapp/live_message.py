@@ -159,7 +159,7 @@ class LiveMessageManager:
 
         lines = [f"\n\n👥 PLAYERS ({active_count} active)"]
 
-        current_player_id = game.players[game.player_iter].user_id
+        current_player_id = game.players[game.current_player_index].user_id
 
         for player in game.players:
             player_name = self._get_player_name(player)
@@ -200,7 +200,7 @@ class LiveMessageManager:
 
     def _build_turn_indicator(self, game: Game) -> str:
         """Build current turn indicator."""
-        current_player = game.players[game.player_iter]
+        current_player = game.players[game.current_player_index]
         player_name = self._get_player_name(current_player)
         chips = current_player.wallet.value()
 
