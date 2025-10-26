@@ -218,17 +218,18 @@ class LiveMessageManager:
             f"{activity_text}"
         )
 
-    def _build_turn_indicator(self, game: Game) -> str:
-        """Build current turn indicator."""
+    def _build_turn_indicator(self, game: Game) -> List[str]:
+        """Build current turn indicator lines."""
         current_player = game.players[game.current_player_index]
         player_name = self._get_player_name(current_player)
         chips = current_player.wallet.value()
 
-        return (
-            f"\n\n⏱️ CURRENT TURN\n"
-            f"{player_name}'s Turn - ${chips} available\n"
-            f"\n⬇️ Choose your action below ⬇️"
-        )
+        return [
+            "⏱️ <b>CURRENT TURN</b>",
+            f"{player_name}'s Turn - ${chips} available",
+            "",
+            "⬇️ Choose your action below ⬇️",
+        ]
 
     def _format_game_state(self, game: Game) -> str:
         """Format the live message using the Phase 8+ layout."""
@@ -296,6 +297,9 @@ class LiveMessageManager:
             for action in game.recent_actions[-3:]:
                 lines.append(f"{action}")
             lines.append("")
+
+        lines.append("")
+        lines.extend(self._build_turn_indicator(game))
 
         return "\n".join(lines)
 
