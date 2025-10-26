@@ -56,6 +56,10 @@ This eliminates message spam and provides a clean, responsive UI.
 - Rendering: Plain text + emojis (no HTML/Markdown for Persian font compatibility)
 - Action buttons: 2-column layout for mobile usability
 
+### Lobby Reliability Notes
+
+Operational considerations for the lobby workflow—including race conditions, Redis usage, and Telegram API behaviors—are tracked in `docs/edge_case_monitoring.md`.
+
 ### How to use ?
 
 1. Ensure you have `docker`, `docker-compose`, and `make` installed.
