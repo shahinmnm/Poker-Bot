@@ -317,10 +317,18 @@ class GameEngine:
 
     def _big_blind_index(self) -> int:
         players_count = len(self._players)
-        if players_count == 0:
+        if players_count <= 1:
             return 0
 
-        big_blind_index = (self._game.dealer_index + 2) % players_count
+        dealer_index = self._game.dealer_index % players_count
+
+        # In heads-up games the dealer posts the small blind and the
+        # opponent posts the big blind. There is no "+2" seat available, so
+        # the big blind is simply the other player.
+        if players_count == 2:
+            return (dealer_index + 1) % players_count
+
+        big_blind_index = (dealer_index + 2) % players_count
         return big_blind_index
 
     def _deal_private_cards(self) -> None:

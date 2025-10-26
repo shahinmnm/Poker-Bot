@@ -3,7 +3,7 @@ import unittest
 from typing import Optional
 
 from pokerapp.entities import GameState, Player, PlayerState, Wallet
-from pokerapp.game_engine import GameEngine
+from pokerapp.game_engine import GameEngine, TurnResult
 from pokerapp.kvstore import InMemoryKV
 
 
@@ -157,6 +157,56 @@ class GameEngineTests(unittest.IsolatedAsyncioTestCase):
 
         # The current player should be the seat after the big blind.
         self.assertEqual(state["current_player"], players[0].user_id)
+
+    async def test_heads_up_pre_flop_turn_order(self) -> None:
+        kv = InMemoryKV()
+        view = DummyView()
+
+        players = [
+            Player(
+                user_id="1",
+                mention_markdown="@alice",
+                wallet=DummyWallet(1_000),
+                ready_message_id=None,
+            ),
+            Player(
+                user_id="2",
+                mention_markdown="@bob",
+                wallet=DummyWallet(1_000),
+                ready_message_id=None,
+            ),
+        ]
+
+        engine = GameEngine(
+            game_id="heads-up",
+            chat_id=42,
+            players=players,
+            small_blind=10,
+            big_blind=20,
+            kv_store=kv,
+            view=view,
+        )
+
+        game = await engine.start_new_hand()
+
+        # Small blind posts first and should act first.
+        self.assertEqual(game.current_player_index, 0)
+        self.assertEqual(view.live_updates[0][1], game.players[0].user_id)
+
+        coordinator = engine._coordinator
+
+        # Small blind checks/calls and the turn moves to the big blind.
+        coordinator.player_call_or_check(game, game.players[0])
+        result, next_player = coordinator.process_game_turn(game)
+        self.assertEqual(result, TurnResult.CONTINUE_ROUND)
+        self.assertIsNotNone(next_player)
+        self.assertEqual(next_player.user_id, game.players[1].user_id)
+
+        # Big blind acts and the round should conclude without repeating turns.
+        coordinator.player_call_or_check(game, game.players[1])
+        result, next_player = coordinator.process_game_turn(game)
+        self.assertEqual(result, TurnResult.END_ROUND)
+        self.assertIsNone(next_player)
 
 
 if __name__ == "__main__":  # pragma: no cover
