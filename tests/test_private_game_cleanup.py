@@ -66,7 +66,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
             application=application,
         )
 
-
 # ============================================================================
 # BASIC CLEANUP TESTS
 # ============================================================================
@@ -95,7 +94,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
 
         # Verify key deleted
         self.assertFalse(self.kv_store.exists("private_game:" + game_code))
-
 
     async def test_delete_lobby_removes_user_mappings(self):
         """Verify user:{id}:private_game keys are cleaned up."""
@@ -129,7 +127,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(
                 self.kv_store.exists("user:" + str(pid) + ":private_game")
             )
-
 
     async def test_delete_lobby_clears_pending_invites(self):
         """Verify pending invites are removed from user sets."""
@@ -167,7 +164,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
             }
             self.assertNotIn(game_code, decoded_members)
 
-
 # ============================================================================
 # PLAYER ID DISCOVERY TESTS
 # ============================================================================
@@ -204,7 +200,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
                 self.kv_store.exists("user:" + str(pid) + ":private_game")
             )
 
-
     async def test_fallback_to_context_when_json_missing(self):
         """Verify cleanup works even if Redis snapshot is unavailable."""
 
@@ -219,7 +214,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
 
         # Primary key deletion should still work
         self.assertFalse(self.kv_store.exists("private_game:" + game_code))
-
 
 # ============================================================================
 # IDEMPOTENCY & ERROR RESILIENCE
@@ -244,13 +238,11 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
         # Should not raise, key stays deleted
         self.assertFalse(self.kv_store.exists("private_game:" + game_code))
 
-
     async def test_delete_lobby_handles_missing_lobby_gracefully(self):
         """Verify deleting non-existent lobby doesn't error."""
 
         # Should not raise
         await self.poker_model.delete_private_game_lobby(-999, "NOEXIST")
-
 
     async def test_partial_cleanup_on_redis_error(self):
         """Verify cleanup continues even if some operations fail."""
@@ -291,7 +283,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
         # Other user key still cleaned
         self.assertFalse(self.kv_store.exists("user:200:private_game"))
 
-
 # ============================================================================
 # JSON PARSING EDGE CASES
 # ============================================================================
@@ -313,7 +304,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
 
         # Key should still be deleted
         self.assertFalse(self.kv_store.exists("private_game:" + game_code))
-
 
     async def test_handles_json_without_players(self):
         """Verify cleanup tolerates missing 'players' key."""
@@ -337,7 +327,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(self.kv_store.exists("private_game:" + game_code))
 
-
 # ============================================================================
 # BYTES VS STRING HANDLING
 # ============================================================================
@@ -358,12 +347,13 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
         self.kv_store.set("user:100:private_game", game_code_str)
 
         # Call with bytes
-        await self.poker_model.delete_private_game_lobby(chat_id, game_code_bytes)
+        await self.poker_model.delete_private_game_lobby(
+            chat_id, game_code_bytes
+        )
 
         # Should still clean up
         self.assertFalse(self.kv_store.exists("private_game:" + game_code_str))
         self.assertFalse(self.kv_store.exists("user:100:private_game"))
-
 
 # ============================================================================
 # INTEGRATION WITH PRIVATE GAME FLOW
@@ -374,7 +364,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(hasattr(self.poker_model, "delete_private_game_lobby"))
         self.assertTrue(callable(self.poker_model.delete_private_game_lobby))
-
 
 # ============================================================================
 # PENDING INVITES WITH srem
@@ -416,7 +405,6 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(game_code, remaining_decoded)
             self.assertIn("OTHER_CODE", remaining_decoded)
 
-
 # ============================================================================
 # LOGGING VERIFICATION
 # ============================================================================
@@ -438,12 +426,14 @@ class PrivateGameCleanupTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with self.assertLogs("pokerapp.pokerbotmodel", level="INFO"):
-            await self.poker_model.delete_private_game_lobby(chat_id, game_code)
-
+            await self.poker_model.delete_private_game_lobby(
+                chat_id, game_code
+            )
 
 # ============================================================================
 # RUN TESTS
 # ============================================================================
+
 
 if __name__ == "__main__":
     unittest.main()
