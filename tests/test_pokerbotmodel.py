@@ -21,7 +21,11 @@ from pokerapp.entities import (
 from pokerapp.game_coordinator import GameCoordinator
 from pokerapp.game_engine import TurnResult
 from pokerapp.kvstore import InMemoryKV
-from pokerapp.pokerbotmodel import KEY_CHAT_DATA_GAME, PokerBotModel, WalletManagerModel
+from pokerapp.pokerbotmodel import (
+    KEY_CHAT_DATA_GAME,
+    PokerBotModel,
+    WalletManagerModel,
+)
 
 
 def with_cards(p: Player) -> Tuple[Player, Cards]:
@@ -317,11 +321,13 @@ class HandlePlayerActionStateTests(unittest.IsolatedAsyncioTestCase):
                 )
 
                 self.assertTrue(result)
+                recent_actions = self.game.recent_actions
                 self.assertTrue(
-                    any("checked" in action for action in self.game.recent_actions)
+                    any("checked" in action for action in recent_actions)
                 )
-                self.model._coordinator.process_game_turn.assert_called_once()
-                self.model._coordinator._send_or_update_game_state.assert_awaited()
+                coordinator = self.model._coordinator
+                coordinator.process_game_turn.assert_called_once()
+                coordinator._send_or_update_game_state.assert_awaited()
 
 
 if __name__ == '__main__':
