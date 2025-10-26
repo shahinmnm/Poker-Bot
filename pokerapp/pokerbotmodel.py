@@ -8,7 +8,7 @@ import json
 import logging
 import secrets
 from collections import defaultdict
-from typing import Awaitable, Callable, Dict, List, Optional, Tuple, Union
+from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
@@ -152,6 +152,168 @@ class PokerBotModel:
                 "Failed to cache username mapping for %s: %s",
                 username,
                 exc,
+            )
+
+    async def delete_private_game_lobby(
+        self,
+        chat_id: int,
+        game_code: str,
+        player_ids: Optional[Iterable[int]] = None,
+    ) -> None:
+        """Remove Redis state and invites for a private game lobby.
+
+        This helper is safe to call multiple times. It makes a best-effort
+        attempt to clear lobby metadata, user↔game mappings, and any pending
+        invitations so that stale lobby state does not linger after a game
+        starts or fails to initialize.
+        """
+
+        lobby_key = ":".join(["private_game", game_code])
+        players_to_clear: Set[int] = set()
+        invite_user_ids: Set[int] = set()
+
+        if player_ids:
+            for pid in player_ids:
+                try:
+                    players_to_clear.add(int(pid))
+                except (TypeError, ValueError):
+                    logger.debug(
+                        "Skipping invalid player id %r during cleanup for game %s",
+                        pid,
+                        game_code,
+                    )
+
+        try:
+            players_to_clear.add(int(chat_id))
+        except (TypeError, ValueError):
+            logger.debug(
+                "Could not coerce chat_id %r to int during lobby cleanup for %s",
+                chat_id,
+                game_code,
+            )
+
+        # Attempt to load lobby snapshot to gather host and invite metadata.
+        game_json = None
+        try:
+            game_json = self._kv.get(lobby_key)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Failed to fetch lobby state for game %s during cleanup: %s",
+                game_code,
+                exc,
+            )
+
+        if isinstance(game_json, bytes):
+            game_json = game_json.decode("utf-8")
+
+        if game_json:
+            try:
+                from pokerapp.private_game import PrivateGame
+
+                private_game = PrivateGame.from_json(game_json)
+                players_to_clear.add(int(private_game.host_user_id))
+                for pid, invite in private_game.invited_players.items():
+                    try:
+                        invite_user_ids.add(int(pid))
+                    except (TypeError, ValueError):
+                        logger.debug(
+                            "Skipping invalid invite user id %r during cleanup for %s",
+                            pid,
+                            game_code,
+                        )
+                        continue
+
+                    if getattr(invite, "accepted", False):
+                        players_to_clear.add(int(pid))
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to deserialize lobby %s during cleanup: %s",
+                    game_code,
+                    exc,
+                )
+        else:
+            logger.debug(
+                "No Redis lobby payload found for game %s during cleanup",
+                game_code,
+            )
+
+        # Supplement player ids with any active game state in memory.
+        if not player_ids:
+            chat_data = self._application.chat_data.get(chat_id, {})
+            game = chat_data.get(KEY_CHAT_DATA_GAME)
+            if game and getattr(game, "players", None):
+                for player in game.players:
+                    try:
+                        players_to_clear.add(int(player.user_id))
+                    except (TypeError, ValueError):
+                        logger.debug(
+                            "Skipping non-numeric player id %r during cleanup for %s",
+                            player.user_id,
+                            game_code,
+                        )
+
+        keys_deleted = 0
+
+        try:
+            keys_deleted += self._kv.delete(lobby_key)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Failed to delete lobby key %s for game %s: %s",
+                lobby_key,
+                game_code,
+                exc,
+            )
+
+        for pid in players_to_clear:
+            user_game_key = ":".join(["user", str(pid), "private_game"])
+            try:
+                keys_deleted += self._kv.delete(user_game_key)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.debug(
+                    "Failed to delete user mapping %s for game %s: %s",
+                    user_game_key,
+                    game_code,
+                    exc,
+                )
+
+        for pid in invite_user_ids:
+            invite_key = ":".join(["private_invite", str(pid), game_code])
+            try:
+                keys_deleted += self._kv.delete(invite_key)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.debug(
+                    "Failed to delete invite key %s for game %s: %s",
+                    invite_key,
+                    game_code,
+                    exc,
+                )
+
+            pending_key = "user:" + str(pid) + ":pending_invites"
+            if hasattr(self._kv, "srem"):
+                try:
+                    self._kv.srem(pending_key, game_code)
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.debug(
+                        "Failed to remove pending invite %s for game %s: %s",
+                        pending_key,
+                        game_code,
+                        exc,
+                    )
+
+        if keys_deleted:
+            logger.info(
+                "Deleted private game lobby %s (keys=%d, players=%d, invites=%d)",
+                game_code,
+                keys_deleted,
+                len(players_to_clear),
+                len(invite_user_ids),
+            )
+        else:
+            logger.debug(
+                "Private game lobby cleanup for %s removed no keys (players=%d, invites=%d)",
+                game_code,
+                len(players_to_clear),
+                len(invite_user_ids),
             )
 
     def _lookup_user_by_username(self, username: str) -> Optional[int]:
