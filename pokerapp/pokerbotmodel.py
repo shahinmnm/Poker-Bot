@@ -1136,7 +1136,7 @@ class PokerBotModel:
 
             current_player = self._current_turn_player(game)
             current_user_id = update.callback_query.from_user.id
-            if current_user_id != current_player.user_id:
+            if str(current_user_id) != str(current_player.user_id):
                 return
 
             await fn(update, context)
@@ -3113,11 +3113,13 @@ class PokerBotModel:
         current_player = game.players[game.current_player_index]
         player_name = self._get_player_name(current_player)
 
-        if current_player.user_id != user_id_str:
+        current_player_id_str = str(current_player.user_id)
+
+        if current_player_id_str != user_id_str:
             logger.warning(
                 "User %s tried to act but it's %s's turn",
                 user_id_str,
-                current_player.user_id,
+                current_player_id_str,
             )
             return False
 
