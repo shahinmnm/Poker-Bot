@@ -2395,6 +2395,224 @@ class PokerBotModel:
             game_code,
         )
 
+    async def delete_private_game_lobby(
+        self,
+        chat_id: int,
+        game_code: Union[str, bytes],
+    ) -> None:
+        """
+        Clean up all Redis keys associated with a private game lobby.
+
+        This is an idempotent helper that removes:
+        - Primary lobby key (private_game:{code})
+        - User mapping keys (user:{id}:private_game)
+        - Pending invite entries (user:{id}:pending_invites set)
+
+        Safe to call multiple times. Handles missing data gracefully.
+        Attempts to discover affected players from:
+        1. Persisted JSON snapshot (if available)
+        2. In-memory game state (fallback)
+
+        Args:
+            chat_id: Chat ID where game was hosted (for logging/fallback)
+            game_code: 6-character game code (str or bytes)
+        """
+
+        # Normalize game_code to string
+        if isinstance(game_code, bytes):
+            game_code = game_code.decode("utf-8")
+
+        lobby_key = f"private_game:{game_code}"
+
+        logger.info(
+            "Cleaning up private game lobby: chat=%s, code=%s",
+            chat_id,
+            game_code,
+        )
+
+        # === STEP 1: DISCOVER PLAYER IDs ===
+
+        player_ids: List[int] = []
+
+        # Try to load from Redis snapshot
+        try:
+            lobby_json = self._kv.get(lobby_key)
+
+            if isinstance(lobby_json, bytes):
+                lobby_json = lobby_json.decode("utf-8")
+
+            if lobby_json:
+                lobby_data = json.loads(lobby_json)
+                player_ids = lobby_data.get("players", [])
+
+                # Ensure all IDs are integers
+                player_ids = [
+                    int(pid) for pid in player_ids
+                    if pid is not None
+                ]
+
+                logger.debug(
+                    "Discovered %d players from lobby JSON: %s",
+                    len(player_ids),
+                    player_ids,
+                )
+
+        except (json.JSONDecodeError, ValueError, TypeError) as exc:
+            logger.warning(
+                "Failed to parse lobby JSON for %s: %s",
+                game_code,
+                exc,
+            )
+            # Continue with fallback discovery
+
+        except Exception as exc:
+            logger.warning(
+                "Error reading lobby data for %s: %s",
+                game_code,
+                exc,
+            )
+
+        # Fallback: Check in-memory game state
+        if not player_ids:
+            try:
+                chat_data = self._application.chat_data.get(chat_id, {})
+                game = chat_data.get(KEY_CHAT_DATA_GAME)
+
+                if game and hasattr(game, "players"):
+                    player_ids = [
+                        int(p.user_id)
+                        for p in game.players
+                        if hasattr(p, "user_id")
+                    ]
+
+                    logger.debug(
+                        "Discovered %d players from in-memory game state",
+                        len(player_ids),
+                    )
+
+            except Exception as exc:
+                logger.warning(
+                    "Failed to discover players from game state: %s",
+                    exc,
+                )
+
+        # === STEP 2: DELETE PRIMARY LOBBY KEY ===
+
+        keys_deleted = 0
+
+        try:
+            deleted = self._kv.delete(lobby_key)
+            keys_deleted += deleted
+
+            if deleted > 0:
+                logger.debug("Deleted primary lobby key: %s", lobby_key)
+
+        except Exception as exc:
+            logger.error(
+                "Failed to delete lobby key %s: %s",
+                lobby_key,
+                exc,
+            )
+
+        # === STEP 3: DELETE USER MAPPING KEYS ===
+
+        for player_id in player_ids:
+            user_game_key = f"user:{player_id}:private_game"
+
+            try:
+                deleted = self._kv.delete(user_game_key)
+                keys_deleted += deleted
+
+                if deleted > 0:
+                    logger.debug(
+                        "Deleted user mapping: %s",
+                        user_game_key,
+                    )
+
+            except Exception as exc:
+                logger.warning(
+                    "Failed to delete user mapping %s: %s",
+                    user_game_key,
+                    exc,
+                )
+                # Continue cleanup for other players
+
+        # === STEP 4: CLEAR PENDING INVITE SETS ===
+
+        for player_id in player_ids:
+            pending_key = f"user:{player_id}:pending_invites"
+
+            try:
+                removed = 0
+
+                # Prefer set removal when available.
+                srem_candidates = [
+                    getattr(self._kv, "srem", None),
+                    getattr(getattr(self._kv, "_backend", None), "srem", None),
+                    getattr(getattr(self._kv, "_fallback", None), "srem", None),
+                ]
+
+                for candidate in srem_candidates:
+                    if callable(candidate):
+                        removed = candidate(pending_key, game_code)
+                        break
+
+                if removed and removed > 0:
+                    logger.debug(
+                        "Removed %s from pending invites set: %s",
+                        game_code,
+                        pending_key,
+                    )
+                else:
+                    # Fallback: Delete entire key (for in-memory KV)
+                    deleted = self._kv.delete(pending_key)
+
+                    if deleted > 0:
+                        logger.debug(
+                            "Deleted pending invites key: %s",
+                            pending_key,
+                        )
+
+            except Exception as exc:
+                logger.warning(
+                    "Failed to clear pending invites for user %s: %s",
+                    player_id,
+                    exc,
+                )
+                # Continue cleanup
+
+        # === STEP 5: DELETE INDIVIDUAL INVITE KEYS ===
+
+        for player_id in player_ids:
+            invite_key = f"private_invite:{player_id}:{game_code}"
+
+            try:
+                deleted = self._kv.delete(invite_key)
+                keys_deleted += deleted
+
+                if deleted > 0:
+                    logger.debug(
+                        "Deleted invite key: %s",
+                        invite_key,
+                    )
+
+            except Exception as exc:
+                logger.warning(
+                    "Failed to delete invite key %s: %s",
+                    invite_key,
+                    exc,
+                )
+
+        # === FINAL LOGGING ===
+
+        logger.info(
+            "Cleanup complete for game %s: "
+            "%d keys deleted, %d players affected",
+            game_code,
+            keys_deleted,
+            len(player_ids),
+        )
+
     async def accept_invitation(
         self,
         update: Update,
