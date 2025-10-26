@@ -803,11 +803,12 @@ class PokerBotModel:
         if current_player is None or not current_player.cards:
             return
 
-        await self._view.send_cards(
-            chat_id=update.effective_message.chat_id,
+        await self._view.send_or_update_private_hand(
+            chat_id=current_player.user_id,
             cards=current_player.cards,
+            table_cards=game.cards_table,
             mention_markdown=current_player.mention_markdown,
-            ready_message_id=update.effective_message.message_id,
+            disable_notification=False,
         )
 
     async def _check_access(self, chat_id: ChatId, user_id: UserId) -> bool:
@@ -825,6 +826,10 @@ class PokerBotModel:
         """Send cards to multiple players concurrently for performance."""
 
         async def send_to_player(player: Player) -> None:
+            private_chat: Optional[UserPrivateChatModel] = None
+            private_chat_id: Optional[ChatId] = None
+            existing_message_id: Optional[int] = None
+
             try:
                 private_chat = UserPrivateChatModel(
                     user_id=player.user_id,
@@ -832,12 +837,11 @@ class PokerBotModel:
                 )
                 private_chat_id = private_chat.get_chat_id()
 
-                if private_chat_id:
-                    if isinstance(private_chat_id, bytes):
-                        private_chat_id = private_chat_id.decode('utf-8')
+                if isinstance(private_chat_id, bytes):
+                    private_chat_id = private_chat_id.decode('utf-8')
 
+                if private_chat_id:
                     existing_message_id_raw = private_chat.pop_message()
-                    existing_message_id: Optional[int] = None
 
                     if existing_message_id_raw is not None:
                         try:
@@ -848,47 +852,49 @@ class PokerBotModel:
                             existing_message_id = int(existing_message_id_raw)
                         except (TypeError, ValueError):
                             existing_message_id = None
+            except Exception as exc:
+                logger.warning(
+                    "Failed to prepare private chat for %s: %s",
+                    player.user_id,
+                    exc,
+                )
 
-                        view = self._view
+            target_chat_id = private_chat_id or player.user_id
+            message_id = existing_message_id if private_chat_id else None
 
-                        new_msg_id = await view.send_or_update_private_hand(
-                            chat_id=private_chat_id,
-                            cards=player.cards,
-                            mention_markdown=player.mention_markdown,
-                            table_cards=None,
-                            message_id=existing_message_id,
-                            disable_notification=False,
-                        )
-
-                    if new_msg_id is not None:
-                        private_chat.push_message(new_msg_id)
-                    elif existing_message_id is not None:
-                        try:
-                            await self._view.remove_message(
-                                chat_id=private_chat_id,
-                                message_id=existing_message_id,
-                            )
-                        except Exception as exc:
-                            logger.debug(
-                                "Failed to remove stale private hand "
-                                "message for %s: %s",
-                                player.user_id,
-                                exc,
-                            )
-                    return
+            try:
+                new_msg_id = await self._view.send_or_update_private_hand(
+                    chat_id=target_chat_id,
+                    cards=player.cards,
+                    mention_markdown=player.mention_markdown,
+                    table_cards=None,
+                    message_id=message_id,
+                    disable_notification=False,
+                )
             except Exception as exc:
                 logger.warning(
                     "Failed to send cards privately to %s: %s",
                     player.user_id,
                     exc,
                 )
+                return
 
-            await self._view.send_cards(
-                chat_id=chat_id,
-                cards=player.cards,
-                mention_markdown=player.mention_markdown,
-                ready_message_id=player.ready_message_id,
-            )
+            if private_chat_id and private_chat:
+                if new_msg_id is not None:
+                    private_chat.push_message(new_msg_id)
+                elif existing_message_id is not None and message_id is not None:
+                    try:
+                        await self._view.remove_message(
+                            chat_id=private_chat_id,
+                            message_id=existing_message_id,
+                        )
+                    except Exception as exc:
+                        logger.debug(
+                            "Failed to remove stale private hand message "
+                            "for %s: %s",
+                            player.user_id,
+                            exc,
+                        )
 
         await asyncio.gather(
             *[send_to_player(player) for player in players],
