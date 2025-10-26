@@ -3123,9 +3123,16 @@ class PokerBotModel:
             )
             return False
 
-        if game.state != GameState.PLAYING:
+        active_states = {
+            GameState.ROUND_PRE_FLOP,
+            GameState.ROUND_FLOP,
+            GameState.ROUND_TURN,
+            GameState.ROUND_RIVER,
+        }
+
+        if game.state not in active_states:
             logger.warning(
-                "User %s tried to act in non-playing game (state: %s)",
+                "User %s tried to act while game in state %s",
                 user_id_str,
                 game.state,
             )
