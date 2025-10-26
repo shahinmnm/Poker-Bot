@@ -72,8 +72,12 @@ class GameCoordinator:
                 if 0 <= index < len(game.players):
                     resolved_player = game.players[index]
 
-            if resolved_player is not None and game.state != GameState.FINISHED:
-                message_id = await live_manager.send_or_update_game_state(
+            if (
+                resolved_player is not None
+                and game.state != GameState.FINISHED
+            ):
+                send_or_update = live_manager.send_or_update_game_state
+                message_id = await send_or_update(
                     chat_id=effective_chat_id,
                     game=game,
                     current_player=resolved_player,
