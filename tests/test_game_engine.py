@@ -220,6 +220,61 @@ class PokerEngineRoundTests(unittest.TestCase):
             ready_message_id=None,
         )
 
+    def test_advance_after_action_sets_last_actor_and_advances_turn(self) -> None:
+        engine = PokerEngine()
+        game = Game()
+        players = [
+            self._create_player(1),
+            self._create_player(2),
+            self._create_player(3),
+        ]
+
+        game.players = players
+        game.state = GameState.ROUND_PRE_FLOP
+        game.current_player_index = 0
+        game.round_has_started = False
+
+        self.assertIsNone(getattr(game, "last_actor_user_id", None))
+
+        engine.advance_after_action(game)
+
+        self.assertEqual(game.last_actor_user_id, players[0].user_id)
+        self.assertEqual(game.current_player_index, 1)
+
+    def test_advance_street_clears_last_actor(self) -> None:
+        engine = PokerEngine()
+        game = Game()
+        players = [self._create_player(1), self._create_player(2)]
+
+        game.players = players
+        game.state = GameState.ROUND_PRE_FLOP
+        game.dealer_index = 0
+        game.last_actor_user_id = players[0].user_id
+
+        new_state = engine._advance_street(game)
+
+        self.assertEqual(new_state, GameState.ROUND_FLOP)
+        self.assertIsNone(game.last_actor_user_id)
+
+    def test_betting_complete_requires_last_actor(self) -> None:
+        engine = PokerEngine()
+        game = Game()
+        players = [self._create_player(1), self._create_player(2)]
+
+        game.players = players
+        game.state = GameState.ROUND_PRE_FLOP
+        game.current_player_index = 0
+        game.trading_end_user_id = players[0].user_id
+        game.max_round_rate = 0
+        for player in players:
+            player.round_rate = 0
+
+        game.last_actor_user_id = None
+        self.assertFalse(engine._is_betting_complete(game))
+
+        game.last_actor_user_id = players[0].user_id
+        self.assertTrue(engine._is_betting_complete(game))
+
     def test_heads_up_post_flop_checks_end_round(self) -> None:
         engine = PokerEngine()
         game = Game()
