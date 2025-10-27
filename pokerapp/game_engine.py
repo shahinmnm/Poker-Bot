@@ -286,18 +286,6 @@ class PokerEngine:
         if len(active_or_allin) == 1:
             return TurnResult.END_GAME
 
-        # First invocation after preparing the round should simply prompt the
-        # current player without advancing the turn order.  This mirrors the
-        # legacy behaviour where the active player gets a chance to act before
-        # the engine rotates to the next seat.
-        if not game.round_has_started:
-            game.round_has_started = True
-            logger.debug(
-                "🔔 Round starting → prompting player %s",
-                current_player.user_id,
-            )
-            return TurnResult.CONTINUE_ROUND
-
         # When the most recent actor closed the betting, finish the round
         # before moving to another player.
         if self.should_end_round(game):
