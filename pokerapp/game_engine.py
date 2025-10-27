@@ -20,6 +20,8 @@ from pokerapp.kvstore import ensure_kv
 # pure "PokerEngine" defined in this module.
 
 logger = logging.getLogger(__name__)
+
+
 class TurnResult(Enum):
     """Result of processing a player turn"""
     CONTINUE_ROUND = "continue_round"
@@ -296,7 +298,7 @@ class PokerEngine:
         if not getattr(game, "round_has_started", False):
             game.round_has_started = True
             logger.debug(
-                "🔁 Betting round initialised – waiting for first player action."
+                "🔁 Betting round initialised – awaiting first player action."
             )
             return TurnResult.CONTINUE_ROUND
 
@@ -780,11 +782,11 @@ class GameEngine:
 
         if len(self._players) == 2:
             self._logger.debug(
-                "[HU] Turn order → Dealer acts first on Pre-Flop, opponent closes."
+                "[HU] Turn order → dealer opens pre-flop; opponent closes."
             )
         else:
             self._logger.debug(
-                "[Multi] Turn order → left-of-dealer starts, dealer closes."
+                "[Multi] Turn order → left-of-dealer starts; dealer closes."
             )
 
         # Configure who acts first and who closes the pre-flop betting round.
@@ -798,5 +800,5 @@ class GameEngine:
 
 
 logger.info(
-    "✅ Refactored turn logic — alternating actions guaranteed, rounds close correctly."
+    "✅ Refactored turn logic — alternating actions guaranteed; rounds close."
 )
