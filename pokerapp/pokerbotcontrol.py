@@ -323,9 +323,9 @@ Send 💰 /money once per day for free chips!
         query_data = update.callback_query.data
 
         if query_data == PlayerAction.CHECK.value:
-            await self._model.call_check(update, context)
+            await self._model.call_or_check(update, context)
         elif query_data == PlayerAction.CALL.value:
-            await self._model.call_check(update, context)
+            await self._model.call_or_check(update, context)
         elif query_data == PlayerAction.FOLD.value:
             await self._model.fold(update, context)
         elif query_data == str(PlayerAction.SMALL.value):

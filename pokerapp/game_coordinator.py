@@ -138,7 +138,6 @@ class GameCoordinator:
     ) -> Tuple[TurnResult, Optional[Player]]:
         """
         Process one game turn iteration.
-        Replaces legacy _process_playing recursion.
 
         Returns:
             (TurnResult, next_player_or_None)
@@ -151,19 +150,13 @@ class GameCoordinator:
             # Auto all-in if player has no money
             if current_player.wallet.value() <= 0:
                 logger.info(
-                    "Player %s has $0 - setting ALL_IN and advancing turn",
+                    "Player %s has $0 - setting ALL_IN",
                     current_player.user_id,
                 )
                 current_player.state = PlayerState.ALL_IN
 
-                # Call process_turn() once more to advance to the next player.
-                # Avoid recursion and skip ALL_IN players.
-                result = self.engine.process_turn(game)
-
-                if result == TurnResult.CONTINUE_ROUND:
-                    return result, game.players[game.current_player_index]
-                else:
-                    return result, None
+                # Recursively process next turn since this player cannot act
+                return self.process_game_turn(game)
 
             return result, current_player
 
