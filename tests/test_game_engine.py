@@ -233,10 +233,18 @@ class PokerEngineRoundTests(unittest.TestCase):
         self.assertEqual(game.current_player_index, 1)
         self.assertEqual(game.trading_end_user_id, players[0].user_id)
 
+        # First invocation should keep the current player (opponent) so they
+        # actually get to act on the flop.
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.CONTINUE_ROUND)
+        self.assertEqual(game.current_player_index, 1)
+
+        # After the opponent acts, control passes to the dealer.
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.CONTINUE_ROUND)
         self.assertEqual(game.current_player_index, 0)
 
+        # Dealer action closes the betting round.
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.END_ROUND)
 
@@ -259,14 +267,22 @@ class PokerEngineRoundTests(unittest.TestCase):
         self.assertEqual(game.current_player_index, 0)
         self.assertEqual(game.trading_end_user_id, players[2].user_id)
 
+        # First player stays in place on initial prompt.
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.CONTINUE_ROUND)
+        self.assertEqual(game.current_player_index, 0)
+
+        # After player 1 acts, move to player 2.
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.CONTINUE_ROUND)
         self.assertEqual(game.current_player_index, 1)
 
+        # Player 2 acts, move to dealer (player 3).
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.CONTINUE_ROUND)
         self.assertEqual(game.current_player_index, 2)
 
+        # Dealer closes the round.
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.END_ROUND)
 
