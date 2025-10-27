@@ -258,6 +258,14 @@ class PokerEngine:
             logger.debug("❌ Betting not complete: no actions yet")
             return False
 
+        if last_actor != game.trading_end_user_id:
+            logger.debug(
+                "❌ Betting not complete: closer %s still to act (last=%s)",
+                game.trading_end_user_id,
+                last_actor,
+            )
+            return False
+
         # Second check: Are all active players matched?
         active_players = self._active_players(game)
 
@@ -333,43 +341,55 @@ class PokerEngine:
         return TurnResult.CONTINUE_ROUND
 
     def advance_after_action(self, game: Game) -> None:
-        """
-        Advance to next active player after current player's action completes.
+        """Record the action and move the button to the next active player."""
 
-        This should ONLY be called after:
-        - Player folds/checks/calls/raises/all-ins
-        - NOT called by process_turn()
-        """
+        if not game.players:
+            logger.warning("⚠️ advance_after_action called with no players")
+            return
+
         current_index = game.current_player_index
-        current_id = None
 
-        if 0 <= current_index < len(game.players):
-            current_id = game.players[current_index].user_id
+        if not (0 <= current_index < len(game.players)):
+            logger.warning(
+                "⚠️ Invalid current_player_index=%s for advance_after_action",
+                current_index,
+            )
+            return
 
-        if current_id is not None:
-            game.last_actor_user_id = current_id
+        current_player = game.players[current_index]
+        game.last_actor_user_id = current_player.user_id
 
-        next_index = self._find_next_active_index(
-            game,
+        logger.debug(
+            "📝 Recorded last actor: %s (index=%d)",
+            current_player.user_id,
             current_index,
-            include_start=False,  # Never stay on current player
         )
 
-        if next_index is None:
-            logger.warning("⚠️ No next active player found")
+        # Mark that at least one action has occurred this round.
+        game.round_has_started = True
+
+        # If the closer just acted with all bets matched, the round is done.
+        if self._is_betting_complete(game):
+            logger.info(
+                "🔚 Betting complete after action from %s", current_player.user_id
+            )
+            return
+
+        next_player = self._advance_turn(game)
+
+        if next_player is None:
+            logger.warning(
+                "⚠️ No next active player found after %s", current_player.user_id
+            )
             game.current_player_index = -1
             return
 
-        next_id = game.players[next_index].user_id
-        game.current_player_index = next_index
-        game.round_has_started = True
-
         logger.info(
             "➡️ Turn advanced: %s → %s (idx %d → %d)",
-            current_id,
-            next_id,
+            current_player.user_id,
+            next_player.user_id,
             current_index,
-            next_index,
+            game.current_player_index,
         )
 
     def advance_to_next_street(self, game: Game) -> GameState:
@@ -402,6 +422,7 @@ class PokerEngine:
             player.round_rate = 0
 
         game.max_round_rate = 0
+        game.last_actor_user_id = None
 
         self._prepare_turn_order(game, new_state)
         game.round_has_started = False
