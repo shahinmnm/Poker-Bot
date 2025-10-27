@@ -244,13 +244,18 @@ class PokerEngine:
         current_player = game.players[game.current_player_index]
         last_actor = getattr(game, "last_actor_user_id", None)
 
-        # First check: Has the closer acted most recently?
-        if last_actor != game.trading_end_user_id:
+        # Check 1: Is current player the closer?
+        if current_player.user_id != game.trading_end_user_id:
             logger.debug(
-                "❌ Betting not complete: last_actor=%s, closer=%s",
-                last_actor,
+                "❌ Betting not complete: current=%s, closer=%s",
+                current_player.user_id,
                 game.trading_end_user_id,
             )
+            return False
+
+        # Check 2: Has at least one action been taken?
+        if last_actor is None:
+            logger.debug("❌ Betting not complete: no actions yet")
             return False
 
         # Second check: Are all active players matched?
