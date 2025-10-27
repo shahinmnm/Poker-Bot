@@ -197,6 +197,17 @@ class PokerEngine:
             logger.info("🏁 ROUND END DETECTED")
             return TurnResult.END_ROUND
 
+        # If the betting round hasn't started yet, keep the pointer on the
+        # first player to act so they actually get a turn.  The previous logic
+        # advanced immediately which caused the closer to act twice in a row
+        # when transitioning between streets (e.g. heads-up flop).
+        if not getattr(game, "round_has_started", False):
+            game.round_has_started = True
+            logger.debug(
+                "🔁 Betting round initialised – waiting for first player action."
+            )
+            return TurnResult.CONTINUE_ROUND
+
         # Move to next active player
         next_player = self.get_next_active_player(game)
 
@@ -403,6 +414,32 @@ class GameEngine:
 
         big_blind_index = (dealer_index + 2) % players_count
         return big_blind_index
+
+    def _configure_pre_flop_turn_order(self) -> None:
+        """Set current player and closing seat for the pre-flop street."""
+
+        players_count = len(self._players)
+
+        if players_count == 0:
+            self._game.current_player_index = -1
+            self._game.trading_end_user_id = 0
+            return
+
+        dealer_index = self._game.dealer_index % players_count
+
+        if players_count == 2:
+            hu_turn_flow(
+                self._game,
+                GameState.ROUND_PRE_FLOP,
+                dealer_index,
+            )
+            return
+
+        big_blind_index = self._big_blind_index()
+        first_to_act_index = (big_blind_index + 1) % players_count
+
+        self._game.current_player_index = first_to_act_index
+        self._game.trading_end_user_id = self._players[big_blind_index].user_id
 
     def _deal_private_cards(self) -> None:
         deck = get_shuffled_deck()
@@ -703,9 +740,8 @@ class GameEngine:
                 "[Multi] Turn order → left-of-dealer starts, dealer closes."
             )
 
-        # Position the index on the big blind so the betting loop advances to
-        # the seat after the blinds when play resumes.
-        self._game.current_player_index = self._big_blind_index()
+        # Configure who acts first and who closes the pre-flop betting round.
+        self._configure_pre_flop_turn_order()
 
         self._persist_state({"hand_number": self._hand_number})
 
