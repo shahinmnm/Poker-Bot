@@ -197,6 +197,7 @@ class GameEngineTests(unittest.IsolatedAsyncioTestCase):
 
         # Small blind checks/calls and the turn moves to the big blind.
         coordinator.player_call_or_check(game, game.players[0])
+        coordinator.engine.advance_after_action(game)
         result, next_player = coordinator.process_game_turn(game)
         self.assertEqual(result, TurnResult.CONTINUE_ROUND)
         self.assertIsNotNone(next_player)
@@ -204,6 +205,7 @@ class GameEngineTests(unittest.IsolatedAsyncioTestCase):
 
         # Big blind acts and the round should conclude without repeating turns.
         coordinator.player_call_or_check(game, game.players[1])
+        coordinator.engine.advance_after_action(game)
         result, next_player = coordinator.process_game_turn(game)
         self.assertEqual(result, TurnResult.END_ROUND)
         self.assertIsNone(next_player)
@@ -240,11 +242,13 @@ class PokerEngineRoundTests(unittest.TestCase):
         self.assertEqual(game.current_player_index, 1)
 
         # After the opponent acts, control passes to the dealer.
+        engine.advance_after_action(game)
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.CONTINUE_ROUND)
         self.assertEqual(game.current_player_index, 0)
 
         # Dealer action closes the betting round.
+        engine.advance_after_action(game)
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.END_ROUND)
 
@@ -273,16 +277,19 @@ class PokerEngineRoundTests(unittest.TestCase):
         self.assertEqual(game.current_player_index, 0)
 
         # After player 1 acts, move to player 2.
+        engine.advance_after_action(game)
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.CONTINUE_ROUND)
         self.assertEqual(game.current_player_index, 1)
 
         # Player 2 acts, move to dealer (player 3).
+        engine.advance_after_action(game)
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.CONTINUE_ROUND)
         self.assertEqual(game.current_player_index, 2)
 
         # Dealer closes the round.
+        engine.advance_after_action(game)
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.END_ROUND)
 

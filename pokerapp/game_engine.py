@@ -185,6 +185,7 @@ class PokerEngine:
         else:
             game.trading_end_user_id = game.players[closer_index].user_id
 
+        game.last_actor_user_id = None
         logger.debug(
             "Prepared turn order: first=%s, closer=%s, street=%s",
             game.current_player_index,
@@ -230,10 +231,32 @@ class PokerEngine:
 
         return game.players[next_index].user_id
 
-    def _should_close_round(self, game: Game) -> bool:
+    def _is_betting_complete(self, game: Game) -> bool:
+        """
+        Check if the current betting round is complete.
+
+        Round is complete when:
+        1. Current player is the designated closer
+        2. All active players have matched the highest bet
+
+        This check happens BEFORE the closer acts, preventing double-action.
+        """
+        current_player = game.players[game.current_player_index]
+        last_actor = getattr(game, "last_actor_user_id", None)
+
+        # First check: Has the closer acted most recently?
+        if last_actor != game.trading_end_user_id:
+            logger.debug(
+                "❌ Betting not complete: last_actor=%s, closer=%s",
+                last_actor,
+                game.trading_end_user_id,
+            )
+            return False
+
+        # Second check: Are all active players matched?
         active_players = self._active_players(game)
 
-        if len(active_players) <= 1:
+        if not active_players:
             return True
 
         all_matched = all(
@@ -241,79 +264,108 @@ class PokerEngine:
             for player in active_players
         )
 
-        if not all_matched:
-            return False
+        logger.debug(
+            "🔍 Closer reached: all_matched=%s, max_rate=%d",
+            all_matched,
+            game.max_round_rate,
+        )
 
-        current_player = game.players[game.current_player_index]
-        return current_player.user_id == game.trading_end_user_id
+        return all_matched
 
     def should_end_round(self, game: Game) -> bool:
-        return self._should_close_round(game)
+        return self._is_betting_complete(game)
 
     def process_turn(self, game: Game) -> TurnResult:
         """
         Process one player turn iteration.
-        Replaces recursive _process_playing helper.
+
+        Flow:
+        1. Check if game/round should end
+        2. Return current player to act
+        3. External code handles action
+        4. External code calls advance_after_action()
+        5. Loop back to step 1
 
         Returns:
-            TurnResult indicating whether to continue,
-            end round, or end game
+            TurnResult indicating next state
         """
         if not game.players:
             return TurnResult.END_GAME
 
+        # Ensure turn order is initialized
         if not (0 <= game.current_player_index < len(game.players)):
             self._prepare_turn_order(game)
 
-        if not (0 <= game.current_player_index < len(game.players)):
-            logger.info("🔔 Round end detected → advancing to next street")
-            return TurnResult.END_ROUND
+            if not (0 <= game.current_player_index < len(game.players)):
+                return TurnResult.END_ROUND
 
         current_player = game.players[game.current_player_index]
-        next_user_id = self._peek_next_user_id(game)
 
         logger.info(
-            "🎯 Turn → Player %s acting (street=%s)",
+            "🎯 Player %s to act (street=%s, index=%d)",
             current_player.user_id,
             game.state.name,
-        )
-        logger.info(
-            "🧠 Next → %s (dealer=%s)",
-            next_user_id,
-            game.dealer_index,
-        )
-        logger.info(
-            "🪧 Close → trading_end=%s",
-            game.trading_end_user_id,
-        )
-
-        # Count players still in the hand (actively acting or already all-in)
-        active_or_allin = self._active_or_all_in_players(game)
-
-        # Only one player left → end game immediately
-        if len(active_or_allin) == 1:
-            return TurnResult.END_GAME
-
-        # When the most recent actor closed the betting, finish the round
-        # before moving to another player.
-        if self.should_end_round(game):
-            logger.info("🔔 Round end detected → advancing to next street")
-            return TurnResult.END_ROUND
-
-        # Move to the next active player.
-        next_player = self._advance_turn(game)
-
-        if next_player is None:
-            logger.info("🔔 Round end detected → advancing to next street")
-            return TurnResult.END_ROUND
-
-        logger.info(
-            "➡️ TURN CONTINUES: next_player=%s, index=%s",
-            next_player.user_id,
             game.current_player_index,
         )
 
+        # Count active players (not folded, still have chips or all-in)
+        active_count = len(self._active_or_all_in_players(game))
+
+        # Only one player left → game over
+        if active_count <= 1:
+            logger.info("🏁 Only 1 player remains → END_GAME")
+            return TurnResult.END_GAME
+
+        # Check if current player is the closer AND all bets are matched
+        if self._is_betting_complete(game):
+            logger.info(
+                "🔔 Closer %s reached with bets matched → END_ROUND",
+                current_player.user_id,
+            )
+            return TurnResult.END_ROUND
+
+        # Player needs to act
         return TurnResult.CONTINUE_ROUND
+
+    def advance_after_action(self, game: Game) -> None:
+        """
+        Advance to next active player after current player's action completes.
+
+        This should ONLY be called after:
+        - Player folds/checks/calls/raises/all-ins
+        - NOT called by process_turn()
+        """
+        current_index = game.current_player_index
+        current_id = None
+
+        if 0 <= current_index < len(game.players):
+            current_id = game.players[current_index].user_id
+
+        if current_id is not None:
+            game.last_actor_user_id = current_id
+
+        next_index = self._find_next_active_index(
+            game,
+            current_index,
+            include_start=False,  # Never stay on current player
+        )
+
+        if next_index is None:
+            logger.warning("⚠️ No next active player found")
+            game.current_player_index = -1
+            return
+
+        next_id = game.players[next_index].user_id
+        game.current_player_index = next_index
+        game.round_has_started = True
+
+        logger.info(
+            "➡️ Turn advanced: %s → %s (idx %d → %d)",
+            current_id,
+            next_id,
+            current_index,
+            next_index,
+        )
 
     def advance_to_next_street(self, game: Game) -> GameState:
         """

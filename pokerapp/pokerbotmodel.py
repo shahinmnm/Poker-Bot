@@ -732,7 +732,14 @@ class PokerBotModel:
             big_blind=self._stake_config.big_blind,
         )
 
-        await self._start_betting_round(game, chat_id)
+        turn_result, next_player = self._coordinator.process_game_turn(game)
+
+        await self._handle_turn_result(
+            game,
+            chat_id,
+            turn_result,
+            next_player,
+        )
 
         context.chat_data[KEY_OLD_PLAYERS] = list(
             map(lambda p: p.user_id, game.players),
@@ -965,52 +972,6 @@ class PokerBotModel:
             len(game.players),
         )
 
-    async def _start_betting_round(self, game: Game, chat_id: int) -> None:
-        """
-        Start new betting round using coordinator.
-        Replaces legacy _process_playing loop.
-        """
-
-        while True:
-            result, next_player = self._coordinator.process_game_turn(game)
-
-            if result == TurnResult.END_GAME:
-                await self._finish_game(game, chat_id)
-                return
-
-            if result == TurnResult.END_ROUND:
-                self._coordinator.commit_round_bets(game)
-
-                if game.state == GameState.ROUND_RIVER:
-                    await self._finish_game(game, chat_id)
-                    return
-
-                new_state, cards_count = (
-                    self._coordinator.advance_game_street(game)
-                )
-
-                if cards_count > 0:
-                    await self._deal_community_cards(
-                        game=game,
-                        chat_id=chat_id,
-                        count=cards_count,
-                    )
-
-                if new_state == GameState.FINISHED:
-                    await self._finish_game(game, chat_id)
-                    return
-
-                continue
-
-            if result == TurnResult.CONTINUE_ROUND and next_player:
-                game.last_turn_time = dt.now()
-                await self._send_live_manager_update(
-                    game,
-                    chat_id,
-                    current_player=next_player,
-                )
-                return
-
     async def _send_live_manager_update(
         self,
         game: Game,
@@ -1044,6 +1005,44 @@ class PokerBotModel:
                 exc,
             )
 
+    async def _handle_post_action(self, game: Game, chat_id: int) -> None:
+        """Advance turn and react to the resulting state transition."""
+
+        self._coordinator.engine.advance_after_action(game)
+
+        turn_result, next_player = self._coordinator.process_game_turn(game)
+
+        await self._handle_turn_result(
+            game,
+            chat_id,
+            turn_result,
+            next_player,
+        )
+
+    async def _handle_turn_result(
+        self,
+        game: Game,
+        chat_id: int,
+        turn_result: TurnResult,
+        next_player: Optional[Player],
+        *,
+        update_live: bool = True,
+    ) -> None:
+        """React to the result of processing a turn."""
+
+        if turn_result == TurnResult.CONTINUE_ROUND and next_player:
+            game.last_turn_time = dt.now()
+            if update_live:
+                await self._send_live_manager_update(
+                    game,
+                    chat_id,
+                    current_player=next_player,
+                )
+        elif turn_result == TurnResult.END_ROUND:
+            await self._advance_to_next_street(game, chat_id)
+        elif turn_result == TurnResult.END_GAME:
+            await self._finish_game(game, chat_id)
+
     @staticmethod
     def _resolve_live_current_player(
         game: Game, current_player: Optional[Player]
@@ -1064,6 +1063,39 @@ class PokerBotModel:
             return None
 
         return game.players[index]
+
+    async def _advance_to_next_street(
+        self,
+        game: Game,
+        chat_id: int,
+    ) -> None:
+        """Handle transition to next betting round."""
+
+        # Move round bets to pot
+        self._coordinator.commit_round_bets(game)
+
+        # Advance street
+        new_state, cards_to_deal = self._coordinator.advance_game_street(game)
+
+        # Deal community cards if needed
+        if cards_to_deal > 0:
+            for _ in range(cards_to_deal):
+                if game.remain_cards:
+                    game.cards_table.append(game.remain_cards.pop())
+
+        # Send updated game state
+        await self._send_live_manager_update(game, chat_id)
+
+        # Check if next street needs action
+        turn_result, next_player = self._coordinator.process_game_turn(game)
+
+        await self._handle_turn_result(
+            game,
+            chat_id,
+            turn_result,
+            next_player,
+            update_live=False,
+        )
 
     async def _deal_community_cards(
         self,
@@ -1204,10 +1236,9 @@ class PokerBotModel:
         )
 
         chat_id = update.effective_message.chat_id
-        await self._start_betting_round(game, chat_id)
-        await self._send_live_manager_update(game, chat_id)
+        await self._handle_post_action(game, chat_id)
 
-    async def call_check(
+    async def call_or_check(
         self,
         update: Update,
         context: ContextTypes.DEFAULT_TYPE,
@@ -1243,9 +1274,7 @@ class PokerBotModel:
         except UserException as e:
             await self._view.send_message(chat_id=chat_id, text=str(e))
             return
-
-        await self._start_betting_round(game, chat_id)
-        await self._send_live_manager_update(game, chat_id)
+        await self._handle_post_action(game, chat_id)
 
     async def raise_rate_bet(
         self,
@@ -1286,9 +1315,7 @@ class PokerBotModel:
         except UserException as e:
             await self._view.send_message(chat_id=chat_id, text=str(e))
             return
-
-        await self._start_betting_round(game, chat_id)
-        await self._send_live_manager_update(game, chat_id)
+        await self._handle_post_action(game, chat_id)
 
     async def all_in(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -1305,8 +1332,7 @@ class PokerBotModel:
         )
         player.state = PlayerState.ALL_IN
         game.add_action(f"{player_name} went ALL-IN (${amount})")
-        await self._start_betting_round(game, chat_id)
-        await self._send_live_manager_update(game, chat_id)
+        await self._handle_post_action(game, chat_id)
 
     async def create_private_game(
         self,
@@ -3232,57 +3258,21 @@ class PokerBotModel:
 
             self._save_game(chat_id_int, game)
 
-            turn_result, next_player = self._coordinator.process_game_turn(
-                game
+            self._coordinator.engine.advance_after_action(game)
+
+            turn_result, next_player = self._coordinator.process_game_turn(game)
+
+            await self._handle_turn_result(
+                game,
+                chat_id_int,
+                turn_result,
+                next_player,
             )
 
             if turn_result == TurnResult.CONTINUE_ROUND:
                 await self._coordinator._send_or_update_game_state(
                     game=game,
                     chat_id=chat_id_int,
-                )
-
-            elif turn_result == TurnResult.END_ROUND:
-                (
-                    new_state,
-                    cards_to_deal,
-                ) = self._coordinator.advance_game_street(game)
-
-                game.state = new_state
-
-                if cards_to_deal > 0:
-                    for _ in range(cards_to_deal):
-                        if not game.remain_cards:
-                            logger.debug(
-                                "Attempted to deal community card but deck "
-                                "empty",
-                            )
-                            break
-
-                        card = game.remain_cards.pop()
-                        game.cards_table.append(card)
-                        logger.debug("Dealt community card %s", card)
-
-                self._coordinator.commit_round_bets(game)
-                self._save_game(chat_id_int, game)
-
-                await self._coordinator._send_or_update_game_state(
-                    game=game,
-                    chat_id=chat_id_int,
-                )
-
-            elif turn_result == TurnResult.END_GAME:
-                winners_results = self._coordinator.finish_game_with_winners(
-                    game
-                )
-
-                game.state = GameState.FINISHED
-                self._save_game(chat_id_int, game)
-
-                await self._show_game_results(
-                    chat_id=chat_id_str,
-                    game=game,
-                    winners_results=winners_results,
                 )
 
             return True
