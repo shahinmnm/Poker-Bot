@@ -185,6 +185,20 @@ class PokerEngine:
         else:
             game.trading_end_user_id = game.players[closer_index].user_id
 
+        players_count = len(game.players)
+        if players_count == 2:
+            dealer_index = game.dealer_index % players_count
+            opponent_index = (dealer_index + 1) % players_count
+
+            if target_street == GameState.ROUND_PRE_FLOP:
+                # Heads-up: dealer acts first; opponent ends round
+                game.current_player_index = dealer_index
+                game.trading_end_user_id = game.players[opponent_index].user_id
+            else:
+                # Heads-up: opponent acts first; dealer closes
+                game.current_player_index = opponent_index
+                game.trading_end_user_id = game.players[dealer_index].user_id
+
         logger.debug(
             "Prepared turn order: first=%s, closer=%s, street=%s",
             game.current_player_index,
