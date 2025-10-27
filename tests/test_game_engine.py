@@ -270,5 +270,6 @@ class PokerEngineRoundTests(unittest.TestCase):
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.END_ROUND)
 
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
