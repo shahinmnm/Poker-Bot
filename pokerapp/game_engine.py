@@ -225,9 +225,6 @@ class PokerEngine:
         if len(active_players) <= 1:
             return True
 
-        if not game.round_has_started:
-            return False
-
         all_matched = all(
             player.round_rate == game.max_round_rate
             for player in active_players
@@ -339,6 +336,7 @@ class PokerEngine:
         game.max_round_rate = 0
 
         self._prepare_turn_order(game, new_state)
+        game.round_has_started = False
 
         logger.info("🎬 Street advanced → %s", new_state.name)
 
