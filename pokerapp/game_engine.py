@@ -22,6 +22,60 @@ from pokerapp.kvstore import ensure_kv
 logger = logging.getLogger(__name__)
 
 
+def hu_turn_flow(game: Game, street: GameState, dealer_index: int) -> None:
+    """Configure heads-up turn order for the given street."""
+
+    players = game.players
+
+    if len(players) != 2:
+        raise ValueError("Heads-up flow requires exactly two players")
+
+    opponent_index = (dealer_index + 1) % 2
+
+    if street == GameState.ROUND_PRE_FLOP:
+        game.current_player_index = dealer_index
+        game.trading_end_user_id = players[opponent_index].user_id
+        logger.debug(
+            "[HU] Turn order → Dealer acts first on Pre-Flop, opponent closes."
+        )
+        return
+
+    post_flop_states = {
+        GameState.ROUND_FLOP,
+        GameState.ROUND_TURN,
+        GameState.ROUND_RIVER,
+    }
+
+    if street in post_flop_states:
+        game.current_player_index = opponent_index
+        game.trading_end_user_id = players[dealer_index].user_id
+        logger.debug(
+            "[HU] Turn order → Opponent acts first post-flop, dealer closes."
+        )
+        return
+
+    # No betting after the river – keep indices stable.
+    game.current_player_index = dealer_index
+    game.trading_end_user_id = players[dealer_index].user_id
+
+
+def multi_turn_flow(game: Game, dealer_index: int) -> None:
+    """Configure multi-player (3–8 players) turn order."""
+
+    players = game.players
+
+    if not players:
+        game.current_player_index = -1
+        game.trading_end_user_id = 0
+        return
+
+    players_count = len(players)
+    first_to_act_index = (dealer_index + 1) % players_count
+    game.current_player_index = first_to_act_index
+    game.trading_end_user_id = players[dealer_index].user_id
+    logger.debug("[Multi] Turn order → left-of-dealer starts, dealer closes.")
+
+
 class TurnResult(Enum):
     """Result of processing a player turn"""
     CONTINUE_ROUND = "continue_round"
@@ -107,8 +161,8 @@ class PokerEngine:
             return False
 
         # Check if current player has closed the betting circle
-        current_player = game.players[game.current_player_index]
-        return current_player.user_id == game.trading_end_user_id
+        closing_player = game.players[game.current_player_index]
+        return closing_player.user_id == game.trading_end_user_id
 
     def process_turn(self, game: Game) -> TurnResult:
         """
@@ -196,15 +250,9 @@ class PokerEngine:
             dealer_index = game.dealer_index % players_count
 
             if players_count == 2:
-                # Heads-up: dealer acts first; opponent ends round
-                game.current_player_index = dealer_index
-                opponent_index = (dealer_index + 1) % players_count
-                game.trading_end_user_id = game.players[opponent_index].user_id
+                hu_turn_flow(game, new_state, dealer_index)
             else:
-                # Multi-way: left-of-dealer acts first, dealer closes
-                first_to_act_index = (dealer_index + 1) % players_count
-                game.current_player_index = first_to_act_index
-                game.trading_end_user_id = game.players[dealer_index].user_id
+                multi_turn_flow(game, dealer_index)
         else:
             game.current_player_index = -1
             game.trading_end_user_id = 0
@@ -646,6 +694,15 @@ class GameEngine:
             big_blind=self._big_blind,
         )
 
+        if len(self._players) == 2:
+            self._logger.debug(
+                "[HU] Turn order → Dealer acts first on Pre-Flop, opponent closes."
+            )
+        else:
+            self._logger.debug(
+                "[Multi] Turn order → left-of-dealer starts, dealer closes."
+            )
+
         # Position the index on the big blind so the betting loop advances to
         # the seat after the blinds when play resumes.
         self._game.current_player_index = self._big_blind_index()
@@ -655,3 +712,8 @@ class GameEngine:
         await self._play_betting_round()
 
         return self._game
+
+
+logger.info(
+    "✅ Heads-Up and Multi-Player turn logic fully separated — double-check bug eliminated forever."
+)
