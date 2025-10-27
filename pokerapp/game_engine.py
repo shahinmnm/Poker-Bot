@@ -195,12 +195,16 @@ class PokerEngine:
             players_count = len(game.players)
             dealer_index = game.dealer_index % players_count
 
-            # Post-flop action always starts with the seat directly to the
-            # dealer's left (the small blind in full-ring, the big blind in
-            # heads-up play). The dealer closes the betting round.
-            first_to_act_index = (dealer_index + 1) % players_count
-            game.current_player_index = first_to_act_index
-            game.trading_end_user_id = game.players[dealer_index].user_id
+            if players_count == 2:
+                # Heads-up: dealer acts first; opponent ends round
+                game.current_player_index = dealer_index
+                opponent_index = (dealer_index + 1) % players_count
+                game.trading_end_user_id = game.players[opponent_index].user_id
+            else:
+                # Multi-way: left-of-dealer acts first, dealer closes
+                first_to_act_index = (dealer_index + 1) % players_count
+                game.current_player_index = first_to_act_index
+                game.trading_end_user_id = game.players[dealer_index].user_id
         else:
             game.current_player_index = -1
             game.trading_end_user_id = 0
