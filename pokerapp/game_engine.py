@@ -106,13 +106,9 @@ class PokerEngine:
         if not getattr(game, "round_has_started", False):
             return False
 
-        # Determine who would act next without updating state
-        next_player = self.get_next_active_player(game)
-
-        if next_player is None:
-            return True
-
-        return next_player.user_id == game.trading_end_user_id
+        # Check if current player has closed the betting circle
+        current_player = game.players[game.current_player_index]
+        return current_player.user_id == game.trading_end_user_id
 
     def process_turn(self, game: Game) -> TurnResult:
         """
@@ -142,22 +138,20 @@ class PokerEngine:
         if len(active_or_allin) == 1:
             return TurnResult.END_GAME
 
-        # Move to next active player before evaluating if the round ends
-        next_player = self.get_next_active_player(game)
-
-        if next_player is None:
-            # No active players left (all folded or all-in)
-            logger.info("🏁 ROUND END DETECTED (no next player)")
-            return TurnResult.END_ROUND
-
-        # Update game state to next player's turn
-        game.current_player_index = game.players.index(next_player)
-        game.round_has_started = True
-
-        # Check if betting round is complete after advancing the turn
+        # ✅ Check if betting round is complete BEFORE advancing
         if self.should_end_round(game):
             logger.info("🏁 ROUND END DETECTED")
             return TurnResult.END_ROUND
+
+        # Move to next active player
+        next_player = self.get_next_active_player(game)
+
+        if next_player is None:
+            logger.info("🏁 ROUND END DETECTED (no next player)")
+            return TurnResult.END_ROUND
+
+        game.current_player_index = game.players.index(next_player)
+        game.round_has_started = True
 
         logger.info(
             "➡️ TURN CONTINUES: next_player=%s, index=%s",
