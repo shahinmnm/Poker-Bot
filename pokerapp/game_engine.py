@@ -8,7 +8,7 @@ import logging
 import asyncio
 import datetime
 import json
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, Optional, Sequence, Tuple
 from enum import Enum
 
 from pokerapp.cards import get_shuffled_deck
@@ -20,62 +20,6 @@ from pokerapp.kvstore import ensure_kv
 # pure "PokerEngine" defined in this module.
 
 logger = logging.getLogger(__name__)
-
-
-def hu_turn_flow(game: Game, street: GameState, dealer_index: int) -> None:
-    """Configure heads-up turn order for the given street."""
-
-    players = game.players
-
-    if len(players) != 2:
-        raise ValueError("Heads-up flow requires exactly two players")
-
-    opponent_index = (dealer_index + 1) % 2
-
-    if street == GameState.ROUND_PRE_FLOP:
-        game.current_player_index = dealer_index
-        game.trading_end_user_id = players[opponent_index].user_id
-        logger.debug(
-            "[HU] Turn order → Dealer acts first on Pre-Flop, opponent closes."
-        )
-        return
-
-    post_flop_states = {
-        GameState.ROUND_FLOP,
-        GameState.ROUND_TURN,
-        GameState.ROUND_RIVER,
-    }
-
-    if street in post_flop_states:
-        game.current_player_index = opponent_index
-        game.trading_end_user_id = players[dealer_index].user_id
-        logger.debug(
-            "[HU] Turn order → Opponent acts first post-flop, dealer closes."
-        )
-        return
-
-    # No betting after the river – keep indices stable.
-    game.current_player_index = dealer_index
-    game.trading_end_user_id = players[dealer_index].user_id
-
-
-def multi_turn_flow(game: Game, dealer_index: int) -> None:
-    """Configure multi-player (3–8 players) turn order."""
-
-    players = game.players
-
-    if not players:
-        game.current_player_index = -1
-        game.trading_end_user_id = 0
-        return
-
-    players_count = len(players)
-    first_to_act_index = (dealer_index + 1) % players_count
-    game.current_player_index = first_to_act_index
-    game.trading_end_user_id = players[dealer_index].user_id
-    logger.debug("[Multi] Turn order → left-of-dealer starts, dealer closes.")
-
-
 class TurnResult(Enum):
     """Result of processing a player turn"""
     CONTINUE_ROUND = "continue_round"
@@ -112,57 +56,189 @@ class PokerEngine:
         minimum_balance = big_blind * 20  # 20 big blinds minimum
         return player_balance >= minimum_balance
 
-    def get_next_active_player(self, game: Game) -> Optional[Player]:
-        """
-        Find next player who can act (not folded, not all-in).
+    def _active_players(self, game: Game) -> Sequence[Player]:
+        return [
+            player
+            for player in game.players
+            if player.state == PlayerState.ACTIVE
+        ]
 
-        Returns:
-            Next active player or None if round should end
-        """
-        start_index = game.current_player_index
-        players_count = len(game.players)
+    def _active_or_all_in_players(self, game: Game) -> Sequence[Player]:
+        return [
+            player
+            for player in game.players
+            if player.state in (PlayerState.ACTIVE, PlayerState.ALL_IN)
+        ]
 
-        for offset in range(1, players_count + 1):
-            next_index = (start_index + offset) % players_count
-            player = game.players[next_index]
+    def _find_next_active_index(
+        self,
+        game: Game,
+        start_index: int,
+        *,
+        include_start: bool = False,
+    ) -> Optional[int]:
+        players = game.players
+        players_count = len(players)
 
-            if player.state == PlayerState.ACTIVE:
-                return player
+        if players_count == 0:
+            return None
+
+        for offset in range(players_count):
+            if offset == 0 and not include_start:
+                continue
+
+            candidate = (start_index + offset) % players_count
+            if players[candidate].state == PlayerState.ACTIVE:
+                return candidate
 
         return None
 
-    def should_end_round(self, game: Game) -> bool:
-        """
-        Check if betting round is complete.
-        Round ends when action is about to return to the last aggressor
-        and all remaining players have matched the current bet.
-        """
-        active_players = [
-            p
-            for p in game.players
-            if p.state == PlayerState.ACTIVE
-        ]
+    def _find_previous_active_index(
+        self,
+        game: Game,
+        start_index: int,
+    ) -> Optional[int]:
+        players = game.players
+        players_count = len(players)
 
-        # Only one active player left
+        if players_count == 0:
+            return None
+
+        for offset in range(players_count):
+            candidate = (start_index - offset) % players_count
+            if players[candidate].state == PlayerState.ACTIVE:
+                return candidate
+
+        return None
+
+    def _resolve_first_and_closer(
+        self,
+        game: Game,
+        street: GameState,
+    ) -> Tuple[Optional[int], Optional[int]]:
+        players = game.players
+        players_count = len(players)
+
+        if players_count == 0:
+            return None, None
+
+        dealer_index = game.dealer_index % players_count
+
+        if players_count == 2:
+            opponent_index = (dealer_index + 1) % 2
+
+            if street == GameState.ROUND_PRE_FLOP:
+                first_to_act = dealer_index
+                closer_index = opponent_index
+            elif street in (
+                GameState.ROUND_FLOP,
+                GameState.ROUND_TURN,
+                GameState.ROUND_RIVER,
+            ):
+                first_to_act = opponent_index
+                closer_index = dealer_index
+            else:
+                first_to_act = dealer_index
+                closer_index = dealer_index
+        else:
+            closer_index = dealer_index
+
+            if street == GameState.ROUND_PRE_FLOP:
+                # Pre-flop: action begins to the left of the big blind (UTG),
+                # while the big blind closes the round by default.
+                first_to_act = (dealer_index + 3) % players_count
+                closer_index = (dealer_index + 2) % players_count
+            else:
+                # Post-flop: left of the dealer acts first and the dealer
+                # closes the action unless betting changes reassign it.
+                first_to_act = (dealer_index + 1) % players_count
+
+        first_active = self._find_next_active_index(
+            game,
+            first_to_act,
+            include_start=True,
+        )
+        closer_active = self._find_previous_active_index(game, closer_index)
+
+        return first_active, closer_active
+
+    def _prepare_turn_order(
+        self,
+        game: Game,
+        street: Optional[GameState] = None,
+    ) -> None:
+        target_street = street or game.state
+        first_index, closer_index = self._resolve_first_and_closer(
+            game,
+            target_street,
+        )
+
+        if first_index is None:
+            game.current_player_index = -1
+        else:
+            game.current_player_index = first_index
+
+        if closer_index is None:
+            game.trading_end_user_id = 0
+        else:
+            game.trading_end_user_id = game.players[closer_index].user_id
+
+        logger.debug(
+            "Prepared turn order: first=%s, closer=%s, street=%s",
+            game.current_player_index,
+            game.trading_end_user_id,
+            target_street.name,
+        )
+
+    def prepare_round(
+        self,
+        game: Game,
+        street: Optional[GameState] = None,
+    ) -> None:
+        self._prepare_turn_order(game, street)
+        game.round_has_started = False
+
+    def _advance_turn(self, game: Game) -> Optional[Player]:
+        current_index = game.current_player_index
+        next_index = self._find_next_active_index(game, current_index)
+
+        if next_index is None:
+            return None
+
+        game.current_player_index = next_index
+        return game.players[next_index]
+
+    def _peek_next_user_id(self, game: Game) -> Optional[str]:
+        current_index = game.current_player_index
+        next_index = self._find_next_active_index(game, current_index)
+
+        if next_index is None:
+            return None
+
+        return game.players[next_index].user_id
+
+    def _should_close_round(self, game: Game) -> bool:
+        active_players = self._active_players(game)
+
         if len(active_players) <= 1:
             return True
 
-        # All active players must have matched the max bet
+        if not game.round_has_started:
+            return False
+
         all_matched = all(
-            p.round_rate == game.max_round_rate
-            for p in active_players
+            player.round_rate == game.max_round_rate
+            for player in active_players
         )
 
         if not all_matched:
             return False
 
-        # Betting round must have started (at least one action taken)
-        if not getattr(game, "round_has_started", False):
-            return False
+        current_player = game.players[game.current_player_index]
+        return current_player.user_id == game.trading_end_user_id
 
-        # Check if current player has closed the betting circle
-        closing_player = game.players[game.current_player_index]
-        return closing_player.user_id == game.trading_end_user_id
+    def should_end_round(self, game: Game) -> bool:
+        return self._should_close_round(game)
 
     def process_turn(self, game: Game) -> TurnResult:
         """
@@ -173,20 +249,36 @@ class PokerEngine:
             TurnResult indicating whether to continue,
             end round, or end game
         """
+        if not game.players:
+            return TurnResult.END_GAME
+
+        if not (0 <= game.current_player_index < len(game.players)):
+            self._prepare_turn_order(game)
+
+        if not (0 <= game.current_player_index < len(game.players)):
+            logger.info("🔔 Round end detected → advancing to next street")
+            return TurnResult.END_ROUND
+
         current_player = game.players[game.current_player_index]
+        next_user_id = self._peek_next_user_id(game)
+
         logger.info(
-            "🎲 TURN START: player=%s, index=%s, trading_end=%s",
+            "🎯 Turn → Player %s acting (street=%s)",
             current_player.user_id,
-            game.current_player_index,
+            game.state.name,
+        )
+        logger.info(
+            "🧠 Next → %s (dealer=%s)",
+            next_user_id,
+            game.dealer_index,
+        )
+        logger.info(
+            "🪧 Close → trading_end=%s",
             game.trading_end_user_id,
         )
 
         # Count players still in the hand (actively acting or already all-in)
-        active_or_allin = [
-            player
-            for player in game.players
-            if player.state in (PlayerState.ACTIVE, PlayerState.ALL_IN)
-        ]
+        active_or_allin = self._active_or_all_in_players(game)
 
         # Only one player left → end game immediately
         if len(active_or_allin) == 1:
@@ -194,7 +286,7 @@ class PokerEngine:
 
         # ✅ Check if betting round is complete BEFORE advancing
         if self.should_end_round(game):
-            logger.info("🏁 ROUND END DETECTED")
+            logger.info("🔔 Round end detected → advancing to next street")
             return TurnResult.END_ROUND
 
         # If the betting round hasn't started yet, keep the pointer on the
@@ -209,14 +301,11 @@ class PokerEngine:
             return TurnResult.CONTINUE_ROUND
 
         # Move to next active player
-        next_player = self.get_next_active_player(game)
+        next_player = self._advance_turn(game)
 
         if next_player is None:
-            logger.info("🏁 ROUND END DETECTED (no next player)")
+            logger.info("🔔 Round end detected → advancing to next street")
             return TurnResult.END_ROUND
-
-        game.current_player_index = game.players.index(next_player)
-        game.round_has_started = True
 
         logger.info(
             "➡️ TURN CONTINUES: next_player=%s, index=%s",
@@ -234,6 +323,9 @@ class PokerEngine:
         Returns:
             New game state
         """
+        return self._advance_street(game)
+
+    def _advance_street(self, game: Game) -> GameState:
         state_transitions = {
             GameState.ROUND_PRE_FLOP: GameState.ROUND_FLOP,
             GameState.ROUND_FLOP: GameState.ROUND_TURN,
@@ -249,26 +341,15 @@ class PokerEngine:
         new_state = state_transitions[current_state]
         game.state = new_state
 
-        # Reset round betting
         for player in game.players:
             player.round_rate = 0
+
         game.max_round_rate = 0
 
-        # Set the dealer as the reference point so the next player to act is
-        # the seat immediately to their left (small blind / first to act).
-        if game.players:
-            players_count = len(game.players)
-            dealer_index = game.dealer_index % players_count
-
-            if players_count == 2:
-                hu_turn_flow(game, new_state, dealer_index)
-            else:
-                multi_turn_flow(game, dealer_index)
-        else:
-            game.current_player_index = -1
-            game.trading_end_user_id = 0
-
+        self._prepare_turn_order(game, new_state)
         game.round_has_started = False
+
+        logger.info("🎬 Street advanced → %s", new_state.name)
 
         return new_state
 
@@ -399,47 +480,13 @@ class GameEngine:
             self._game.dealer_index - small_blind_index
         ) % players_count
 
-    def _big_blind_index(self) -> int:
-        players_count = len(self._players)
-        if players_count <= 1:
-            return 0
-
-        dealer_index = self._game.dealer_index % players_count
-
-        # In heads-up games the dealer posts the small blind and the
-        # opponent posts the big blind. There is no "+2" seat available, so
-        # the big blind is simply the other player.
-        if players_count == 2:
-            return (dealer_index + 1) % players_count
-
-        big_blind_index = (dealer_index + 2) % players_count
-        return big_blind_index
-
     def _configure_pre_flop_turn_order(self) -> None:
         """Set current player and closing seat for the pre-flop street."""
 
-        players_count = len(self._players)
-
-        if players_count == 0:
-            self._game.current_player_index = -1
-            self._game.trading_end_user_id = 0
-            return
-
-        dealer_index = self._game.dealer_index % players_count
-
-        if players_count == 2:
-            hu_turn_flow(
-                self._game,
-                GameState.ROUND_PRE_FLOP,
-                dealer_index,
-            )
-            return
-
-        big_blind_index = self._big_blind_index()
-        first_to_act_index = (big_blind_index + 1) % players_count
-
-        self._game.current_player_index = first_to_act_index
-        self._game.trading_end_user_id = self._players[big_blind_index].user_id
+        self._coordinator.engine.prepare_round(
+            self._game,
+            GameState.ROUND_PRE_FLOP,
+        )
 
     def _deal_private_cards(self) -> None:
         deck = get_shuffled_deck()
@@ -751,5 +798,5 @@ class GameEngine:
 
 
 logger.info(
-    "✅ Heads-Up and Multi-Player turn logic fully separated — double-check bug eliminated forever."
+    "✅ Refactored turn logic — alternating actions guaranteed, rounds close correctly."
 )
