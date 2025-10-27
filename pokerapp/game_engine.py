@@ -80,7 +80,8 @@ class PokerEngine:
     def should_end_round(self, game: Game) -> bool:
         """
         Check if betting round is complete.
-        Round ends when all players matched max bet OR folded/all-in
+        Round ends when action is about to return to the last aggressor
+        and all remaining players have matched the current bet.
         """
         active_players = [
             p
@@ -92,22 +93,26 @@ class PokerEngine:
         if len(active_players) <= 1:
             return True
 
-        # All active players matched the max bet
+        # All active players must have matched the max bet
         all_matched = all(
             p.round_rate == game.max_round_rate
             for p in active_players
         )
 
+        if not all_matched:
+            return False
+
+        # Betting round must have started (at least one action taken)
         if not getattr(game, "round_has_started", False):
             return False
 
-        # Check if we've completed the circle back to last raiser
-        current_player = game.players[game.current_player_index]
-        at_round_initiator = (
-            current_player.user_id == game.trading_end_user_id
-        )
+        # Determine who would act next without updating state
+        next_player = self.get_next_active_player(game)
 
-        return all_matched and at_round_initiator
+        if next_player is None:
+            return True
+
+        return next_player.user_id == game.trading_end_user_id
 
     def process_turn(self, game: Game) -> TurnResult:
         """
@@ -118,6 +123,14 @@ class PokerEngine:
             TurnResult indicating whether to continue,
             end round, or end game
         """
+        current_player = game.players[game.current_player_index]
+        logger.info(
+            "🎲 TURN START: player=%s, index=%s, trading_end=%s",
+            current_player.user_id,
+            game.current_player_index,
+            game.trading_end_user_id,
+        )
+
         # Count players still in the hand (actively acting or already all-in)
         active_or_allin = [
             player
@@ -129,20 +142,28 @@ class PokerEngine:
         if len(active_or_allin) == 1:
             return TurnResult.END_GAME
 
-        # Check if betting round is complete
-        if self.should_end_round(game):
-            return TurnResult.END_ROUND
-
-        # Move to next active player
+        # Move to next active player before evaluating if the round ends
         next_player = self.get_next_active_player(game)
 
         if next_player is None:
             # No active players left (all folded or all-in)
+            logger.info("🏁 ROUND END DETECTED (no next player)")
             return TurnResult.END_ROUND
 
-        # Update game state to next player's turn and continue the round
+        # Update game state to next player's turn
         game.current_player_index = game.players.index(next_player)
         game.round_has_started = True
+
+        # Check if betting round is complete after advancing the turn
+        if self.should_end_round(game):
+            logger.info("🏁 ROUND END DETECTED")
+            return TurnResult.END_ROUND
+
+        logger.info(
+            "➡️ TURN CONTINUES: next_player=%s, index=%s",
+            next_player.user_id,
+            game.current_player_index,
+        )
 
         return TurnResult.CONTINUE_ROUND
 
