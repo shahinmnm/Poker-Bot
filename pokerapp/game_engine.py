@@ -201,8 +201,9 @@ class PokerEngine:
                 opponent_index = (dealer_index + 1) % players_count
                 game.trading_end_user_id = game.players[opponent_index].user_id
             else:
-                # Multi-way: dealer closes, left-of-dealer acts first
-                game.current_player_index = dealer_index
+                # Multi-way: left-of-dealer acts first, dealer closes
+                first_to_act_index = (dealer_index + 1) % players_count
+                game.current_player_index = first_to_act_index
                 game.trading_end_user_id = game.players[dealer_index].user_id
         else:
             game.current_player_index = -1
