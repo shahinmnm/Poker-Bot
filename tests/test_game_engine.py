@@ -3,6 +3,7 @@ import unittest
 from typing import Optional
 
 from pokerapp.entities import Game, GameState, Player, PlayerState, Wallet
+from pokerapp.game_coordinator import GameCoordinator
 from pokerapp.game_engine import GameEngine, PokerEngine, TurnResult
 from pokerapp.kvstore import InMemoryKV
 
@@ -292,6 +293,45 @@ class PokerEngineRoundTests(unittest.TestCase):
         engine.advance_after_action(game)
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.END_ROUND)
+
+
+class GameCoordinatorTurnFlowTests(unittest.TestCase):
+    def test_process_game_turn_skips_broke_player(self) -> None:
+        coordinator = GameCoordinator()
+        game = Game()
+
+        players = [
+            Player(
+                user_id=1,
+                mention_markdown="@alice",
+                wallet=DummyWallet(0),
+                ready_message_id=None,
+            ),
+            Player(
+                user_id=2,
+                mention_markdown="@bob",
+                wallet=DummyWallet(500),
+                ready_message_id=None,
+            ),
+            Player(
+                user_id=3,
+                mention_markdown="@carol",
+                wallet=DummyWallet(500),
+                ready_message_id=None,
+            ),
+        ]
+
+        game.players = players
+        game.state = GameState.ROUND_PRE_FLOP
+        game.current_player_index = 0
+
+        result, next_player = coordinator.process_game_turn(game)
+
+        self.assertEqual(players[0].state, PlayerState.ALL_IN)
+        self.assertEqual(result, TurnResult.CONTINUE_ROUND)
+        self.assertIsNotNone(next_player)
+        self.assertEqual(next_player.user_id, players[1].user_id)
+        self.assertEqual(game.current_player_index, 1)
 
 
 if __name__ == "__main__":  # pragma: no cover
