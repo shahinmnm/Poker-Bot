@@ -186,6 +186,7 @@ class PokerEngine:
             game.trading_end_user_id = game.players[closer_index].user_id
 
         game.last_actor_user_id = None
+        game.closer_has_acted = False
         logger.debug(
             "Prepared turn order: first=%s, closer=%s, street=%s",
             game.current_player_index,
@@ -235,25 +236,22 @@ class PokerEngine:
         """
         Check if the current betting round is complete.
 
-        Round is complete when:
-        1. Current player is the designated closer
-        2. All active players have matched the highest bet
-
-        This check happens BEFORE the closer acts, preventing double-action.
+        Round is complete when the closer has already taken their turn during
+        the current betting cycle and all active players have matched the
+        highest bet. This ensures the closer still gets an opportunity to act
+        before the round ends, while allowing betting to close immediately
+        after a called raise.
         """
-        current_player = game.players[game.current_player_index]
-        last_actor = getattr(game, "last_actor_user_id", None)
-
         closer_id = game.trading_end_user_id
+        closer_has_acted = getattr(game, "closer_has_acted", False)
 
         # Check 1: Has the closer already acted in this loop?
         # Betting should only close once the closer has taken their turn,
         # otherwise we would skip their final opportunity to act.
-        if last_actor != closer_id:
+        if not closer_has_acted:
             logger.debug(
-                "❌ Betting not complete: closer=%s still needs to act (last_actor=%s)",
+                "❌ Betting not complete: closer=%s still needs to act",
                 closer_id,
-                last_actor,
             )
             return False
 
@@ -347,6 +345,10 @@ class PokerEngine:
 
         if current_id is not None:
             game.last_actor_user_id = current_id
+            closer_id = getattr(game, "trading_end_user_id", 0)
+
+            if closer_id and current_id == closer_id:
+                game.closer_has_acted = True
 
         next_index = self._find_next_active_index(
             game,

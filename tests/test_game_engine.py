@@ -293,6 +293,46 @@ class PokerEngineRoundTests(unittest.TestCase):
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.END_ROUND)
 
+    def test_final_call_after_closer_raise_closes_round(self) -> None:
+        engine = PokerEngine()
+        game = Game()
+        players = [self._create_player(1), self._create_player(2)]
+
+        game.players = players
+        game.state = GameState.ROUND_PRE_FLOP
+        game.dealer_index = 0
+
+        new_state = engine.advance_to_next_street(game)
+
+        self.assertEqual(new_state, GameState.ROUND_FLOP)
+        self.assertEqual(game.current_player_index, 1)
+
+        # Initial prompt keeps the non-dealer in place to act first.
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.CONTINUE_ROUND)
+        self.assertEqual(game.current_player_index, 1)
+
+        # Non-dealer bets, becoming the closer for the round.
+        bet_amount = 50
+        players[1].round_rate = bet_amount
+        game.max_round_rate = bet_amount
+        game.trading_end_user_id = players[1].user_id
+
+        engine.advance_after_action(game)
+
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.CONTINUE_ROUND)
+        self.assertEqual(game.current_player_index, 0)
+
+        # Dealer calls to match the bet. Betting should now be complete even
+        # though the last actor differs from the closer.
+        players[0].round_rate = bet_amount
+
+        engine.advance_after_action(game)
+
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.END_ROUND)
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

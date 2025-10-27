@@ -307,6 +307,8 @@ class GameCoordinator:
         else:
             game.trading_end_user_id = 0
 
+        game.closer_has_acted = False
+
     def _format_action_text(
         self,
         player: Player,
