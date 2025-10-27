@@ -75,57 +75,95 @@ class LiveMessageManager:
             else 0,
         )
 
-        try:
-            if game.has_group_message():
-                try:
-                    message = await self._bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=game.group_message_id,
-                        text=message_text,
-                        reply_markup=reply_markup,
-                        parse_mode=self.PARSE_MODE,
-                        disable_web_page_preview=True,
-                    )
-                    message_id = getattr(
-                        message,
-                        "message_id",
-                        game.group_message_id,
-                    )
-                except TelegramError as exc:  # pragma: no cover
-                    self._logger.warning(
-                        "Failed to edit live game message %s: %s",
-                        game.group_message_id,
-                        exc,
-                    )
-                    message = await self._bot.send_message(
-                        chat_id=chat_id,
-                        text=message_text,
-                        reply_markup=reply_markup,
-                        parse_mode=self.PARSE_MODE,
-                        disable_notification=True,
-                        disable_web_page_preview=True,
-                    )
-                    message_id = getattr(message, "message_id", None)
-            else:
-                message = await self._bot.send_message(
+        message_id = None
+
+        # Try to edit existing message first
+        if game.has_group_message():
+            try:
+                self._logger.debug(
+                    "Attempting to edit message %s in chat %s",
+                    game.group_message_id,
+                    chat_id,
+                )
+                message = await self._bot.edit_message_text(
                     chat_id=chat_id,
+                    message_id=game.group_message_id,
                     text=message_text,
                     reply_markup=reply_markup,
                     parse_mode=self.PARSE_MODE,
-                    disable_notification=True,
                     disable_web_page_preview=True,
                 )
-                message_id = getattr(message, "message_id", None)
-        except TelegramError as exc:  # pragma: no cover
+                message_id = getattr(
+                    message,
+                    "message_id",
+                    game.group_message_id,
+                )
+                self._logger.debug(
+                    "✅ Successfully edited message %s", message_id
+                )
+                return message_id
+
+            except TelegramError as exc:
+                # Check if it's a "message not modified" error (content identical)
+                error_msg = str(exc).lower()
+                if "not modified" in error_msg or "message is not modified" in error_msg:
+                    self._logger.debug(
+                        "Message %s content unchanged, skipping update",
+                        game.group_message_id,
+                    )
+                    return game.group_message_id
+
+                # Check if message was deleted or doesn't exist
+                if (
+                    "message to edit not found" in error_msg
+                    or "message can't be edited" in error_msg
+                    or "message_id_invalid" in error_msg
+                ):
+                    self._logger.warning(
+                        "⚠️ Message %s no longer exists, will create new one",
+                        game.group_message_id,
+                    )
+                    # Clear the stale message ID
+                    game.group_message_id = None
+                else:
+                    # For other errors, log but try to continue
+                    self._logger.warning(
+                        "⚠️ Failed to edit message %s: %s (will try new message)",
+                        game.group_message_id,
+                        exc,
+                    )
+                    # Don't clear message ID yet - might be temporary
+
+        # Send new message if no existing one or edit failed critically
+        try:
+            self._logger.debug("Sending new live message to chat %s", chat_id)
+            message = await self._bot.send_message(
+                chat_id=chat_id,
+                text=message_text,
+                reply_markup=reply_markup,
+                parse_mode=self.PARSE_MODE,
+                disable_notification=True,
+                disable_web_page_preview=True,
+            )
+            message_id = getattr(message, "message_id", None)
+
+            if message_id is not None:
+                self._logger.info(
+                    "✅ Created new live message %s in chat %s",
+                    message_id,
+                    chat_id,
+                )
+                game.set_group_message(message_id)
+
+            return message_id
+
+        except TelegramError as exc:
             self._logger.error(
-                "Unable to send or update live message: %s", exc
+                "❌ Unable to send new live message to chat %s: %s",
+                chat_id,
+                exc,
             )
             return None
-
-        if message_id is not None:
-            game.set_group_message(message_id)
-
-        return message_id
 
     def _build_game_state_text(
         self, game: Game, _current_player: Player
