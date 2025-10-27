@@ -256,8 +256,12 @@ class PokerEngineRoundTests(unittest.TestCase):
         new_state = engine.advance_to_next_street(game)
 
         self.assertEqual(new_state, GameState.ROUND_FLOP)
-        self.assertEqual(game.current_player_index, 0)
+        self.assertEqual(game.current_player_index, 2)
         self.assertEqual(game.trading_end_user_id, players[2].user_id)
+
+        result = engine.process_turn(game)
+        self.assertEqual(result, TurnResult.CONTINUE_ROUND)
+        self.assertEqual(game.current_player_index, 0)
 
         result = engine.process_turn(game)
         self.assertEqual(result, TurnResult.CONTINUE_ROUND)
