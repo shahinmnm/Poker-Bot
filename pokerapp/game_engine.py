@@ -291,17 +291,6 @@ class PokerEngine:
             logger.info("🔔 Round end detected → advancing to next street")
             return TurnResult.END_ROUND
 
-        # If the betting round hasn't started yet, keep the pointer on the
-        # first player to act so they actually get a turn.  The previous logic
-        # advanced immediately which caused the closer to act twice in a row
-        # when transitioning between streets (e.g. heads-up flop).
-        if not getattr(game, "round_has_started", False):
-            game.round_has_started = True
-            logger.debug(
-                "🔁 Betting round initialised – awaiting first player action."
-            )
-            return TurnResult.CONTINUE_ROUND
-
         # Move to next active player
         next_player = self._advance_turn(game)
 
