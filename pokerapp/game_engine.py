@@ -182,14 +182,14 @@ class PokerEngine:
 
             if players_count == 2:
                 # Heads-up: dealer (small blind) acts first, opponent ends round
-                first_to_act_index = dealer_index
+                current_index = (dealer_index - 1) % players_count
                 last_to_act_user_id = game.players[(dealer_index + 1) % players_count].user_id
             else:
-                # Multi-way pots: seat to dealer's left acts first, dealer ends round
-                first_to_act_index = (dealer_index + 1) % players_count
+                # Multi-way pots: leave index on dealer so process_turn() moves to SB
+                current_index = dealer_index
                 last_to_act_user_id = game.players[dealer_index].user_id
 
-            game.current_player_index = first_to_act_index
+            game.current_player_index = current_index
             game.trading_end_user_id = last_to_act_user_id
         else:
             game.current_player_index = -1
