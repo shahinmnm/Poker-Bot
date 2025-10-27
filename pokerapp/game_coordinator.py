@@ -155,6 +155,10 @@ class GameCoordinator:
                 )
                 current_player.state = PlayerState.ALL_IN
 
+                # Advance to the next player before recursing so we don't loop
+                # on the broke player we just marked all-in.
+                self.engine.advance_after_action(game)
+
                 # Recursively process next turn since this player cannot act
                 return self.process_game_turn(game)
 
