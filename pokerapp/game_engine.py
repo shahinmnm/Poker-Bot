@@ -339,7 +339,6 @@ class PokerEngine:
         game.max_round_rate = 0
 
         self._prepare_turn_order(game, new_state)
-        game.round_has_started = False
 
         logger.info("🎬 Street advanced → %s", new_state.name)
 
