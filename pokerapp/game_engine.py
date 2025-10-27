@@ -201,6 +201,17 @@ class PokerEngine:
         game.round_has_started = False
 
     def _advance_turn(self, game: Game) -> Optional[Player]:
+        # On the first call of a fresh betting round, keep the current player
+        # in place so they get a turn before the pointer advances.
+        if not getattr(game, "round_has_started", False):
+            game.round_has_started = True
+            current_index = game.current_player_index
+
+            if 0 <= current_index < len(game.players):
+                return game.players[current_index]
+
+            return None
+
         current_index = game.current_player_index
         next_index = self._find_next_active_index(game, current_index)
 
