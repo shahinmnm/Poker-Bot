@@ -316,24 +316,39 @@ class LiveMessageManager:
 
         raise_amounts: List[int] = []
         if can_raise:
-            raise_amounts.append(min_raise)
-
             pot_raise = game.pot
-            if pot_raise > min_raise and player_balance >= pot_raise:
+            close_threshold = min_raise * 0.1
+
+            primary_raise = min_raise
+            merged_pot_raise = False
+
+            if pot_raise > 0 and player_balance >= pot_raise:
+                if abs(pot_raise - min_raise) <= close_threshold:
+                    merged_pot_raise = True
+                    if pot_raise > min_raise:
+                        primary_raise = pot_raise
+            raise_amounts.append(primary_raise)
+
+            if (
+                pot_raise > min_raise
+                and player_balance >= pot_raise
+                and not merged_pot_raise
+            ):
                 raise_amounts.append(pot_raise)
 
         if player_balance > 0 and (can_raise or not show_primary_all_in):
             second_row: List[InlineKeyboardButton] = []
 
-            if can_raise:
+            if can_raise and raise_amounts:
+                primary_raise_amount = raise_amounts[0]
                 second_row.append(
                     InlineKeyboardButton(
-                        f"📈 Raise ${min_raise}",
+                        f"📈 Raise ${primary_raise_amount}",
                         callback_data=":".join(
                             [
                                 "action",
                                 "raise",
-                                str(min_raise),
+                                str(primary_raise_amount),
                                 game_id,
                             ]
                         ),
@@ -351,7 +366,7 @@ class LiveMessageManager:
             if second_row:
                 buttons.append(second_row)
 
-        extra_amounts = raise_amounts[1:]
+        extra_amounts = sorted(set(raise_amounts[1:]))
         if extra_amounts:
             for i in range(0, len(extra_amounts), 2):
                 row: List[InlineKeyboardButton] = []
