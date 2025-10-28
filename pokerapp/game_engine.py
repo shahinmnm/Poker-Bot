@@ -856,15 +856,14 @@ class GameEngine:
                 self._logger.info(
                     "✅ Advanced to %s (cards_to_deal=%d)",
                     new_state.name,
-                    cards_count
+                    cards_count,
                 )
 
                 # Safety check: if advance resulted in FINISHED,
                 # end immediately
                 if new_state == GameState.FINISHED:
                     self._logger.error(
-                        "⚠️ UNEXPECTED: Advance resulted in FINISHED state - "
-                        "this should only happen from RIVER. Finishing hand."
+                        "⚠️ UNEXPECTED: Advance resulted in FINISHED state"
                     )
                     await self._finish_hand()
                     return
