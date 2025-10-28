@@ -8,6 +8,7 @@ import json
 import logging
 import secrets
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 import redis
@@ -60,6 +61,29 @@ ONE_DAY = 86400
 DEFAULT_MONEY = 1000
 MAX_TIME_FOR_TURN = datetime.timedelta(minutes=2)
 DESCRIPTION_FILE = "assets/description_bot.md"
+
+
+@dataclass(slots=True)
+class PreparedPlayerAction:
+    """Lightweight container describing a validated action request."""
+
+    chat_id: int
+    chat_id_str: str
+    user_id: int
+    user_id_str: str
+    action_type: str
+    raise_amount: Optional[int]
+    game: Game
+    current_player: Player
+
+
+@dataclass(slots=True)
+class PlayerActionValidation:
+    """Result of validating a requested player action."""
+
+    success: bool
+    message: Optional[str] = None
+    prepared_action: Optional[PreparedPlayerAction] = None
 
 
 class PokerBotModel:
@@ -3103,29 +3127,14 @@ class PokerBotModel:
             can_start=False,
         )
 
-    async def handle_player_action(
+    async def prepare_player_action(
         self,
         user_id: int,
         chat_id: int,
         action_type: str,
         raise_amount: Optional[int] = None,
-    ) -> bool:
-        """
-        Handle player action from inline button callback.
-
-        This is the modern unified action handler used by Phase 6
-        single living message UI.
-
-        Args:
-            user_id: Telegram user ID (int)
-            chat_id: Chat ID where game is happening (int)
-            action_type: Action as string
-                ("fold", "call", "check", "raise", "all_in")
-            raise_amount: Amount for raise actions (optional)
-
-        Returns:
-            True if action was processed successfully, False otherwise
-        """
+    ) -> PlayerActionValidation:
+        """Validate that a player can take an action before processing it."""
 
         user_id_str = str(user_id)
         chat_id_str = str(chat_id)
@@ -3137,7 +3146,10 @@ class PokerBotModel:
                 "Invalid chat_id provided for action buttons: %s",
                 chat_id,
             )
-            return False
+            return PlayerActionValidation(
+                success=False,
+                message="❌ Cannot determine chat context",
+            )
 
         chat_data = self._application.chat_data.get(chat_id_int, {})
         game = chat_data.get(KEY_CHAT_DATA_GAME)
@@ -3147,15 +3159,19 @@ class PokerBotModel:
                 "No active game found in chat %s for user action",
                 chat_id_str,
             )
-            return False
+            return PlayerActionValidation(
+                success=False,
+                message="❌ No active game in this chat",
+            )
 
         if game.current_player_index >= len(game.players):
             logger.error("Invalid current_player_index in game %s", game.id)
-            return False
+            return PlayerActionValidation(
+                success=False,
+                message="❌ Game state error. Please wait",
+            )
 
         current_player = game.players[game.current_player_index]
-        player_name = self._get_player_name(current_player)
-
         current_player_id_str = str(current_player.user_id)
 
         if current_player_id_str != user_id_str:
@@ -3164,7 +3180,10 @@ class PokerBotModel:
                 user_id_str,
                 current_player_id_str,
             )
-            return False
+            return PlayerActionValidation(
+                success=False,
+                message="❌ It's not your turn",
+            )
 
         active_states = {
             GameState.ROUND_PRE_FLOP,
@@ -3179,7 +3198,10 @@ class PokerBotModel:
                 user_id_str,
                 game.state,
             )
-            return False
+            return PlayerActionValidation(
+                success=False,
+                message="❌ Game is not accepting actions now",
+            )
 
         if current_player.state not in (
             PlayerState.ACTIVE,
@@ -3190,7 +3212,80 @@ class PokerBotModel:
                 user_id_str,
                 current_player.state,
             )
-            return False
+            return PlayerActionValidation(
+                success=False,
+                message="❌ You cannot act right now",
+            )
+
+        if action_type == "check":
+            if game.max_round_rate > current_player.round_rate:
+                logger.warning(
+                    "User %s tried to check but must call %d",
+                    user_id_str,
+                    game.max_round_rate - current_player.round_rate,
+                )
+                return PlayerActionValidation(
+                    success=False,
+                    message="❌ You must call or raise",
+                )
+
+        elif action_type == "raise":
+            if raise_amount is None or raise_amount <= 0:
+                logger.warning(
+                    "User %s tried to raise without valid amount",
+                    user_id_str,
+                )
+                return PlayerActionValidation(
+                    success=False,
+                    message="❌ Invalid raise amount",
+                )
+
+            min_raise = game.max_round_rate * 2
+
+            if raise_amount < min_raise:
+                logger.warning(
+                    "User %s raise %d below minimum %d",
+                    user_id_str,
+                    raise_amount,
+                    min_raise,
+                )
+                return PlayerActionValidation(
+                    success=False,
+                    message=f"❌ Minimum raise is ${min_raise}",
+                )
+
+        elif action_type in {"fold", "call", "all_in"}:
+            pass
+        else:
+            logger.warning("Unknown action_type: %s", action_type)
+            return PlayerActionValidation(
+                success=False,
+                message="❌ Unknown action",
+            )
+
+        prepared = PreparedPlayerAction(
+            chat_id=chat_id_int,
+            chat_id_str=chat_id_str,
+            user_id=user_id,
+            user_id_str=user_id_str,
+            action_type=action_type,
+            raise_amount=raise_amount,
+            game=game,
+            current_player=current_player,
+        )
+
+        return PlayerActionValidation(success=True, prepared_action=prepared)
+
+    async def execute_player_action(
+        self, prepared: PreparedPlayerAction
+    ) -> bool:
+        """Execute a previously validated player action."""
+
+        game = prepared.game
+        current_player = prepared.current_player
+        player_name = self._get_player_name(current_player)
+        action_type = prepared.action_type
+        user_id_str = prepared.user_id_str
 
         try:
             if action_type == "fold":
@@ -3198,14 +3293,6 @@ class PokerBotModel:
                 action_text = f"{player_name} folded"
 
             elif action_type == "check":
-                if game.max_round_rate > current_player.round_rate:
-                    logger.warning(
-                        "User %s tried to check but must call %d",
-                        user_id_str,
-                        game.max_round_rate - current_player.round_rate,
-                    )
-                    return False
-
                 action_text = f"{player_name} checked"
 
             elif action_type == "call":
@@ -3215,21 +3302,11 @@ class PokerBotModel:
                 action_text = f"{player_name} called ${call_amount}"
 
             elif action_type == "raise":
-                if raise_amount is None or raise_amount <= 0:
+                raise_amount = prepared.raise_amount
+                if raise_amount is None:
                     logger.warning(
-                        "User %s tried to raise without valid amount",
+                        "Validated raise lost amount for user %s",
                         user_id_str,
-                    )
-                    return False
-
-                min_raise = game.max_round_rate * 2
-
-                if raise_amount < min_raise:
-                    logger.warning(
-                        "User %s raise %d below minimum %d",
-                        user_id_str,
-                        raise_amount,
-                        min_raise,
                     )
                     return False
 
@@ -3251,12 +3328,12 @@ class PokerBotModel:
                 )
 
             else:
-                logger.warning("Unknown action_type: %s", action_type)
+                logger.warning("Unknown action_type during execution: %s", action_type)
                 return False
 
             game.add_action(action_text)
 
-            self._save_game(chat_id_int, game)
+            self._save_game(prepared.chat_id, game)
 
             self._coordinator.engine.advance_after_action(game)
 
@@ -3266,7 +3343,7 @@ class PokerBotModel:
 
             await self._handle_turn_result(
                 game,
-                chat_id_int,
+                prepared.chat_id,
                 turn_result,
                 next_player,
             )
@@ -3274,7 +3351,7 @@ class PokerBotModel:
             if turn_result == TurnResult.CONTINUE_ROUND:
                 await self._coordinator._send_or_update_game_state(
                     game=game,
-                    chat_id=chat_id_int,
+                    chat_id=prepared.chat_id,
                 )
 
             return True
@@ -3288,6 +3365,27 @@ class PokerBotModel:
                 exc_info=True,
             )
             return False
+
+    async def handle_player_action(
+        self,
+        user_id: int,
+        chat_id: int,
+        action_type: str,
+        raise_amount: Optional[int] = None,
+    ) -> bool:
+        """Backwards-compatible wrapper for controller-driven actions."""
+
+        validation = await self.prepare_player_action(
+            user_id=user_id,
+            chat_id=chat_id,
+            action_type=action_type,
+            raise_amount=raise_amount,
+        )
+
+        if not validation.success or validation.prepared_action is None:
+            return False
+
+        return await self.execute_player_action(validation.prepared_action)
 
 
 class WalletManagerModel(Wallet):
