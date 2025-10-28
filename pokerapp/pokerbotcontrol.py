@@ -7,6 +7,7 @@ from telegram import (
     BotCommand,
     Update,
 )
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CallbackContext,
@@ -15,13 +16,17 @@ from telegram.ext import (
 )
 
 from pokerapp.entities import PlayerAction
-from pokerapp.pokerbotmodel import PokerBotModel
+from pokerapp.pokerbotmodel import PokerBotModel, PlayerActionValidation
 
 logger = logging.getLogger(__name__)
 
 
 class PokerBotController:
     """Controller for handling Telegram updates and routing to model."""
+
+    _STALE_QUERY_MESSAGE = (
+        "Query is too old and response timeout expired or query id is invalid"
+    )
 
     def __init__(
         self,
@@ -36,6 +41,7 @@ class PokerBotController:
             application: PTB Application instance
         """
         self._model = model
+        self._application = application
 
         application.add_handler(CommandHandler("ready", self._handle_ready))
         application.add_handler(CommandHandler("start", self._handle_start))
@@ -124,6 +130,39 @@ class PokerBotController:
         application.post_init = self._post_init
 
         logger.info("Controller handlers registered")
+
+    @classmethod
+    def _is_stale_callback_query_error(cls, error: BadRequest) -> bool:
+        """Return True when Telegram reports an expired callback query."""
+
+        return cls._STALE_QUERY_MESSAGE in str(error)
+
+    async def _safe_query_answer(
+        self,
+        query,
+        text: str | None = None,
+        *,
+        show_alert: bool = False,
+    ) -> None:
+        """Attempt to answer a callback query while handling stale query errors."""
+
+        if not query:
+            return
+
+        try:
+            if text is None:
+                await query.answer(show_alert=show_alert)
+            else:
+                await query.answer(text, show_alert=show_alert)
+        except BadRequest as exc:  # pragma: no cover - defensive logging
+            if self._is_stale_callback_query_error(exc):
+                logger.debug("Ignoring stale callback query: %s", exc)
+            else:
+                logger.error(
+                    "Failed to answer callback query: %s",
+                    exc,
+                    exc_info=True,
+                )
 
     async def _post_init(self, application: Application) -> None:
         """Set up bot command descriptions in Telegram UI."""
@@ -352,7 +391,7 @@ Send 💰 /money once per day for free chips!
         if query is None:
             return
 
-        await query.answer()
+        await self._safe_query_answer(query)
         await self._model.ready(update, context)
 
     async def _handle_lobby_leave(
@@ -368,7 +407,7 @@ Send 💰 /money once per day for free chips!
         user = query.from_user
 
         if chat is None or user is None:
-            await query.answer()
+            await self._safe_query_answer(query)
             return
 
         await self._model.remove_lobby_player(
@@ -376,9 +415,9 @@ Send 💰 /money once per day for free chips!
             chat_id=chat.id,
             user_id=user.id,
         )
-        await query.answer(
+        await self._safe_query_answer(
+            query,
             text="🚶 You left the table. Use /ready to rejoin!",
-            show_alert=False,
         )
 
     async def _handle_lobby_start(
@@ -390,7 +429,7 @@ Send 💰 /money once per day for free chips!
         if query is None:
             return
 
-        await query.answer()
+        await self._safe_query_answer(query)
         await self._model.start(update, context)
 
     async def _handle_private(
@@ -472,7 +511,7 @@ Send 💰 /money once per day for free chips!
         if not query or not query.data:
             return
 
-        await query.answer()
+        await self._safe_query_answer(query)
         await self._model.accept_invitation(update, context)
 
     async def _handle_invite_decline_callback(
@@ -487,7 +526,7 @@ Send 💰 /money once per day for free chips!
         if not query or not query.data:
             return
 
-        await query.answer()
+        await self._safe_query_answer(query)
         await self._model.decline_invitation(update, context)
 
     async def _handle_private_start_callback(
@@ -502,7 +541,7 @@ Send 💰 /money once per day for free chips!
         if not query or not query.data:
             return
 
-        await query.answer()
+        await self._safe_query_answer(query)
         await self._model.start_private_game(update, context)
 
     async def _handle_private_leave_callback(
@@ -517,7 +556,7 @@ Send 💰 /money once per day for free chips!
         if not query or not query.data:
             return
 
-        await query.answer()
+        await self._safe_query_answer(query)
         await self._model.leave_private_game(update, context)
 
     async def _handle_callback_query(
@@ -532,7 +571,7 @@ Send 💰 /money once per day for free chips!
             return
 
         # Acknowledge the callback immediately
-        await query.answer()
+        await self._safe_query_answer(query)
 
         callback_data = query.data
 
@@ -575,7 +614,7 @@ Send 💰 /money once per day for free chips!
 
             if len(parts) < 3:
                 logger.warning("Invalid action button data: %s", query.data)
-                await query.answer("❌ Invalid action format")
+                await self._safe_query_answer(query, "❌ Invalid action format")
                 return
 
             action_type = parts[1]  # fold, call, check, raise, all_in
@@ -584,7 +623,7 @@ Send 💰 /money once per day for free chips!
             if action_type == "raise":
                 if len(parts) < 4:
                     logger.warning("Invalid raise button data: %s", query.data)
-                    await query.answer("❌ Invalid raise format")
+                    await self._safe_query_answer(query, "❌ Invalid raise format")
                     return
 
                 try:
@@ -592,7 +631,7 @@ Send 💰 /money once per day for free chips!
                     game_id = parts[3]
                 except (ValueError, IndexError):
                     logger.warning("Invalid raise amount in: %s", query.data)
-                    await query.answer("❌ Invalid raise amount")
+                    await self._safe_query_answer(query, "❌ Invalid raise amount")
                     return
             else:
                 # For other actions: action:TYPE:GAME_ID
@@ -603,20 +642,55 @@ Send 💰 /money once per day for free chips!
             chat_id = query.message.chat_id if query.message else None
 
             if not chat_id:
-                await query.answer("❌ Cannot determine chat context")
+                await self._safe_query_answer(query, "❌ Cannot determine chat context")
                 return
 
             handle_action = getattr(self._model, "handle_player_action", None)
 
             if handle_action is None:
                 logger.error("Model missing handle_player_action method")
-                await query.answer("❌ Action handler not available")
+                await self._safe_query_answer(query, "❌ Action handler not available")
                 return
 
             signature = inspect.signature(handle_action)
 
+            if "action_type" in signature.parameters and hasattr(
+                self._model, "prepare_player_action"
+            ) and hasattr(self._model, "execute_player_action"):
+                validation: PlayerActionValidation = await self._model.prepare_player_action(
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    action_type=action_type,
+                    raise_amount=raise_amount,
+                )
+
+                if not validation.success or validation.prepared_action is None:
+                    await self._safe_query_answer(
+                        query,
+                        validation.message
+                        or "❌ Action failed - not your turn or invalid action",
+                    )
+                    return
+
+                await self._safe_query_answer(query)
+
+                success = await self._model.execute_player_action(
+                    validation.prepared_action
+                )
+
+                if not success:
+                    logger.warning(
+                        "Execution of player action %s failed after validation",
+                        action_type,
+                    )
+                    await self._model._view.send_message(
+                        chat_id=chat_id,
+                        text="❌ Action could not be processed. Please try again.",
+                    )
+                return
+
             if "action_type" in signature.parameters:
-                # Preferred modern API
+                # Preferred modern API fallback when validation helpers unavailable
                 success = await handle_action(
                     user_id=user_id,
                     chat_id=chat_id,
@@ -636,7 +710,7 @@ Send 💰 /money once per day for free chips!
                 player_action = legacy_map.get(action_type)
 
                 if player_action is None:
-                    await query.answer("❌ Unknown action type")
+                    await self._safe_query_answer(query, "❌ Unknown action type")
                     return
 
                 legacy_amount = raise_amount if raise_amount is not None else 0
@@ -650,10 +724,11 @@ Send 💰 /money once per day for free chips!
                 )
 
             if success:
-                await query.answer()  # Silent success
+                await self._safe_query_answer(query)
             else:
-                await query.answer(
-                    "❌ Action failed - not your turn or invalid action"
+                await self._safe_query_answer(
+                    query,
+                    "❌ Action failed - not your turn or invalid action",
                 )
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.error(
@@ -661,7 +736,7 @@ Send 💰 /money once per day for free chips!
                 exc,
                 exc_info=True,
             )
-            await query.answer("❌ An error occurred")
+            await self._safe_query_answer(query, "❌ An error occurred")
 
     async def _handle_stake_selection(
         self,
@@ -674,7 +749,7 @@ Send 💰 /money once per day for free chips!
         if not query or not query.data:
             return
 
-        await query.answer()
+        await self._safe_query_answer(query)
 
         # Parse stake level from callback data (e.g., "stake:low" → "low")
         stake_level = query.data.split(":", 1)[1]
