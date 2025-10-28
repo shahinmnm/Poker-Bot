@@ -184,7 +184,7 @@ class PokerEngine:
             turn_order_indices.append(first_index)
 
             next_index = first_index
-            while True:
+            for offset in range(1, len(game.players)):
                 next_index = self._find_next_active_index(game, next_index)
 
                 if next_index is None or next_index == first_index:
@@ -267,7 +267,7 @@ class PokerEngine:
         This check happens BEFORE the closer acts, preventing double-action.
         """
         current_player = game.players[game.current_player_index]
-        last_actor = getattr(game, "last_actor_user_id", None)
+        closer_has_acted = getattr(game, "closer_has_acted", False)
 
         # Check 1: Is current player the closer?
         if current_player.user_id != game.trading_end_user_id:
@@ -278,16 +278,16 @@ class PokerEngine:
             )
             return False
 
-        # Check 2: Has at least one action been taken?
-        if last_actor is None:
-            logger.debug("❌ Betting not complete: no actions yet")
-            return False
+        logger.debug(
+            "🔍 Closer flag status: closer=%s, has_acted=%s",
+            game.trading_end_user_id,
+            closer_has_acted,
+        )
 
-        if last_actor != game.trading_end_user_id:
+        if not closer_has_acted:
             logger.debug(
-                "❌ Betting not complete: closer %s still to act (last=%s)",
+                "❌ Betting not complete: closer %s still to act",
                 game.trading_end_user_id,
-                last_actor,
             )
             return False
 
@@ -383,6 +383,8 @@ class PokerEngine:
 
         current_player = game.players[current_index]
         game.last_actor_user_id = current_player.user_id
+        if current_player.user_id == game.trading_end_user_id:
+            game.closer_has_acted = True
 
         logger.debug(
             "📝 Recorded last actor: %s (index=%d)",
