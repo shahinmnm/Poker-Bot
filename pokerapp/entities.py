@@ -119,6 +119,8 @@ class Game:
         self.group_message_id = None
         self.recent_actions = []
         self.round_has_started = False
+        # Version number used to invalidate stale inline keyboard callbacks.
+        self.live_message_version = 0
 
     def players_by(self, states: Tuple[PlayerState]) -> List[Player]:
         return list(filter(lambda p: p.state in states, self.players))
@@ -146,6 +148,24 @@ class Game:
         """Return ``True`` when a live message has already been created."""
 
         return self.group_message_id is not None
+
+    def get_live_message_version(self) -> int:
+        """Return the current live message version counter."""
+
+        return getattr(self, "live_message_version", 0)
+
+    def next_live_message_version(self) -> int:
+        """Return the version number that should be used for the next update."""
+
+        return self.get_live_message_version() + 1
+
+    def mark_live_message_version(self, version: int) -> None:
+        """Persist the provided live message version counter."""
+
+        if version < 0:
+            version = 0
+
+        self.live_message_version = version
 
     def get_recent_actions_text(self) -> str:
         """Return a bulleted list summarizing the most recent actions."""

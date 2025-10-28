@@ -3133,6 +3133,7 @@ class PokerBotModel:
         chat_id: int,
         action_type: str,
         raise_amount: Optional[int] = None,
+        message_version: Optional[int] = None,
     ) -> PlayerActionValidation:
         """Validate that a player can take an action before processing it."""
 
@@ -3163,6 +3164,21 @@ class PokerBotModel:
                 success=False,
                 message="❌ No active game in this chat",
             )
+
+        if message_version is not None:
+            current_version = game.get_live_message_version()
+            if message_version != current_version:
+                logger.info(
+                    "Stale action rejected: user=%s chat=%s got=%s expected=%s",
+                    user_id_str,
+                    chat_id_str,
+                    message_version,
+                    current_version,
+                )
+                return PlayerActionValidation(
+                    success=False,
+                    message="♻️ Action expired. Please use the latest buttons.",
+                )
 
         if game.current_player_index >= len(game.players):
             logger.error("Invalid current_player_index in game %s", game.id)

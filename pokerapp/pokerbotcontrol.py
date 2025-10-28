@@ -628,15 +628,57 @@ Send 💰 /money once per day for free chips!
 
                 try:
                     raise_amount = int(parts[2])
-                    game_id = parts[3]
                 except (ValueError, IndexError):
                     logger.warning("Invalid raise amount in: %s", query.data)
                     await self._safe_query_answer(query, "❌ Invalid raise amount")
                     return
+                message_version = None
+                if len(parts) == 4:
+                    game_id = parts[3]
+                else:
+                    try:
+                        message_version = int(parts[3])
+                    except (ValueError, IndexError):
+                        logger.warning(
+                            "Invalid message version in: %s", query.data
+                        )
+                        await self._safe_query_answer(
+                            query, "❌ Invalid action version"
+                        )
+                        return
+                    try:
+                        game_id = parts[4]
+                    except IndexError:
+                        logger.warning("Missing game id in: %s", query.data)
+                        await self._safe_query_answer(
+                            query, "❌ Invalid action format"
+                        )
+                        return
             else:
                 # For other actions: action:TYPE:GAME_ID
                 raise_amount = None
-                game_id = parts[2]
+                message_version = None
+                if len(parts) == 3:
+                    game_id = parts[2]
+                else:
+                    try:
+                        message_version = int(parts[2])
+                    except (ValueError, IndexError):
+                        logger.warning(
+                            "Invalid message version in: %s", query.data
+                        )
+                        await self._safe_query_answer(
+                            query, "❌ Invalid action version"
+                        )
+                        return
+                    try:
+                        game_id = parts[3]
+                    except IndexError:
+                        logger.warning("Missing game id in: %s", query.data)
+                        await self._safe_query_answer(
+                            query, "❌ Invalid action format"
+                        )
+                        return
 
             user_id = query.from_user.id
             chat_id = query.message.chat_id if query.message else None
@@ -662,6 +704,7 @@ Send 💰 /money once per day for free chips!
                     chat_id=chat_id,
                     action_type=action_type,
                     raise_amount=raise_amount,
+                    message_version=message_version,
                 )
 
                 if not validation.success or validation.prepared_action is None:
