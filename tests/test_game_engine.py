@@ -236,12 +236,14 @@ class PokerEngineRoundTests(unittest.TestCase):
         game.closer_has_acted = False
         self.assertIsNone(getattr(game, "last_actor_user_id", None))
 
+        # First action: a non-closer acts, so the flag should remain False.
         engine.advance_after_action(game)
 
         self.assertEqual(game.last_actor_user_id, players[0].user_id)
         self.assertEqual(game.current_player_index, 1)
         self.assertFalse(game.closer_has_acted)
 
+        # Set up the closer scenario and confirm the flag flips when they act.
         game.trading_end_user_id = players[2].user_id
         game.closer_has_acted = False
 
