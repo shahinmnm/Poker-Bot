@@ -220,7 +220,9 @@ class PokerEngineRoundTests(unittest.TestCase):
             ready_message_id=None,
         )
 
-    def test_advance_after_action_updates_last_actor_and_closer_flag(self) -> None:
+    def test_advance_after_action_updates_last_actor_and_closer_flag(
+        self,
+    ) -> None:
         engine = PokerEngine()
         game = Game()
         players = [
