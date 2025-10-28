@@ -408,7 +408,8 @@ class PokerEngine:
         # If the closer just acted with all bets matched, the round is done.
         if self._is_betting_complete(game):
             logger.info(
-                "🔚 Betting complete after action from %s", current_player.user_id
+                "🔚 Betting complete after action from %s",
+                current_player.user_id,
             )
             return
 
@@ -416,7 +417,8 @@ class PokerEngine:
 
         if next_player is None:
             logger.warning(
-                "⚠️ No next active player found after %s", current_player.user_id
+                "⚠️ No next active player found after %s",
+                current_player.user_id,
             )
             game.current_player_index = -1
             return
@@ -834,12 +836,17 @@ class GameEngine:
                 )
 
                 if current_state == GameState.ROUND_RIVER:
-                    logger.info("🏁 River betting complete → finishing hand NOW")
+                    logger.info(
+                        "🏁 River betting complete → finishing hand NOW"
+                    )
                     await self._finish_hand()
                     return
 
                 # Not on River, advance to next street
-                logger.info("⏭️ Advancing from %s to next street", current_state.name)
+                logger.info(
+                    "⏭️ Advancing from %s to next street",
+                    current_state.name,
+                )
                 advance_result = self._coordinator.advance_game_street(
                     self._game
                 )
@@ -852,7 +859,8 @@ class GameEngine:
                     cards_count
                 )
 
-                # Safety check: if advance resulted in FINISHED, end immediately
+                # Safety check: if advance resulted in FINISHED,
+                # end immediately
                 if new_state == GameState.FINISHED:
                     logger.error(
                         "⚠️ UNEXPECTED: Advance resulted in FINISHED state - "

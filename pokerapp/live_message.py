@@ -104,9 +104,13 @@ class LiveMessageManager:
                 return message_id
 
             except TelegramError as exc:
-                # Check if it's a "message not modified" error (content identical)
+                # Check if it's a "message not modified" error
+                # (content identical)
                 error_msg = str(exc).lower()
-                if "not modified" in error_msg or "message is not modified" in error_msg:
+                if (
+                    "not modified" in error_msg
+                    or "message is not modified" in error_msg
+                ):
                     self._logger.debug(
                         "Message %s content unchanged, skipping update",
                         game.group_message_id,
@@ -128,7 +132,10 @@ class LiveMessageManager:
                 else:
                     # For other errors, log but try to continue
                     self._logger.warning(
-                        "⚠️ Failed to edit message %s: %s (will try new message)",
+                        (
+                            "⚠️ Failed to edit message %s: %s "
+                            "(will try new message)"
+                        ),
                         game.group_message_id,
                         exc,
                     )

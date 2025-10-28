@@ -3260,7 +3260,9 @@ class PokerBotModel:
 
             self._coordinator.engine.advance_after_action(game)
 
-            turn_result, next_player = self._coordinator.process_game_turn(game)
+            turn_result, next_player = self._coordinator.process_game_turn(
+                game
+            )
 
             await self._handle_turn_result(
                 game,
