@@ -152,6 +152,7 @@ class PokerBotViewer:
         self,
         game: Game,
         current_player: Player,
+        version: Optional[int] = None,
     ) -> InlineKeyboardMarkup:
         """
         Build inline keyboard with available actions for current player.
@@ -172,6 +173,7 @@ class PokerBotViewer:
         call_amount = current_bet - player_bet
 
         game_id_str = str(game.id)
+        version_segment = [str(version)] if version is not None else []
 
         # Row 1 – primary defensive options (Check/Call + Fold)
         row1: List[InlineKeyboardButton] = []
@@ -179,21 +181,27 @@ class PokerBotViewer:
             row1.append(
                 InlineKeyboardButton(
                     "✅ Check",
-                    callback_data=":".join(["action", "check", game_id_str]),
+                    callback_data=":".join(
+                        ["action", "check", *version_segment, game_id_str]
+                    ),
                 )
             )
         elif call_amount < player_balance:
             row1.append(
                 InlineKeyboardButton(
                     f"💵 Call ${call_amount}",
-                    callback_data=":".join(["action", "call", game_id_str]),
+                    callback_data=":".join(
+                        ["action", "call", *version_segment, game_id_str]
+                    ),
                 )
             )
 
         row1.append(
             InlineKeyboardButton(
                 "❌ Fold",
-                callback_data=":".join(["action", "fold", game_id_str]),
+                callback_data=":".join(
+                    ["action", "fold", *version_segment, game_id_str]
+                ),
             )
         )
         buttons.append(row1)
@@ -224,7 +232,13 @@ class PokerBotViewer:
                     InlineKeyboardButton(
                         f"📈 Raise ${min_raise}",
                         callback_data=":".join(
-                            ["action", "raise", str(min_raise), game_id_str]
+                            [
+                                "action",
+                                "raise",
+                                str(min_raise),
+                                *version_segment,
+                                game_id_str,
+                            ]
                         ),
                     )
                 )
@@ -232,7 +246,9 @@ class PokerBotViewer:
             row2.append(
                 InlineKeyboardButton(
                     "🚀 All-in",
-                    callback_data=":".join(["action", "all_in", game_id_str]),
+                    callback_data=":".join(
+                        ["action", "all_in", *version_segment, game_id_str]
+                    ),
                 )
             )
 
@@ -251,7 +267,13 @@ class PokerBotViewer:
                         InlineKeyboardButton(
                             f"${amount}",
                             callback_data=":".join(
-                                ["action", "raise", str(amount), game_id_str]
+                                [
+                                    "action",
+                                    "raise",
+                                    str(amount),
+                                    *version_segment,
+                                    game_id_str,
+                                ]
                             ),
                         )
                     )
@@ -283,8 +305,14 @@ class PokerBotViewer:
 
             # Build buttons if there's a current player
             reply_markup = None
+            next_version = None
             if current_player:
-                reply_markup = self.build_action_buttons(game, current_player)
+                next_version = game.next_live_message_version()
+                reply_markup = self.build_action_buttons(
+                    game,
+                    current_player,
+                    version=next_version,
+                )
 
             message = await self._bot.send_message(
                 chat_id=chat_id,
@@ -294,6 +322,9 @@ class PokerBotViewer:
                 disable_notification=True,
                 disable_web_page_preview=True,
             )
+
+            if next_version is not None:
+                game.mark_live_message_version(next_version)
 
             return message.message_id
         except Exception as e:
@@ -343,8 +374,14 @@ class PokerBotViewer:
 
             # Build buttons if there's a current player
             reply_markup = None
+            next_version = None
             if current_player:
-                reply_markup = self.build_action_buttons(game, current_player)
+                next_version = game.next_live_message_version()
+                reply_markup = self.build_action_buttons(
+                    game,
+                    current_player,
+                    version=next_version,
+                )
 
             await self._bot.edit_message_text(
                 chat_id=chat_id,
@@ -354,6 +391,9 @@ class PokerBotViewer:
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
             )
+
+            if next_version is not None:
+                game.mark_live_message_version(next_version)
 
             return True
         except Exception as e:

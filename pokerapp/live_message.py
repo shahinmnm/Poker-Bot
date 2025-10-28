@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+import asyncio
+from typing import Dict, List, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
@@ -31,10 +32,14 @@ class LiveMessageManager:
     }
 
     PARSE_MODE = "HTML"
+    # Minimum spacing between consecutive updates per chat (seconds)
+    DEBOUNCE_WINDOW = 0.35
 
     def __init__(self, bot, logger):
         self._bot = bot
         self._logger = logger
+        self._chat_locks: Dict[str, asyncio.Lock] = {}
+        self._last_update_at: Dict[str, float] = {}
 
     async def send_or_update_live_message(
         self,
@@ -64,8 +69,60 @@ class LiveMessageManager:
     ) -> Optional[int]:
         """Send a new live message or update the existing one."""
 
+        chat_key = str(chat_id)
+        lock = self._chat_locks.get(chat_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._chat_locks[chat_key] = lock
+
+        async with lock:
+            await self._apply_debounce(chat_key)
+            loop = asyncio.get_running_loop()
+            try:
+                return await self._send_or_update_locked(
+                    chat_id=chat_id,
+                    game=game,
+                    current_player=current_player,
+                )
+            finally:
+                self._last_update_at[chat_key] = loop.time()
+
+    async def _apply_debounce(self, chat_key: str) -> None:
+        """Sleep briefly if the last update happened too recently."""
+
+        window = self.DEBOUNCE_WINDOW
+        if window <= 0:
+            return
+
+        last_update = self._last_update_at.get(chat_key)
+        if last_update is None:
+            return
+
+        loop = asyncio.get_running_loop()
+        elapsed = loop.time() - last_update
+        if elapsed < window:
+            await asyncio.sleep(window - elapsed)
+
+    async def _send_or_update_locked(
+        self,
+        chat_id: int,
+        game: Game,
+        current_player: Player,
+    ) -> Optional[int]:
+        """Internal helper executing the actual message update."""
+
+        next_version = None
+        if current_player is not None:
+            next_version = game.next_live_message_version()
+
         message_text = self._build_game_state_text(game, current_player)
-        reply_markup = self._build_action_inline_keyboard(game, current_player)
+        reply_markup = None
+        if current_player is not None:
+            reply_markup = self._build_action_inline_keyboard(
+                game,
+                current_player,
+                next_version,
+            )
 
         self._logger.info(
             "🔍 Sending update - has_buttons=%s, button_count=%s",
@@ -98,6 +155,8 @@ class LiveMessageManager:
                     "message_id",
                     game.group_message_id,
                 )
+                if next_version is not None:
+                    game.mark_live_message_version(next_version)
                 self._logger.debug(
                     "✅ Successfully edited message %s", message_id
                 )
@@ -161,6 +220,8 @@ class LiveMessageManager:
                     chat_id,
                 )
                 game.set_group_message(message_id)
+                if next_version is not None:
+                    game.mark_live_message_version(next_version)
 
             return message_id
 
@@ -270,8 +331,12 @@ class LiveMessageManager:
         self,
         game: Game,
         player: Player,
-    ) -> InlineKeyboardMarkup:
+        version: Optional[int],
+    ) -> Optional[InlineKeyboardMarkup]:
         """Build the inline keyboard for the player's available actions."""
+
+        if player is None:
+            return None
 
         buttons: List[List[InlineKeyboardButton]] = []
 
@@ -280,6 +345,7 @@ class LiveMessageManager:
         player_balance = player.wallet.value()
         call_amount = max(current_bet - player_bet, 0)
         game_id = str(game.id)
+        version_segment = [str(version)] if version is not None else []
 
         first_row: List[InlineKeyboardButton] = []
         show_primary_all_in = False
@@ -288,14 +354,18 @@ class LiveMessageManager:
             first_row.append(
                 InlineKeyboardButton(
                     "✅ Check",
-                    callback_data=":".join(["action", "check", game_id]),
+                    callback_data=":".join(
+                        ["action", "check", *version_segment, game_id]
+                    ),
                 )
             )
         elif call_amount < player_balance:
             first_row.append(
                 InlineKeyboardButton(
                     f"💵 Call ${call_amount}",
-                    callback_data=":".join(["action", "call", game_id]),
+                    callback_data=":".join(
+                        ["action", "call", *version_segment, game_id]
+                    ),
                 )
             )
         else:
@@ -303,14 +373,18 @@ class LiveMessageManager:
             first_row.append(
                 InlineKeyboardButton(
                     f"🔥 All-In (${player_balance})",
-                    callback_data=":".join(["action", "all_in", game_id]),
+                    callback_data=":".join(
+                        ["action", "all_in", *version_segment, game_id]
+                    ),
                 )
             )
 
         first_row.append(
             InlineKeyboardButton(
                 "🚪 Fold",
-                callback_data=":".join(["action", "fold", game_id]),
+                callback_data=":".join(
+                    ["action", "fold", *version_segment, game_id]
+                ),
             )
         )
         buttons.append(first_row)
@@ -356,6 +430,7 @@ class LiveMessageManager:
                                 "action",
                                 "raise",
                                 str(primary_raise_amount),
+                                *version_segment,
                                 game_id,
                             ]
                         ),
@@ -366,7 +441,9 @@ class LiveMessageManager:
                 second_row.append(
                     InlineKeyboardButton(
                         f"💥 All-In (${player_balance})",
-                        callback_data=":".join(["action", "all_in", game_id]),
+                        callback_data=":".join(
+                            ["action", "all_in", *version_segment, game_id]
+                        ),
                     )
                 )
 
@@ -386,11 +463,15 @@ class LiveMessageManager:
                                     "action",
                                     "raise",
                                     str(amount),
+                                    *version_segment,
                                     game_id,
                                 ]
                             ),
                         )
                     )
                 buttons.append(row)
+
+        if not buttons:
+            return None
 
         return InlineKeyboardMarkup(buttons)
