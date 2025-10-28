@@ -255,6 +255,7 @@ class PokerEngineRoundTests(unittest.TestCase):
 
         self.assertEqual(new_state, GameState.ROUND_FLOP)
         self.assertIsNone(game.last_actor_user_id)
+        self.assertFalse(game.closer_has_acted)
 
     def test_betting_complete_requires_last_actor(self) -> None:
         engine = PokerEngine()
@@ -289,6 +290,7 @@ class PokerEngineRoundTests(unittest.TestCase):
         self.assertEqual(new_state, GameState.ROUND_FLOP)
         self.assertEqual(game.current_player_index, 1)
         self.assertEqual(game.trading_end_user_id, players[0].user_id)
+        self.assertFalse(game.closer_has_acted)
 
         # First invocation should keep the current player (opponent) so they
         # actually get to act on the flop.
@@ -325,6 +327,7 @@ class PokerEngineRoundTests(unittest.TestCase):
         self.assertEqual(new_state, GameState.ROUND_FLOP)
         self.assertEqual(game.current_player_index, 0)
         self.assertEqual(game.trading_end_user_id, players[2].user_id)
+        self.assertFalse(game.closer_has_acted)
 
         # First player stays in place on initial prompt.
         result = engine.process_turn(game)

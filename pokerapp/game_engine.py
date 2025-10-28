@@ -170,27 +170,52 @@ class PokerEngine:
         street: Optional[GameState] = None,
     ) -> None:
         target_street = street or game.state
-        first_index, closer_index = self._resolve_first_and_closer(
+        first_index, _ = self._resolve_first_and_closer(
             game,
             target_street,
         )
+
+        turn_order_indices: list[int] = []
 
         if first_index is None:
             game.current_player_index = -1
         else:
             game.current_player_index = first_index
+            turn_order_indices.append(first_index)
 
-        if closer_index is None:
-            game.trading_end_user_id = 0
-        else:
+            next_index = first_index
+            while True:
+                next_index = self._find_next_active_index(game, next_index)
+
+                if next_index is None or next_index == first_index:
+                    break
+
+                turn_order_indices.append(next_index)
+
+        if turn_order_indices:
+            closer_index = turn_order_indices[-1]
             game.trading_end_user_id = game.players[closer_index].user_id
+        else:
+            game.trading_end_user_id = 0
 
+        game.closer_has_acted = False
         game.last_actor_user_id = None
+
+        first_user_id = None
+        if 0 <= game.current_player_index < len(game.players):
+            first_user_id = game.players[game.current_player_index].user_id
+
+        order_user_ids = [
+            game.players[index].user_id for index in turn_order_indices
+        ]
+
         logger.debug(
-            "Prepared turn order: first=%s, closer=%s, street=%s",
-            game.current_player_index,
-            game.trading_end_user_id,
+            "Prepared turn order for %s: first=%s (%s), closer=%s, order=%s",
             target_street.name,
+            game.current_player_index,
+            first_user_id,
+            game.trading_end_user_id,
+            order_user_ids,
         )
 
     def prepare_round(
@@ -400,9 +425,9 @@ class PokerEngine:
         Returns:
             New game state
         """
-        return self._advance_street(game)
+        return self._move_to_next_street(game)
 
-    def _advance_street(self, game: Game) -> GameState:
+    def _move_to_next_street(self, game: Game) -> GameState:
         state_transitions = {
             GameState.ROUND_PRE_FLOP: GameState.ROUND_FLOP,
             GameState.ROUND_FLOP: GameState.ROUND_TURN,
@@ -427,9 +452,20 @@ class PokerEngine:
         self._prepare_turn_order(game, new_state)
         game.round_has_started = False
 
-        logger.info("🎬 Street advanced → %s", new_state.name)
+        first_actor = None
+        if 0 <= game.current_player_index < len(game.players):
+            first_actor = game.players[game.current_player_index].user_id
+
+        logger.info(
+            "🎬 Street advanced → %s. First to act: %s",
+            new_state.name,
+            first_actor,
+        )
 
         return new_state
+
+    def _advance_street(self, game: Game) -> GameState:
+        return self._move_to_next_street(game)
 
     def get_cards_to_deal(self, game_state: GameState) -> int:
         """
@@ -521,6 +557,7 @@ class GameEngine:
         self._game.current_player_index = 0
         self._game.remain_cards = []
         self._game.trading_end_user_id = 0
+        self._game.closer_has_acted = False
         self._game.round_has_started = False
 
     def _align_players_with_dealer(self) -> None:
