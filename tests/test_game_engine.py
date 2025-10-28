@@ -220,7 +220,7 @@ class PokerEngineRoundTests(unittest.TestCase):
             ready_message_id=None,
         )
 
-    def test_advance_after_action_sets_last_actor_and_advances_turn(self) -> None:
+    def test_advance_after_action_updates_last_actor_and_closer_flag(self) -> None:
         engine = PokerEngine()
         game = Game()
         players = [
@@ -233,6 +233,8 @@ class PokerEngineRoundTests(unittest.TestCase):
         game.state = GameState.ROUND_PRE_FLOP
         game.current_player_index = 0
         game.round_has_started = False
+        game.trading_end_user_id = players[2].user_id
+        game.closer_has_acted = False
 
         self.assertIsNone(getattr(game, "last_actor_user_id", None))
 
@@ -240,6 +242,15 @@ class PokerEngineRoundTests(unittest.TestCase):
 
         self.assertEqual(game.last_actor_user_id, players[0].user_id)
         self.assertEqual(game.current_player_index, 1)
+        self.assertFalse(game.closer_has_acted)
+
+        # Simulate progression to the closer and ensure the flag is set.
+        game.current_player_index = 2
+
+        engine.advance_after_action(game)
+
+        self.assertEqual(game.last_actor_user_id, players[2].user_id)
+        self.assertTrue(game.closer_has_acted)
 
     def test_advance_street_clears_last_actor(self) -> None:
         engine = PokerEngine()
@@ -257,7 +268,7 @@ class PokerEngineRoundTests(unittest.TestCase):
         self.assertIsNone(game.last_actor_user_id)
         self.assertFalse(game.closer_has_acted)
 
-    def test_betting_complete_requires_last_actor(self) -> None:
+    def test_betting_complete_requires_closer_action(self) -> None:
         engine = PokerEngine()
         game = Game()
         players = [self._create_player(1), self._create_player(2)]
@@ -270,10 +281,10 @@ class PokerEngineRoundTests(unittest.TestCase):
         for player in players:
             player.round_rate = 0
 
-        game.last_actor_user_id = None
+        game.closer_has_acted = False
         self.assertFalse(engine._is_betting_complete(game))
 
-        game.last_actor_user_id = players[0].user_id
+        game.closer_has_acted = True
         self.assertTrue(engine._is_betting_complete(game))
 
     def test_heads_up_post_flop_checks_end_round(self) -> None:

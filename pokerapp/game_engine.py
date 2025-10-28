@@ -217,6 +217,11 @@ class PokerEngine:
             game.trading_end_user_id,
             order_user_ids,
         )
+        logger.debug(
+            "🔄 Reset closer flag for %s → closer_has_acted=%s",
+            target_street.name,
+            game.closer_has_acted,
+        )
 
     def prepare_round(
         self,
@@ -385,6 +390,11 @@ class PokerEngine:
         game.last_actor_user_id = current_player.user_id
         if current_player.user_id == game.trading_end_user_id:
             game.closer_has_acted = True
+            logger.debug(
+                "✅ Closer %s has now acted (street=%s)",
+                current_player.user_id,
+                game.state.name,
+            )
 
         logger.debug(
             "📝 Recorded last actor: %s (index=%d)",
@@ -800,7 +810,9 @@ class GameEngine:
         self._persist_state({"finished": True})
 
     async def _play_betting_round(self) -> None:
-        while True:
+        max_iterations = max(1, len(self._players)) * 100
+
+        for _ in range(max_iterations):
             result, next_player = self._coordinator.process_game_turn(
                 self._game
             )
@@ -872,6 +884,13 @@ class GameEngine:
                 await self._notify_next_player_turn(next_player)
                 self._persist_state()
                 return
+
+        else:
+            self._logger.error(
+                "Betting round exceeded %d iterations without terminating",
+                max_iterations,
+            )
+            raise RuntimeError("Betting loop exceeded safe iteration count")
 
     async def start_new_hand(self) -> Game:
         """Initialise a fresh hand and prompt the first player to act."""
