@@ -826,16 +826,28 @@ class GameEngine:
                 self._coordinator.commit_round_bets(self._game)
                 self._persist_state()
 
+                # Check if we're on River BEFORE advancing
                 if self._game.state == GameState.ROUND_RIVER:
+                    logger.info("🏁 River betting complete → finishing hand")
                     await self._finish_hand()
                     return
 
+                # Advance to next street
                 advance_result = self._coordinator.advance_game_street(
                     self._game
                 )
                 new_state, cards_count = advance_result
                 self._persist_state({"state": new_state.name})
 
+                # Safety check: if advance resulted in FINISHED, end immediately
+                if new_state == GameState.FINISHED:
+                    logger.error(
+                        "⚠️ Unexpected FINISHED state after street advance - ending hand"
+                    )
+                    await self._finish_hand()
+                    return
+
+                # Deal community cards if needed
                 if cards_count > 0:
                     dealt_count = self._deal_community_cards(cards_count)
                     self._persist_state()
@@ -872,10 +884,6 @@ class GameEngine:
                                 ),
                                 exc,
                             )
-
-                if new_state == GameState.FINISHED:
-                    await self._finish_hand()
-                    return
 
                 continue
 
