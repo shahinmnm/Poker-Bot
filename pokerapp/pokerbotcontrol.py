@@ -620,9 +620,24 @@ Send 💰 /money once per day for free chips!
         try:
             parts = query.data.split(":")
 
+            chat_id = query.message.chat_id if query.message else None
+
+            async def notify_user(message: str) -> None:
+                if chat_id is None:
+                    logger.warning(
+                        "Unable to notify user %s about callback issue: %s",
+                        query.from_user.id,
+                        message,
+                    )
+                    return
+                await self._model._view.send_message(
+                    chat_id=chat_id,
+                    text=message,
+                )
+
             if len(parts) < 3:
                 logger.warning("Invalid action button data: %s", query.data)
-                await self._safe_query_answer(query, "❌ Invalid action format")
+                await notify_user("❌ Invalid action format")
                 return
 
             action_type = parts[1]  # fold, call, check, raise, all_in
@@ -631,14 +646,14 @@ Send 💰 /money once per day for free chips!
             if action_type == "raise":
                 if len(parts) < 4:
                     logger.warning("Invalid raise button data: %s", query.data)
-                    await self._safe_query_answer(query, "❌ Invalid raise format")
+                    await notify_user("❌ Invalid raise format")
                     return
 
                 try:
                     raise_amount = int(parts[2])
                 except (ValueError, IndexError):
                     logger.warning("Invalid raise amount in: %s", query.data)
-                    await self._safe_query_answer(query, "❌ Invalid raise amount")
+                    await notify_user("❌ Invalid raise amount")
                     return
                 message_version = None
                 if len(parts) == 4:
@@ -650,17 +665,13 @@ Send 💰 /money once per day for free chips!
                         logger.warning(
                             "Invalid message version in: %s", query.data
                         )
-                        await self._safe_query_answer(
-                            query, "❌ Invalid action version"
-                        )
+                        await notify_user("❌ Invalid action version")
                         return
                     try:
                         game_id = parts[4]
                     except IndexError:
                         logger.warning("Missing game id in: %s", query.data)
-                        await self._safe_query_answer(
-                            query, "❌ Invalid action format"
-                        )
+                        await notify_user("❌ Invalid action format")
                         return
             else:
                 # For other actions: action:TYPE:GAME_ID
@@ -675,31 +686,26 @@ Send 💰 /money once per day for free chips!
                         logger.warning(
                             "Invalid message version in: %s", query.data
                         )
-                        await self._safe_query_answer(
-                            query, "❌ Invalid action version"
-                        )
+                        await notify_user("❌ Invalid action version")
                         return
                     try:
                         game_id = parts[3]
                     except IndexError:
                         logger.warning("Missing game id in: %s", query.data)
-                        await self._safe_query_answer(
-                            query, "❌ Invalid action format"
-                        )
+                        await notify_user("❌ Invalid action format")
                         return
 
             user_id = query.from_user.id
-            chat_id = query.message.chat_id if query.message else None
 
             if not chat_id:
-                await self._safe_query_answer(query, "❌ Cannot determine chat context")
+                await notify_user("❌ Cannot determine chat context")
                 return
 
             handle_action = getattr(self._model, "handle_player_action", None)
 
             if handle_action is None:
                 logger.error("Model missing handle_player_action method")
-                await self._safe_query_answer(query, "❌ Action handler not available")
+                await notify_user("❌ Action handler not available")
                 return
 
             signature = inspect.signature(handle_action)
@@ -716,14 +722,11 @@ Send 💰 /money once per day for free chips!
                 )
 
                 if not validation.success or validation.prepared_action is None:
-                    await self._safe_query_answer(
-                        query,
+                    await notify_user(
                         validation.message
-                        or "❌ Action failed - not your turn or invalid action",
+                        or "❌ Action failed - not your turn or invalid action"
                     )
                     return
-
-                await self._safe_query_answer(query)
 
                 success = await self._model.execute_player_action(
                     validation.prepared_action
@@ -761,7 +764,7 @@ Send 💰 /money once per day for free chips!
                 player_action = legacy_map.get(action_type)
 
                 if player_action is None:
-                    await self._safe_query_answer(query, "❌ Unknown action type")
+                    await notify_user("❌ Unknown action type")
                     return
 
                 legacy_amount = raise_amount if raise_amount is not None else 0
@@ -775,19 +778,16 @@ Send 💰 /money once per day for free chips!
                 )
 
             if success:
-                await self._safe_query_answer(query)
-            else:
-                await self._safe_query_answer(
-                    query,
-                    "❌ Action failed - not your turn or invalid action",
-                )
+                return
+
+            await notify_user("❌ Action failed - not your turn or invalid action")
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.error(
                 "Error handling action button: %s",
                 exc,
                 exc_info=True,
             )
-            await self._safe_query_answer(query, "❌ An error occurred")
+            await notify_user("❌ An error occurred")
 
     async def _handle_stake_selection(
         self,
