@@ -610,6 +610,14 @@ Send 💰 /money once per day for free chips!
             return
 
         try:
+            await query.answer()
+        except BadRequest as exc:
+            if "query is too old" in str(exc).lower():
+                logger.debug("Stale callback from user %s", query.from_user.id)
+                return
+            raise
+
+        try:
             parts = query.data.split(":")
 
             if len(parts) < 3:
