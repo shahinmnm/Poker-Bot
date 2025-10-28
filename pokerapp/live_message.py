@@ -163,9 +163,8 @@ class LiveMessageManager:
                 return message_id
 
             except TelegramError as exc:
-                # Check if it's a "message not modified" error
-                # (content identical)
                 error_msg = str(exc).lower()
+
                 if (
                     "not modified" in error_msg
                     or "message is not modified" in error_msg
@@ -176,29 +175,23 @@ class LiveMessageManager:
                     )
                     return game.group_message_id
 
-                # Check if message was deleted or doesn't exist
                 if (
                     "message to edit not found" in error_msg
                     or "message can't be edited" in error_msg
                     or "message_id_invalid" in error_msg
                 ):
                     self._logger.warning(
-                        "⚠️ Message %s no longer exists, will create new one",
+                        "Message %s no longer exists, will send new message",
                         game.group_message_id,
                     )
-                    # Clear the stale message ID
                     game.group_message_id = None
                 else:
-                    # For other errors, log but try to continue
-                    self._logger.warning(
-                        (
-                            "⚠️ Failed to edit message %s: %s "
-                            "(will try new message)"
-                        ),
+                    self._logger.error(
+                        "Failed to edit message %s: %s, will send new message",
                         game.group_message_id,
                         exc,
                     )
-                    # Don't clear message ID yet - might be temporary
+                    game.group_message_id = None
 
         # Send new message if no existing one or edit failed critically
         try:
