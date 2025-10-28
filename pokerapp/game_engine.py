@@ -830,20 +830,20 @@ class GameEngine:
 
                 # CRITICAL: Check if we're on River BEFORE advancing
                 current_state = self._game.state
-                logger.info(
+                self._logger.info(
                     "🔄 END_ROUND on %s - checking if hand should finish",
-                    current_state.name
+                    current_state.name,
                 )
 
                 if current_state == GameState.ROUND_RIVER:
-                    logger.info(
+                    self._logger.info(
                         "🏁 River betting complete → finishing hand NOW"
                     )
                     await self._finish_hand()
                     return
 
                 # Not on River, advance to next street
-                logger.info(
+                self._logger.info(
                     "⏭️ Advancing from %s to next street",
                     current_state.name,
                 )
@@ -853,7 +853,7 @@ class GameEngine:
                 new_state, cards_count = advance_result
                 self._persist_state({"state": new_state.name})
 
-                logger.info(
+                self._logger.info(
                     "✅ Advanced to %s (cards_to_deal=%d)",
                     new_state.name,
                     cards_count
@@ -862,7 +862,7 @@ class GameEngine:
                 # Safety check: if advance resulted in FINISHED,
                 # end immediately
                 if new_state == GameState.FINISHED:
-                    logger.error(
+                    self._logger.error(
                         "⚠️ UNEXPECTED: Advance resulted in FINISHED state - "
                         "this should only happen from RIVER. Finishing hand."
                     )
