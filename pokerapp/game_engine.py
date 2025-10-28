@@ -826,23 +826,37 @@ class GameEngine:
                 self._coordinator.commit_round_bets(self._game)
                 self._persist_state()
 
-                # Check if we're on River BEFORE advancing
-                if self._game.state == GameState.ROUND_RIVER:
-                    logger.info("🏁 River betting complete → finishing hand")
+                # CRITICAL: Check if we're on River BEFORE advancing
+                current_state = self._game.state
+                logger.info(
+                    "🔄 END_ROUND on %s - checking if hand should finish",
+                    current_state.name
+                )
+
+                if current_state == GameState.ROUND_RIVER:
+                    logger.info("🏁 River betting complete → finishing hand NOW")
                     await self._finish_hand()
                     return
 
-                # Advance to next street
+                # Not on River, advance to next street
+                logger.info("⏭️ Advancing from %s to next street", current_state.name)
                 advance_result = self._coordinator.advance_game_street(
                     self._game
                 )
                 new_state, cards_count = advance_result
                 self._persist_state({"state": new_state.name})
 
+                logger.info(
+                    "✅ Advanced to %s (cards_to_deal=%d)",
+                    new_state.name,
+                    cards_count
+                )
+
                 # Safety check: if advance resulted in FINISHED, end immediately
                 if new_state == GameState.FINISHED:
                     logger.error(
-                        "⚠️ Unexpected FINISHED state after street advance - ending hand"
+                        "⚠️ UNEXPECTED: Advance resulted in FINISHED state - "
+                        "this should only happen from RIVER. Finishing hand."
                     )
                     await self._finish_hand()
                     return
@@ -885,6 +899,7 @@ class GameEngine:
                                 exc,
                             )
 
+                # Continue to next betting round
                 continue
 
             if result == TurnResult.CONTINUE_ROUND and next_player is not None:
