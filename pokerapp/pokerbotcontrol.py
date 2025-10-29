@@ -812,7 +812,8 @@ Send 💰 /money once per day for free chips!
                     )
                     await show_popup(
                         error_message,
-                        is_alert=False,
+                        is_alert=True,
+                        fallback_chat_id=chat_id,
                     )
                     return
 
