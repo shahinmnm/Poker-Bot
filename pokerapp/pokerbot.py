@@ -197,7 +197,11 @@ class PokerBot:
 
         try:
             stats = self._analytics.get_stats()
-            log_helper.info("BotShutdown", "Final stats collected", stats=stats)
+            log_helper.info(
+                "BotShutdown",
+                "Final stats collected",
+                stats=stats,
+            )
         except Exception as exc:  # pragma: no cover - safety net
             log_helper.error(
                 "BotShutdown",
