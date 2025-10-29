@@ -834,7 +834,13 @@ Send 💰 /money once per day for free chips!
                 exc,
                 exc_info=True,
             )
-            await show_popup("❌ An error occurred. Please try again.", is_alert=True)
+            await show_popup(
+                "❌ An error occurred. Please try again.",
+                is_alert=True,
+                fallback_chat_id=(
+                    query.message.chat_id if query and query.message else None
+                ),
+            )
 
     async def _handle_stake_selection(
         self,
