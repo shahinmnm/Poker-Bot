@@ -609,11 +609,34 @@ Send 💰 /money once per day for free chips!
         if not query or not query.data:
             return
 
+        async def show_popup(message: str, is_alert: bool = True) -> bool:
+            """Show popup notification to user. Returns True if successful."""
+
+            try:
+                await query.answer(text=message, show_alert=is_alert)
+                return True
+            except BadRequest as exc:
+                error_msg = str(exc).lower()
+
+                if "query is too old" in error_msg or "query_id_invalid" in error_msg:
+                    logger.debug(
+                        "Cannot show popup (query expired) for user %s: %s",
+                        query.from_user.id,
+                        message,
+                    )
+                    return False
+
+                logger.warning("Failed to show popup: %s", exc)
+                return False
+
         try:
             await query.answer()
         except BadRequest as exc:
             if "query is too old" in str(exc).lower():
-                logger.debug("Stale callback from user %s", query.from_user.id)
+                await show_popup(
+                    "♻️ These buttons are outdated. Please use the latest message!",
+                    is_alert=True,
+                )
                 return
             raise
 
@@ -622,7 +645,7 @@ Send 💰 /money once per day for free chips!
 
             if len(parts) < 3:
                 logger.warning("Invalid action button data: %s", query.data)
-                await self._safe_query_answer(query, "❌ Invalid action format")
+                await show_popup("❌ Invalid action format", is_alert=True)
                 return
 
             action_type = parts[1]  # fold, call, check, raise, all_in
@@ -716,10 +739,10 @@ Send 💰 /money once per day for free chips!
                 )
 
                 if not validation.success or validation.prepared_action is None:
-                    await self._safe_query_answer(
-                        query,
+                    await show_popup(
                         validation.message
                         or "❌ Action failed - not your turn or invalid action",
+                        is_alert=True,
                     )
                     return
 
@@ -734,9 +757,9 @@ Send 💰 /money once per day for free chips!
                         "Execution of player action %s failed after validation",
                         action_type,
                     )
-                    await self._model._view.send_message(
-                        chat_id=chat_id,
-                        text="❌ Action could not be processed. Please try again.",
+                    await show_popup(
+                        "❌ Action failed. Please check the game state.",
+                        is_alert=True,
                     )
                 return
 
@@ -787,7 +810,7 @@ Send 💰 /money once per day for free chips!
                 exc,
                 exc_info=True,
             )
-            await self._safe_query_answer(query, "❌ An error occurred")
+            await show_popup("❌ An error occurred. Please try again.", is_alert=True)
 
     async def _handle_stake_selection(
         self,
