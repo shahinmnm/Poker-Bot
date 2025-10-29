@@ -13,7 +13,6 @@ from typing import Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
-from telegram.error import TelegramError
 from telegram.ext import Application, CallbackContext, ContextTypes
 from telegram.helpers import escape_markdown
 
@@ -1507,19 +1506,7 @@ class PokerBotModel:
         game_data = self._kv.get(lobby_key)
 
         if not game_data:
-            try:
-                await query.answer("❌ Game not found!", show_alert=True)
-                logger.info(
-                    "💬 Popup sent to user %s: %s",
-                    getattr(user, "id", "?"),
-                    "❌ Game not found!",
-                )
-            except TelegramError as exc:
-                logger.warning(
-                    "⚠️ Popup failed for user %s: %s",
-                    getattr(user, "id", "?"),
-                    exc,
-                )
+            await query.answer("❌ Game not found!", show_alert=True)
             return
 
         if isinstance(game_data, bytes):
@@ -1631,19 +1618,7 @@ class PokerBotModel:
         game_data = self._kv.get(game_key)
 
         if not game_data:
-            try:
-                await query.answer("❌ Game not found!", show_alert=True)
-                logger.info(
-                    "💬 Popup sent to user %s: %s",
-                    getattr(user, "id", "?"),
-                    "❌ Game not found!",
-                )
-            except TelegramError as exc:
-                logger.warning(
-                    "⚠️ Popup failed for user %s: %s",
-                    getattr(user, "id", "?"),
-                    exc,
-                )
+            await query.answer("❌ Game not found!", show_alert=True)
             return
 
         if isinstance(game_data, bytes):
@@ -3232,14 +3207,14 @@ class PokerBotModel:
                 current_player_id_str,
             )
 
-            error_message = "⏳ Not your turn!"
+            error_message = "⚠️ It's not your turn!"
 
             if current_player:
                 player_name = self._get_player_name(current_player)
                 if not player_name:
                     player_name = f"Player {current_player.user_id}"
                 error_message = (
-                    f"⏳ Not your turn! It's {player_name}'s move."
+                    f"⏳ It's {player_name}'s turn, please wait."
                 )
 
             return PlayerActionValidation(
@@ -3262,7 +3237,7 @@ class PokerBotModel:
             )
             return PlayerActionValidation(
                 success=False,
-                message="🛑 Game is not accepting actions right now.",
+                message="❌ Game is not accepting actions now",
             )
 
         if current_player.state not in (
@@ -3274,13 +3249,9 @@ class PokerBotModel:
                 user_id_str,
                 current_player.state,
             )
-            if current_player.state == PlayerState.FOLD:
-                message = "❌ You already folded!"
-            else:
-                message = "❌ You cannot act right now"
             return PlayerActionValidation(
                 success=False,
-                message=message,
+                message="❌ You cannot act right now",
             )
 
         if action_type == "check":

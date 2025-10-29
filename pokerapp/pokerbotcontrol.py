@@ -143,25 +143,17 @@ class PokerBotController:
         text: str | None = None,
         *,
         show_alert: bool = False,
-    ) -> bool:
-        """Answer callback queries and handle stale query errors.
-
-        Returns ``True`` when Telegram accepted the response.
-        """
+    ) -> None:
+        """Answer callback queries and handle stale query errors."""
 
         if not query:
-            return False
-
-        user_id = getattr(getattr(query, "from_user", None), "id", "?")
+            return
 
         try:
             if text is None:
                 await query.answer(show_alert=show_alert)
             else:
                 await query.answer(text, show_alert=show_alert)
-                if text:
-                    logger.info("💬 Popup sent to user %s: %s", user_id, text)
-            return True
         except BadRequest as exc:  # pragma: no cover - defensive logging
             if self._is_stale_callback_query_error(exc):
                 logger.debug("Ignoring stale callback query: %s", exc)
@@ -171,11 +163,6 @@ class PokerBotController:
                     exc,
                     exc_info=True,
                 )
-            logger.warning("⚠️ Popup failed for user %s: %s", user_id, exc)
-        except TelegramError as exc:  # pragma: no cover - defensive logging
-            logger.warning("⚠️ Popup failed for user %s: %s", user_id, exc)
-
-        return False
 
     async def _post_init(self, application: Application) -> None:
         """Set up bot command descriptions in Telegram UI."""
@@ -630,38 +617,43 @@ Send 💰 /money once per day for free chips!
         ) -> bool:
             """Show popups and fall back to chat messaging when needed."""
 
-            answered = await self._safe_query_answer(
-                query,
-                message,
-                show_alert=is_alert,
-            )
-
-            if answered:
-                return True
-
-            if fallback_chat_id is None or not is_alert:
-                return False
-
-            # Fallback to chat message only for alert-style messages
             try:
-                await context.bot.send_message(
-                    chat_id=fallback_chat_id,
-                    text=message,
-                )
-                logger.info(
-                    "💬 Popup fallback sent to chat %s for user %s: %s",
-                    fallback_chat_id,
-                    getattr(getattr(query, "from_user", None), "id", "?"),
-                    message,
-                )
+                await query.answer(text=message, show_alert=is_alert)
                 return True
-            except TelegramError as exc:
-                # pragma: no cover - defensive logging
-                logger.error(
-                    "Failed to send fallback chat notification: %s",
-                    exc,
-                    exc_info=True,
-                )
+            except BadRequest as exc:
+                error_msg = str(exc).lower()
+
+                if (
+                    "query is too old" in error_msg
+                    or "query_id_invalid" in error_msg
+                ):
+                    logger.debug(
+                        "Cannot show popup (query expired) for user %s: %s",
+                        query.from_user.id,
+                        message,
+                    )
+                    # Don't return yet - try fallback
+                else:
+                    logger.warning("Failed to show popup: %s", exc)
+
+                if fallback_chat_id is None:
+                    return False
+
+            # Fallback to chat message if popup failed and fallback enabled
+            if fallback_chat_id is not None:
+                try:
+                    await context.bot.send_message(
+                        chat_id=fallback_chat_id,
+                        text=message,
+                    )
+                    return True
+                except TelegramError as exc:
+                    # pragma: no cover - defensive logging
+                    logger.error(
+                        "Failed to send fallback chat notification: %s",
+                        exc,
+                        exc_info=True,
+                    )
 
             return False
 
@@ -671,17 +663,10 @@ Send 💰 /money once per day for free chips!
             if "query is too old" in str(exc).lower():
                 await show_popup(
                     "♻️ Buttons expired. Please use the latest message!",
-                    is_alert=False,
+                    is_alert=True,
                 )
                 return
             raise
-        except TelegramError as exc:
-            logger.warning(
-                "⚠️ Popup failed for user %s: %s",
-                getattr(getattr(query, "from_user", None), "id", "?"),
-                exc,
-            )
-            return
 
         try:
             parts = query.data.split(":")
@@ -690,7 +675,7 @@ Send 💰 /money once per day for free chips!
                 logger.warning("Invalid action button data: %s", query.data)
                 await show_popup(
                     "❌ Invalid action format",
-                    is_alert=False,
+                    is_alert=True,
                 )
                 return
 
@@ -812,7 +797,8 @@ Send 💰 /money once per day for free chips!
                     )
                     await show_popup(
                         error_message,
-                        is_alert=False,
+                        is_alert=True,
+                        fallback_chat_id=chat_id,
                     )
                     return
 
