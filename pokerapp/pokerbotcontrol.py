@@ -609,6 +609,8 @@ Send 💰 /money once per day for free chips!
         if not query or not query.data:
             return
 
+        query_answered = False
+
         async def show_popup(
             message: str,
             is_alert: bool = True,
@@ -617,27 +619,31 @@ Send 💰 /money once per day for free chips!
         ) -> bool:
             """Show popups and fall back to chat messaging when needed."""
 
-            try:
-                await query.answer(text=message, show_alert=is_alert)
-                return True
-            except BadRequest as exc:
-                error_msg = str(exc).lower()
+            nonlocal query_answered
 
-                if (
-                    "query is too old" in error_msg
-                    or "query_id_invalid" in error_msg
-                ):
-                    logger.debug(
-                        "Cannot show popup (query expired) for user %s: %s",
-                        query.from_user.id,
-                        message,
-                    )
-                    # Don't return yet - try fallback
-                else:
-                    logger.warning("Failed to show popup: %s", exc)
+            if not query_answered:
+                try:
+                    await query.answer(text=message, show_alert=is_alert)
+                    query_answered = True
+                    return True
+                except BadRequest as exc:
+                    error_msg = str(exc).lower()
 
-                if fallback_chat_id is None:
-                    return False
+                    if (
+                        "query is too old" in error_msg
+                        or "query_id_invalid" in error_msg
+                    ):
+                        logger.debug(
+                            "Cannot show popup (query expired) for user %s: %s",
+                            query.from_user.id,
+                            message,
+                        )
+                        # Don't return yet - try fallback
+                    else:
+                        logger.warning("Failed to show popup: %s", exc)
+
+                    if fallback_chat_id is None:
+                        return False
 
             # Fallback to chat message if popup failed and fallback enabled
             if fallback_chat_id is not None:
@@ -646,6 +652,7 @@ Send 💰 /money once per day for free chips!
                         chat_id=fallback_chat_id,
                         text=message,
                     )
+                    query_answered = True
                     return True
                 except TelegramError as exc:
                     # pragma: no cover - defensive logging
@@ -659,6 +666,7 @@ Send 💰 /money once per day for free chips!
 
         try:
             await query.answer()
+            query_answered = True
         except BadRequest as exc:
             if "query is too old" in str(exc).lower():
                 await show_popup(
