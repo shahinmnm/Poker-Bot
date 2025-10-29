@@ -746,8 +746,6 @@ Send 💰 /money once per day for free chips!
                     )
                     return
 
-                await self._safe_query_answer(query)
-
                 success = await self._model.execute_player_action(
                     validation.prepared_action
                 )
