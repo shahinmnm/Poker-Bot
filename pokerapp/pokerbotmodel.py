@@ -3206,9 +3206,20 @@ class PokerBotModel:
                 user_id_str,
                 current_player_id_str,
             )
+
+            error_message = "⚠️ It's not your turn!"
+
+            if current_player:
+                player_name = self._get_player_name(current_player)
+                if not player_name:
+                    player_name = f"Player {current_player.user_id}"
+                error_message = (
+                    f"⏳ It's {player_name}'s turn, please wait."
+                )
+
             return PlayerActionValidation(
                 success=False,
-                message="❌ It's not your turn",
+                message=error_message,
             )
 
         active_states = {
