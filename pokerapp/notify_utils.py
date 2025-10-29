@@ -109,6 +109,7 @@ class NotificationManager:
     def _prune_cache(cls, now: float) -> None:
         """Remove cached callback entries that have outlived the TTL."""
 
+        before_count = len(cls._callback_states)
         expired = [
             query_id
             for query_id, state in cls._callback_states.items()
@@ -116,6 +117,14 @@ class NotificationManager:
         ]
         for query_id in expired:
             cls._callback_states.pop(query_id, None)
+
+        after_count = len(cls._callback_states)
+        if before_count > 100 and expired:
+            cls._log.info(
+                "CachePruned",
+                f"Removed {before_count - after_count} expired callbacks",
+                active_count=after_count,
+            )
 
     @classmethod
     def _should_answer(cls, query) -> tuple[bool, str | None, "NotificationManager._CallbackState" | None, float]:
