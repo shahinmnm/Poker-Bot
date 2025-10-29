@@ -16,9 +16,11 @@ from pokerapp.entities import (
     PlayerState,
     Money,
 )
+from pokerapp.notify_utils import LoggerHelper
 from pokerapp.winnerdetermination import WinnerDetermination
 
 logger = logging.getLogger(__name__)
+log_helper = LoggerHelper.for_logger(logger)
 
 
 class GameCoordinator:
@@ -52,7 +54,10 @@ class GameCoordinator:
         """
 
         if self._view is None:
-            logger.warning("View not initialized; cannot update game state UI")
+            log_helper.warn(
+                "CoordinatorViewMissing",
+                "View not initialized; cannot update game state UI",
+            )
             return
 
         effective_chat_id = (
@@ -86,9 +91,9 @@ class GameCoordinator:
                 if message_id is not None:
                     return
 
-            logger.debug(
-                "LiveMessageManager unavailable or no player resolved; "
-                "falling back to direct viewer updates",
+            log_helper.debug(
+                "CoordinatorFallback",
+                "LiveMessageManager unavailable or no player resolved",
             )
 
         # Edit existing message or send new
@@ -104,9 +109,10 @@ class GameCoordinator:
             if updated:
                 return
 
-            logger.warning(
-                "Failed to edit message %s; attempting to send new message",
-                game.group_message_id,
+            log_helper.warn(
+                "CoordinatorMessageRetry",
+                message="Failed to edit message; attempting to send new message",
+                message_id=game.group_message_id,
             )
 
         message_id = await self._view.send_game_state(
@@ -149,9 +155,10 @@ class GameCoordinator:
 
             # Auto all-in if player has no money
             if current_player.wallet.value() <= 0:
-                logger.info(
-                    "Player %s has $0 - setting ALL_IN",
-                    current_player.user_id,
+                log_helper.info(
+                    "CoordinatorAutoAllIn",
+                    "Player has zero balance, forcing ALL_IN",
+                    user_id=current_player.user_id,
                 )
                 current_player.state = PlayerState.ALL_IN
 
@@ -209,12 +216,13 @@ class GameCoordinator:
         raise_increment = max(amount - game.max_round_rate, 0)
         total_needed = call_amount + raise_increment
 
-        logger.debug(
-            "Player %s raising: call=%s, raise_increment=%s, total=%s",
-            player.user_id,
-            call_amount,
-            raise_increment,
-            total_needed,
+        log_helper.debug(
+            "CoordinatorRaise",
+            "Player raising action",
+            user_id=player.user_id,
+            call_amount=call_amount,
+            raise_increment=raise_increment,
+            total_needed=total_needed,
         )
 
         if total_needed <= 0:

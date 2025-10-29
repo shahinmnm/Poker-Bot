@@ -38,6 +38,7 @@ from pokerapp.entities import (
 from pokerapp.game_coordinator import GameCoordinator
 from pokerapp.group_lobby import GroupLobbyManager
 from pokerapp.game_engine import TurnResult
+from pokerapp.notify_utils import NotificationManager
 from pokerapp.pokerbotview import PokerBotViewer
 from pokerapp.kvstore import ensure_kv
 from pokerapp.winnerdetermination import get_combination_name
@@ -1508,7 +1509,12 @@ class PokerBotModel:
 
         if not game_data:
             try:
-                await query.answer("❌ Game not found!", show_alert=True)
+                await NotificationManager.popup(
+                    query,
+                    text="❌ Game not found!",
+                    show_alert=True,
+                    event="ModelPopup",
+                )
                 logger.info(
                     "💬 Popup sent to user %s: %s",
                     getattr(user, "id", "?"),
@@ -1632,7 +1638,12 @@ class PokerBotModel:
 
         if not game_data:
             try:
-                await query.answer("❌ Game not found!", show_alert=True)
+                await NotificationManager.popup(
+                    query,
+                    text="❌ Game not found!",
+                    show_alert=True,
+                    event="ModelPopup",
+                )
                 logger.info(
                     "💬 Popup sent to user %s: %s",
                     getattr(user, "id", "?"),

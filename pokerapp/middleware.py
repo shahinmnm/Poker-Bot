@@ -12,7 +12,10 @@ from typing import Dict, Deque, Optional
 from telegram import Update
 from telegram.ext import CallbackContext
 
+from pokerapp.notify_utils import LoggerHelper
+
 logger = logging.getLogger(__name__)
+log_helper = LoggerHelper.for_logger(logger)
 
 
 class AnalyticsMiddleware:
@@ -44,11 +47,11 @@ class AnalyticsMiddleware:
             command = update.effective_message.text.split()[0]
             self._command_counts[command] += 1
 
-            logger.info(
-                "Command: %s | User: %s | Total: %s",
-                command,
-                user_id,
-                self._command_counts[command],
+            log_helper.info(
+                "AnalyticsCommand",
+                command=command,
+                user_id=user_id,
+                total=self._command_counts[command],
             )
 
     def get_stats(self) -> Dict[str, object]:
@@ -103,11 +106,11 @@ class UserRateLimiter:
             user_queue.popleft()
 
         if len(user_queue) >= self._max_requests:
-            logger.warning(
-                "Rate limit exceeded for user %s: %s requests in %ss",
-                user_id,
-                len(user_queue),
-                self._window_seconds,
+            log_helper.warn(
+                "RateLimitExceeded",
+                user_id=user_id,
+                request_count=len(user_queue),
+                window_seconds=self._window_seconds,
             )
 
             if update.effective_message:

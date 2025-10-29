@@ -16,6 +16,7 @@ from telegram.ext import (
 
 from pokerapp.config import Config
 from pokerapp.middleware import AnalyticsMiddleware, UserRateLimiter
+from pokerapp.notify_utils import LoggerHelper
 from pokerapp.pokerbotcontrol import PokerBotController
 from pokerapp.pokerbotmodel import PokerBotModel
 from pokerapp.pokerbotview import PokerBotViewer
@@ -25,6 +26,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+log_helper = LoggerHelper.for_logger(logger)
 
 
 class PokerBot:
@@ -91,7 +93,7 @@ class PokerBot:
 
         self._cfg = cfg
 
-        logger.info("PokerBot initialized successfully")
+        log_helper.info("BotInit", "PokerBot initialized successfully")
 
     async def _error_handler(
         self,
@@ -99,9 +101,10 @@ class PokerBot:
         context: CallbackContext,
     ) -> None:
         """Global error handler for all bot operations."""
-        logger.error(
-            "Exception while handling update %s:",
-            update,
+        log_helper.error(
+            "BotError",
+            "Exception while handling update",
+            update=update,
             exc_info=context.error,
         )
 
@@ -128,10 +131,11 @@ class PokerBot:
 
         try:
             if self._cfg.use_webhook:
-                logger.info(
-                    "Starting webhook mode on %s:%s",
-                    self._cfg.WEBHOOK_LISTEN,
-                    self._cfg.WEBHOOK_PORT,
+                log_helper.info(
+                    "BotWebhook",
+                    "Starting webhook mode",
+                    listen=self._cfg.WEBHOOK_LISTEN,
+                    port=self._cfg.WEBHOOK_PORT,
                 )
 
                 webhook_url = self._cfg.webhook_url
@@ -147,13 +151,18 @@ class PokerBot:
                         allowed_updates=Update.ALL_TYPES,
                     )
 
-                    logger.info("Webhook set to: %s", webhook_url)
+                    log_helper.info(
+                        "BotWebhook",
+                        "Webhook configured",
+                        url=webhook_url,
+                    )
                     return
                 except Exception as exc:
-                    logger.exception(
-                        "Webhook mode failed to start, falling back to "
-                        "polling: %s",
-                        exc,
+                    log_helper.error(
+                        "BotWebhook",
+                        "Webhook mode failed; falling back to polling",
+                        error=str(exc),
+                        exc_info=True,
                     )
 
                     # When run_webhook() fails, PTB closes the
@@ -165,26 +174,35 @@ class PokerBot:
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
 
-            logger.info("Starting polling mode")
+            log_helper.info("BotPolling", "Starting polling mode")
             self._application.run_polling(
                 drop_pending_updates=True,
                 allowed_updates=Update.ALL_TYPES,
             )
 
         except Exception as exc:  # pragma: no cover - safety net
-            logger.exception("Fatal error during bot execution: %s", exc)
+            log_helper.error(
+                "BotRun",
+                "Fatal error during bot execution",
+                error=str(exc),
+                exc_info=True,
+            )
             raise
         finally:
             self.shutdown()
 
     def shutdown(self) -> None:
         """Log shutdown statistics for the bot."""
-        logger.info("Shutting down bot...")
+        log_helper.info("BotShutdown", "Shutting down bot...")
 
         try:
             stats = self._analytics.get_stats()
-            logger.info("Final stats: %s", stats)
+            log_helper.info("BotShutdown", "Final stats collected", stats=stats)
         except Exception as exc:  # pragma: no cover - safety net
-            logger.error("Error collecting shutdown stats: %s", exc)
+            log_helper.error(
+                "BotShutdown",
+                "Error collecting shutdown stats",
+                error=str(exc),
+            )
 
-        logger.info("Bot shut down complete")
+        log_helper.info("BotShutdown", "Bot shut down complete")
