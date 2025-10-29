@@ -763,9 +763,12 @@ Send 💰 /money once per day for free chips!
                 )
 
                 if not validation.success or validation.prepared_action is None:
-                    await show_popup(
+                    error_message = (
                         validation.message
-                        or "❌ Action failed - not your turn or invalid action",
+                        or "❌ Action failed - not your turn or invalid action"
+                    )
+                    await show_popup(
+                        error_message,
                         is_alert=True,
                         fallback_chat_id=chat_id,
                     )
