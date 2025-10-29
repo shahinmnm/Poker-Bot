@@ -144,7 +144,7 @@ class PokerBotController:
         *,
         show_alert: bool = False,
     ) -> None:
-        """Attempt to answer a callback query while handling stale query errors."""
+        """Answer callback queries and handle stale query errors."""
 
         if not query:
             return
@@ -615,7 +615,7 @@ Send 💰 /money once per day for free chips!
             *,
             fallback_chat_id: int | None = None,
         ) -> bool:
-            """Show popup notification and fall back to chat message when needed."""
+            """Show popups and fall back to chat messaging when needed."""
 
             try:
                 await query.answer(text=message, show_alert=is_alert)
@@ -623,7 +623,10 @@ Send 💰 /money once per day for free chips!
             except BadRequest as exc:
                 error_msg = str(exc).lower()
 
-                if "query is too old" in error_msg or "query_id_invalid" in error_msg:
+                if (
+                    "query is too old" in error_msg
+                    or "query_id_invalid" in error_msg
+                ):
                     logger.debug(
                         "Cannot show popup (query expired) for user %s: %s",
                         query.from_user.id,
@@ -644,7 +647,8 @@ Send 💰 /money once per day for free chips!
                         text=message,
                     )
                     return True
-                except TelegramError as exc:  # pragma: no cover - defensive logging
+                except TelegramError as exc:
+                    # pragma: no cover - defensive logging
                     logger.error(
                         "Failed to send fallback chat notification: %s",
                         exc,
@@ -658,7 +662,7 @@ Send 💰 /money once per day for free chips!
         except BadRequest as exc:
             if "query is too old" in str(exc).lower():
                 await show_popup(
-                    "♻️ These buttons are outdated. Please use the latest message!",
+                    "♻️ Buttons expired. Please use the latest message!",
                     is_alert=True,
                 )
                 return
@@ -669,7 +673,10 @@ Send 💰 /money once per day for free chips!
 
             if len(parts) < 3:
                 logger.warning("Invalid action button data: %s", query.data)
-                await show_popup("❌ Invalid action format", is_alert=True)
+                await show_popup(
+                    "❌ Invalid action format",
+                    is_alert=True,
+                )
                 return
 
             action_type = parts[1]  # fold, call, check, raise, all_in
@@ -678,14 +685,20 @@ Send 💰 /money once per day for free chips!
             if action_type == "raise":
                 if len(parts) < 4:
                     logger.warning("Invalid raise button data: %s", query.data)
-                    await self._safe_query_answer(query, "❌ Invalid raise format")
+                    await self._safe_query_answer(
+                        query,
+                        "❌ Invalid raise format",
+                    )
                     return
 
                 try:
                     raise_amount = int(parts[2])
                 except (ValueError, IndexError):
                     logger.warning("Invalid raise amount in: %s", query.data)
-                    await self._safe_query_answer(query, "❌ Invalid raise amount")
+                    await self._safe_query_answer(
+                        query,
+                        "❌ Invalid raise amount",
+                    )
                     return
                 message_version = None
                 if len(parts) == 4:
@@ -698,7 +711,8 @@ Send 💰 /money once per day for free chips!
                             "Invalid message version in: %s", query.data
                         )
                         await self._safe_query_answer(
-                            query, "❌ Invalid action version"
+                            query,
+                            "❌ Invalid action version",
                         )
                         return
                     try:
@@ -706,7 +720,8 @@ Send 💰 /money once per day for free chips!
                     except IndexError:
                         logger.warning("Missing game id in: %s", query.data)
                         await self._safe_query_answer(
-                            query, "❌ Invalid action format"
+                            query,
+                            "❌ Invalid action format",
                         )
                         return
             else:
@@ -723,7 +738,8 @@ Send 💰 /money once per day for free chips!
                             "Invalid message version in: %s", query.data
                         )
                         await self._safe_query_answer(
-                            query, "❌ Invalid action version"
+                            query,
+                            "❌ Invalid action version",
                         )
                         return
                     try:
@@ -731,7 +747,8 @@ Send 💰 /money once per day for free chips!
                     except IndexError:
                         logger.warning("Missing game id in: %s", query.data)
                         await self._safe_query_answer(
-                            query, "❌ Invalid action format"
+                            query,
+                            "❌ Invalid action format",
                         )
                         return
 
@@ -739,14 +756,20 @@ Send 💰 /money once per day for free chips!
             chat_id = query.message.chat_id if query.message else None
 
             if not chat_id:
-                await self._safe_query_answer(query, "❌ Cannot determine chat context")
+                await self._safe_query_answer(
+                    query,
+                    "❌ Cannot determine chat context",
+                )
                 return
 
             handle_action = getattr(self._model, "handle_player_action", None)
 
             if handle_action is None:
                 logger.error("Model missing handle_player_action method")
-                await self._safe_query_answer(query, "❌ Action handler not available")
+                await self._safe_query_answer(
+                    query,
+                    "❌ Action handler not available",
+                )
                 return
 
             signature = inspect.signature(handle_action)
@@ -754,15 +777,20 @@ Send 💰 /money once per day for free chips!
             if "action_type" in signature.parameters and hasattr(
                 self._model, "prepare_player_action"
             ) and hasattr(self._model, "execute_player_action"):
-                validation: PlayerActionValidation = await self._model.prepare_player_action(
-                    user_id=user_id,
-                    chat_id=chat_id,
-                    action_type=action_type,
-                    raise_amount=raise_amount,
-                    message_version=message_version,
+                validation: PlayerActionValidation = (
+                    await self._model.prepare_player_action(
+                        user_id=user_id,
+                        chat_id=chat_id,
+                        action_type=action_type,
+                        raise_amount=raise_amount,
+                        message_version=message_version,
+                    )
                 )
 
-                if not validation.success or validation.prepared_action is None:
+                if (
+                    not validation.success
+                    or validation.prepared_action is None
+                ):
                     error_message = (
                         validation.message
                         or "❌ Action failed - not your turn or invalid action"
@@ -780,7 +808,8 @@ Send 💰 /money once per day for free chips!
 
                 if not success:
                     logger.warning(
-                        "Execution of player action %s failed after validation",
+                        "Execution of player action %s failed after "
+                        "validation",
                         action_type,
                     )
                     await show_popup(
@@ -791,7 +820,7 @@ Send 💰 /money once per day for free chips!
                 return
 
             if "action_type" in signature.parameters:
-                # Preferred modern API fallback when validation helpers unavailable
+                # Preferred fallback when validation helpers are unavailable
                 success = await handle_action(
                     user_id=user_id,
                     chat_id=chat_id,
@@ -811,7 +840,10 @@ Send 💰 /money once per day for free chips!
                 player_action = legacy_map.get(action_type)
 
                 if player_action is None:
-                    await self._safe_query_answer(query, "❌ Unknown action type")
+                    await self._safe_query_answer(
+                        query,
+                        "❌ Unknown action type",
+                    )
                     return
 
                 legacy_amount = raise_amount if raise_amount is not None else 0

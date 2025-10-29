@@ -155,7 +155,7 @@ class Game:
         return getattr(self, "live_message_version", 0)
 
     def next_live_message_version(self) -> int:
-        """Return the version number that should be used for the next update."""
+        """Return the version number used for the next live message update."""
 
         return self.get_live_message_version() + 1
 
