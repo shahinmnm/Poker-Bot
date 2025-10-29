@@ -637,18 +637,6 @@ Send 💰 /money once per day for free chips!
                 fallback_chat_id=fallback_chat_id,
             )
 
-        acked = await NotificationManager.popup(
-            query,
-            event="ActionAck",
-        )
-
-        if not acked:
-            await show_popup(
-                "♻️ Buttons expired. Please use the latest message!",
-                is_alert=False,
-            )
-            return
-
         try:
             parts = query.data.split(":")
 
@@ -833,6 +821,9 @@ Send 💰 /money once per day for free chips!
                         is_alert=True,
                         fallback_chat_id=chat_id,
                     )
+                    return
+
+                await self._respond_to_query(query)
                 return
 
             if "action_type" in signature.parameters:
