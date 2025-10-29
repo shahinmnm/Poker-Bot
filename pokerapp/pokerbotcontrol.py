@@ -151,7 +151,11 @@ class PokerBotController:
     ) -> bool:
         """Centralized callback responder with optional fallback messaging."""
 
-        if text is None or not show_alert or not (context and fallback_chat_id):
+        if (
+            text is None
+            or not show_alert
+            or not (context and fallback_chat_id)
+        ):
             return await NotificationManager.popup(
                 query,
                 text=text,
@@ -206,7 +210,10 @@ class PokerBotController:
 
         try:
             await application.bot.set_my_commands(commands)
-            log_helper.info("CommandSetup", "Bot commands registered in Telegram UI")
+            log_helper.info(
+                "CommandSetup",
+                "Bot commands registered in Telegram UI",
+            )
         except Exception as exc:  # pragma: no cover - Telegram API
             log_helper.error(
                 "CommandSetup",

@@ -111,7 +111,9 @@ class GameCoordinator:
 
             log_helper.warn(
                 "CoordinatorMessageRetry",
-                message="Failed to edit message; attempting to send new message",
+                message=(
+                    "Failed to edit message; attempting to send new message"
+                ),
                 message_id=game.group_message_id,
             )
 

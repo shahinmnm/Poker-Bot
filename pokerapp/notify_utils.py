@@ -53,16 +53,36 @@ class LoggerHelper:
             **log_kwargs,
         )
 
-    def debug(self, event: str, message: str | None = None, **kwargs: Any) -> None:
+    def debug(
+        self,
+        event: str,
+        message: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         self._log("debug", "🧪", event, message, kwargs)
 
-    def info(self, event: str, message: str | None = None, **kwargs: Any) -> None:
+    def info(
+        self,
+        event: str,
+        message: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         self._log("info", "🎯", event, message, kwargs)
 
-    def warn(self, event: str, message: str | None = None, **kwargs: Any) -> None:
+    def warn(
+        self,
+        event: str,
+        message: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         self._log("warning", "⚠️", event, message, kwargs)
 
-    def error(self, event: str, message: str | None = None, **kwargs: Any) -> None:
+    def error(
+        self,
+        event: str,
+        message: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         self._log("error", "❌", event, message, kwargs)
 
 
@@ -127,7 +147,7 @@ class NotificationManager:
                 alert=show_alert,
                 error=reason,
             )
-        except TelegramError as exc:  # pragma: no cover - Telegram runtime safety
+        except TelegramError as exc:  # pragma: no cover
             cls._log.warn(
                 f"{event}Fail",
                 "Telegram error during popup",
@@ -148,7 +168,7 @@ class NotificationManager:
         show_alert: bool = True,
         event: str = "Popup",
     ) -> bool:
-        """Show a popup and optionally fall back to a persistent chat message."""
+        """Show a popup with optional fallback chat message."""
 
         answered = await cls.popup(
             query,
