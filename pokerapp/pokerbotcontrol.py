@@ -813,6 +813,13 @@ Send 💰 /money once per day for free chips!
                     )
                     return
 
+                await NotificationManager.popup(
+                    query,
+                    text=None,
+                    show_alert=False,
+                    event="ActionAck",
+                )
+
                 success = await self._model.execute_player_action(
                     validation.prepared_action
                 )
