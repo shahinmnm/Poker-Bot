@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from time import monotonic
 from typing import Any, Iterable
 
 from telegram.error import BadRequest, TelegramError
@@ -93,6 +95,64 @@ class NotificationManager:
     _STALE_QUERY_MESSAGE = (
         "Query is too old and response timeout expired or query id is invalid"
     )
+    _FRESH_WINDOW_SECONDS = 8.0
+    _CACHE_TTL_SECONDS = 30.0
+
+    @dataclass
+    class _CallbackState:
+        first_seen: float
+        answered: bool = False
+
+    _callback_states: dict[str, "NotificationManager._CallbackState"] = {}
+
+    @classmethod
+    def _prune_cache(cls, now: float) -> None:
+        """Remove cached callback entries that have outlived the TTL."""
+
+        expired = [
+            query_id
+            for query_id, state in cls._callback_states.items()
+            if now - state.first_seen > cls._CACHE_TTL_SECONDS
+        ]
+        for query_id in expired:
+            cls._callback_states.pop(query_id, None)
+
+    @classmethod
+    def _should_answer(cls, query) -> tuple[bool, str | None, "NotificationManager._CallbackState" | None, float]:
+        """Determine whether the callback query should be answered."""
+
+        query_id = getattr(query, "id", None)
+        now = monotonic()
+        if not query_id:
+            return True, None, None, now
+
+        cls._prune_cache(now)
+
+        state = cls._callback_states.get(query_id)
+        if state is None:
+            state = cls._CallbackState(first_seen=now)
+            cls._callback_states[query_id] = state
+        else:
+            age = now - state.first_seen
+            if state.answered:
+                cls._log.debug(
+                    "PopupSkip",
+                    "Callback already answered",
+                    query_id=query_id,
+                    age=f"{age:.3f}",
+                )
+                return False, query_id, state, now
+            if age > cls._FRESH_WINDOW_SECONDS:
+                cls._log.debug(
+                    "PopupSkip",
+                    "Callback too old for popup",
+                    query_id=query_id,
+                    age=f"{age:.3f}",
+                )
+                state.answered = True
+                return False, query_id, state, now
+
+        return True, query_id, state, now
 
     @classmethod
     async def popup(
@@ -111,11 +171,18 @@ class NotificationManager:
 
         user_id = getattr(getattr(query, "from_user", None), "id", "?")
 
+        should_answer, query_id, state, now = cls._should_answer(query)
+        if not should_answer:
+            return False
+
         try:
             if text is None:
                 await query.answer(show_alert=show_alert)
             else:
                 await query.answer(text=text, show_alert=show_alert)
+
+            if state:
+                state.answered = True
 
             cls._log.info(
                 event,
@@ -126,12 +193,18 @@ class NotificationManager:
             return True
         except BadRequest as exc:
             reason = str(exc)
-            if cls._STALE_QUERY_MESSAGE.lower() in reason.lower():
+            is_stale = cls._STALE_QUERY_MESSAGE.lower() in reason.lower()
+
+            if state:
+                state.answered = True
+
+            if is_stale:
                 cls._log.debug(
                     f"{event}Stale",
                     "Ignoring stale callback query",
                     user_id=user_id,
-                    error=reason,
+                    query_id=query_id,
+                    age=f"{(now - state.first_seen):.3f}" if state else "?",
                 )
             else:
                 cls._log.error(
@@ -140,13 +213,13 @@ class NotificationManager:
                     user_id=user_id,
                     error=reason,
                 )
-            cls._log.warn(
-                f"{event}Fail",
-                "Popup delivery failed",
-                user_id=user_id,
-                alert=show_alert,
-                error=reason,
-            )
+                cls._log.warn(
+                    f"{event}Fail",
+                    "Popup delivery failed",
+                    user_id=user_id,
+                    alert=show_alert,
+                    error=reason,
+                )
         except TelegramError as exc:  # pragma: no cover
             cls._log.warn(
                 f"{event}Fail",
