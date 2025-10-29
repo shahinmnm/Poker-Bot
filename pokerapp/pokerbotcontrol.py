@@ -610,6 +610,14 @@ Send 💰 /money once per day for free chips!
             return
 
         try:
+            await query.answer()
+        except BadRequest as exc:
+            if "query is too old" in str(exc).lower():
+                logger.debug("Stale callback from user %s", query.from_user.id)
+                return
+            raise
+
+        try:
             parts = query.data.split(":")
 
             if len(parts) < 3:
@@ -715,23 +723,21 @@ Send 💰 /money once per day for free chips!
                     )
                     return
 
+                await self._safe_query_answer(query)
+
                 success = await self._model.execute_player_action(
                     validation.prepared_action
                 )
 
-                if success:
-                    await self._safe_query_answer(query)
-                    return
-
-                logger.warning(
-                    "Execution of player action %s failed after validation",
-                    action_type,
-                )
-                await self._model._view.send_message(
-                    chat_id=chat_id,
-                    text="❌ Action could not be processed. Please try again.",
-                )
-                await self._safe_query_answer(query)
+                if not success:
+                    logger.warning(
+                        "Execution of player action %s failed after validation",
+                        action_type,
+                    )
+                    await self._model._view.send_message(
+                        chat_id=chat_id,
+                        text="❌ Action could not be processed. Please try again.",
+                    )
                 return
 
             if "action_type" in signature.parameters:
