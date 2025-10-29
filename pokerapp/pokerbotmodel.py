@@ -1101,14 +1101,19 @@ class PokerBotModel:
         # Advance street
         new_state, cards_to_deal = self._coordinator.advance_game_street(game)
 
-        # Deal community cards if needed
+        # Deal community cards if needed and track count
+        cards_dealt = 0
+
         if cards_to_deal > 0:
             for _ in range(cards_to_deal):
                 if game.remain_cards:
                     game.cards_table.append(game.remain_cards.pop())
+                    cards_dealt += 1
 
-        # Send updated game state
-        await self._send_live_manager_update(game, chat_id)
+        # ✅ FIX: Update live message immediately if cards were dealt
+        # This ensures users see Flop/Turn/River cards as soon as they’re dealt
+        if cards_dealt > 0:
+            await self._send_live_manager_update(game, chat_id)
 
         # Check if next street needs action
         turn_result, next_player = self._coordinator.process_game_turn(game)
@@ -1118,7 +1123,9 @@ class PokerBotModel:
             chat_id,
             turn_result,
             next_player,
-            update_live=False,
+            # ✅ FIX: Changed update_live from False to True so a second update highlights
+            # the current player's turn while LiveMessageManager debouncing prevents spam
+            update_live=True,  # ✅ CHANGED FROM False TO True
         )
 
     async def _deal_community_cards(
