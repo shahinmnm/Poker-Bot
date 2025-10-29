@@ -7,7 +7,7 @@ from telegram import (
     BotCommand,
     Update,
 )
-from telegram.error import BadRequest
+from telegram.error import BadRequest, TelegramError
 from telegram.ext import (
     Application,
     CallbackContext,
@@ -609,8 +609,13 @@ Send 💰 /money once per day for free chips!
         if not query or not query.data:
             return
 
-        async def show_popup(message: str, is_alert: bool = True) -> bool:
-            """Show popup notification to user. Returns True if successful."""
+        async def show_popup(
+            message: str,
+            is_alert: bool = True,
+            *,
+            fallback_chat_id: int | None = None,
+        ) -> bool:
+            """Show popup notification and fall back to chat message when needed."""
 
             try:
                 await query.answer(text=message, show_alert=is_alert)
@@ -624,10 +629,29 @@ Send 💰 /money once per day for free chips!
                         query.from_user.id,
                         message,
                     )
+                    # Don't return yet - try fallback
+                else:
+                    logger.warning("Failed to show popup: %s", exc)
+
+                if fallback_chat_id is None:
                     return False
 
-                logger.warning("Failed to show popup: %s", exc)
-                return False
+            # Fallback to chat message if popup failed and fallback enabled
+            if fallback_chat_id is not None:
+                try:
+                    await context.bot.send_message(
+                        chat_id=fallback_chat_id,
+                        text=message,
+                    )
+                    return True
+                except TelegramError as exc:  # pragma: no cover - defensive logging
+                    logger.error(
+                        "Failed to send fallback chat notification: %s",
+                        exc,
+                        exc_info=True,
+                    )
+
+            return False
 
         try:
             await query.answer()
@@ -743,6 +767,7 @@ Send 💰 /money once per day for free chips!
                         validation.message
                         or "❌ Action failed - not your turn or invalid action",
                         is_alert=True,
+                        fallback_chat_id=chat_id,
                     )
                     return
 
@@ -758,6 +783,7 @@ Send 💰 /money once per day for free chips!
                     await show_popup(
                         "❌ Action failed. Please check the game state.",
                         is_alert=True,
+                        fallback_chat_id=chat_id,
                     )
                 return
 
