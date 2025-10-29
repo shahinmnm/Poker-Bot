@@ -1123,8 +1123,8 @@ class PokerBotModel:
             chat_id,
             turn_result,
             next_player,
-            # ✅ FIX: Changed update_live from False to True so a second update highlights
-            # the current player's turn while LiveMessageManager debouncing prevents spam
+            # ✅ FIX: update_live=True highlights the active player while
+            # LiveMessageManager debouncing prevents spam
             update_live=True,  # ✅ CHANGED FROM False TO True
         )
 
@@ -3176,7 +3176,8 @@ class PokerBotModel:
             current_version = game.get_live_message_version()
             if message_version != current_version:
                 logger.info(
-                    "Stale action rejected: user=%s chat=%s got=%s expected=%s",
+                    "Stale action rejected: user=%s chat=%s "
+                    "got=%s expected=%s",
                     user_id_str,
                     chat_id_str,
                     message_version,
@@ -3184,7 +3185,9 @@ class PokerBotModel:
                 )
                 return PlayerActionValidation(
                     success=False,
-                    message="♻️ Action expired. Please use the latest buttons.",
+                    message=(
+                        "♻️ Action expired. Please use the latest buttons."
+                    ),
                 )
 
         if game.current_player_index >= len(game.players):
@@ -3351,7 +3354,10 @@ class PokerBotModel:
                 )
 
             else:
-                logger.warning("Unknown action_type during execution: %s", action_type)
+                logger.warning(
+                    "Unknown action_type during execution: %s",
+                    action_type,
+                )
                 return False
 
             game.add_action(action_text)
