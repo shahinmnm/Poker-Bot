@@ -1016,18 +1016,102 @@ class PokerBotViewer:
         required: int,
         reply_to_message_id: Optional[int] = None,
     ) -> None:
-        """Notify user they don't have enough chips."""
+        """Send localized insufficient balance error."""
+
+        balance_display = self._format_currency(balance)
+        required_display = self._format_currency(required)
+
+        text = self._t(
+            "error.insufficient_funds_detail",
+            balance=balance_display,
+            required=required_display,
+        )
 
         await self._bot.send_message(
             chat_id=chat_id,
-            text=(
-                "❌ INSUFFICIENT BALANCE\n\n"
-                f"Required: {required} chips\n"
-                f"Your balance: {balance} chips\n"
-                f"Needed: {required - balance} more\n\n"
-                "💰 Get free chips with /money command!"
-            ),
+            text=text,
             reply_to_message_id=reply_to_message_id,
+        )
+
+    async def send_lobby_message(
+        self,
+        chat_id: int,
+        player_count: int,
+        max_players: int,
+        players: List[str],
+        is_host: bool = False,
+    ) -> Message:
+        """Send localized lobby status message."""
+
+        title = self._t("lobby.title")
+        player_text = self._t("lobby.players", count=player_count, max=max_players)
+
+        text_parts = [title, "", player_text]
+
+        for i, player_name in enumerate(players):
+            if i == 0 and is_host:
+                text_parts.append(f"{self._t('lobby.host')} {player_name}")
+            else:
+                text_parts.append(f"• {player_name}")
+
+        if player_count < 2:
+            text_parts.append("")
+            text_parts.append(self._t("lobby.waiting"))
+        elif player_count >= 2:
+            text_parts.append("")
+            text_parts.append(self._t("lobby.ready_to_start"))
+
+        return await self._bot.send_message(
+            chat_id=chat_id,
+            text="\n".join(text_parts),
+        )
+
+    async def send_game_started_message(
+        self,
+        chat_id: int,
+    ) -> None:
+        """Send localized game started notification."""
+
+        text = self._t("msg.game_started")
+
+        await self._bot.send_message(
+            chat_id=chat_id,
+            text=text,
+        )
+
+    def format_player_action(
+        self,
+        player_name: str,
+        action: PlayerAction,
+        amount: int = 0,
+    ) -> str:
+        """Format localized player action description."""
+
+        amount_display = self._format_currency(amount, include_symbol=False)
+
+        action_messages = {
+            PlayerAction.FOLD: self._t("msg.player_folded", player=player_name),
+            PlayerAction.CHECK: self._t("msg.player_checked", player=player_name),
+            PlayerAction.CALL: self._t(
+                "msg.player_called",
+                player=player_name,
+                amount=amount_display,
+            ),
+            PlayerAction.RAISE_RATE: self._t(
+                "msg.player_raised",
+                player=player_name,
+                amount=amount_display,
+            ),
+            PlayerAction.ALL_IN: self._t(
+                "msg.player_all_in",
+                player=player_name,
+                amount=amount_display,
+            ),
+        }
+
+        return action_messages.get(
+            action,
+            f"{player_name}: {action.value}",
         )
 
     def build_invitation_message(
