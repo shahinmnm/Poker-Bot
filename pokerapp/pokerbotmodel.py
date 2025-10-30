@@ -9,7 +9,7 @@ import logging
 import secrets
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 import redis
 from telegram import Bot, ReplyKeyboardMarkup, Update
@@ -39,6 +39,7 @@ from pokerapp.game_coordinator import GameCoordinator
 from pokerapp.group_lobby import GroupLobbyManager
 from pokerapp.game_engine import TurnResult
 from pokerapp.notify_utils import NotificationManager
+from pokerapp.i18n import translation_manager
 from pokerapp.pokerbotview import PokerBotViewer
 from pokerapp.kvstore import ensure_kv
 from pokerapp.winnerdetermination import get_combination_name
@@ -65,6 +66,17 @@ DEFAULT_MONEY = 1000
 MAX_TIME_FOR_TURN = datetime.timedelta(minutes=2)
 DESCRIPTION_FILE = "assets/description_bot.md"
 
+
+class ModelTextKeys:
+    JOIN_CODE_REQUIRED = "model.join.code_required"
+    JOIN_CODE_INVALID = "model.join.code_invalid"
+    JOIN_USAGE = "model.join.usage"
+    JOIN_GAME_NOT_FOUND = "model.join.game_not_found"
+    JOIN_GAME_STARTED = "model.join.game_started"
+    JOIN_ALREADY_IN_GAME = "model.join.already_in_game"
+    JOIN_GAME_FULL = "model.join.game_full"
+    JOIN_NOT_ACCEPTING = "model.join.not_accepting"
+    JOIN_SUCCESS = "model.join.success"
 
 @dataclass(slots=True)
 class PreparedPlayerAction:
@@ -133,6 +145,23 @@ class PokerBotModel:
             self._request_cache.log_stats("ActionHandler")
             self._request_cache = None
 
+    def _translate(
+        self,
+        key: str,
+        *,
+        user_id: Optional[int] = None,
+        lang: Optional[str] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Translate *key* for the current user context."""
+
+        return translation_manager.t(
+            key,
+            user_id=user_id,
+            lang=lang,
+            **kwargs,
+        )
+
     async def _ensure_minimum_balance(
         self,
         update: Update,
@@ -147,7 +176,7 @@ class PokerBotModel:
         Returns:
             True if balance sufficient, False otherwise (error sent to user)
         """
-        self._apply_user_language(update)
+        user_language = self._apply_user_language(update)
 
         balance = wallet.value()
         if balance < min_balance:
@@ -160,21 +189,37 @@ class PokerBotModel:
             return False
         return True
 
-    def _validate_game_code(self, code: Optional[str]) -> tuple[bool, str]:
+    def _validate_game_code(
+        self,
+        code: Optional[str],
+        *,
+        lang: Optional[str] = None,
+        user_id: Optional[int] = None,
+    ) -> tuple[bool, str]:
         """
         Validate game code format (6 alphanumeric characters).
 
         Returns:
             (is_valid, error_message)
         """
+        language = translation_manager.resolve_language(
+            user_id=user_id,
+            lang=lang,
+        )
+
+        def _t(key: str, **kwargs: Any) -> str:
+            return translation_manager.t(
+                key,
+                user_id=user_id,
+                lang=language,
+                **kwargs,
+            )
+
         if not code:
-            return False, "❌ Please provide a game code: /join <code>"
+            return False, _t(ModelTextKeys.JOIN_CODE_REQUIRED)
 
         if len(code) != 6 or not code.isalnum():
-            return False, (
-                f"❌ Invalid code format: '{code}'\n\n"
-                "Game codes must be exactly 6 alphanumeric characters."
-            )
+            return False, _t(ModelTextKeys.JOIN_CODE_INVALID, code=code)
 
         return True, ""
 
@@ -1802,7 +1847,7 @@ class PokerBotModel:
     ) -> None:
         """Handle /join <code> command to join private game lobby."""
 
-        self._apply_user_language(update)
+        user_language = self._apply_user_language(update)
 
         user = update.effective_user
         self._track_user(user.id, user.username)
@@ -1812,10 +1857,10 @@ class PokerBotModel:
         if not context.args or len(context.args) != 1:
             await self._send_response(
                 update,
-                (
-                    "❌ Invalid command format\n\n"
-                    "Usage: /join <code>\n"
-                    "Example: /join ABC123"
+                self._translate(
+                    ModelTextKeys.JOIN_USAGE,
+                    lang=user_language,
+                    user_id=user_id,
                 ),
                 reply_to_message_id=update.effective_message.message_id,
             )
@@ -1823,7 +1868,11 @@ class PokerBotModel:
 
         game_code = context.args[0].upper()
 
-        is_valid, error_msg = self._validate_game_code(game_code)
+        is_valid, error_msg = self._validate_game_code(
+            game_code,
+            lang=user_language,
+            user_id=user_id,
+        )
         if not is_valid:
             await self._send_response(
                 update,
@@ -1841,9 +1890,11 @@ class PokerBotModel:
         if not game_chat_id:
             await self._view.send_message_reply(
                 chat_id=chat_id,
-                text=(
-                    f"❌ Game ‘{game_code}’ not found\n\n"
-                    "The game may have ended or the code is incorrect"
+                text=self._translate(
+                    ModelTextKeys.JOIN_GAME_NOT_FOUND,
+                    lang=user_language,
+                    user_id=user_id,
+                    code=game_code,
                 ),
                 message_id=update.effective_message.message_id,
             )
@@ -1854,9 +1905,11 @@ class PokerBotModel:
         except (TypeError, ValueError):
             await self._view.send_message_reply(
                 chat_id=chat_id,
-                text=(
-                    f"❌ Game ‘{game_code}’ not found\n\n"
-                    "The game may have ended or the code is incorrect"
+                text=self._translate(
+                    ModelTextKeys.JOIN_GAME_NOT_FOUND,
+                    lang=user_language,
+                    user_id=user_id,
+                    code=game_code,
                 ),
                 message_id=update.effective_message.message_id,
             )
@@ -1867,9 +1920,11 @@ class PokerBotModel:
         if game.state != GameState.INITIAL:
             await self._view.send_message_reply(
                 chat_id=chat_id,
-                text=(
-                    f"❌ Game ‘{game_code}’ has already started\n\n"
-                    "You cannot join a game in progress"
+                text=self._translate(
+                    ModelTextKeys.JOIN_GAME_STARTED,
+                    lang=user_language,
+                    user_id=user_id,
+                    code=game_code,
                 ),
                 message_id=update.effective_message.message_id,
             )
@@ -1878,7 +1933,12 @@ class PokerBotModel:
         if any(p.user_id == user_id for p in game.players):
             await self._view.send_message_reply(
                 chat_id=chat_id,
-                text=f"✅ You’re already in game ‘{game_code}’!",
+                text=self._translate(
+                    ModelTextKeys.JOIN_ALREADY_IN_GAME,
+                    lang=user_language,
+                    user_id=user_id,
+                    code=game_code,
+                ),
                 message_id=update.effective_message.message_id,
             )
             return
@@ -1886,9 +1946,12 @@ class PokerBotModel:
         if not self._has_available_seat(game):
             await self._view.send_message_reply(
                 chat_id=chat_id,
-                text=(
-                    f"❌ Game ‘{game_code}’ is full\n\n"
-                    f"Maximum {MAX_PLAYERS} players allowed"
+                text=self._translate(
+                    ModelTextKeys.JOIN_GAME_FULL,
+                    lang=user_language,
+                    user_id=user_id,
+                    code=game_code,
+                    max_players=MAX_PLAYERS,
                 ),
                 message_id=update.effective_message.message_id,
             )
@@ -1899,8 +1962,11 @@ class PokerBotModel:
         if stake_config is None:
             await self._view.send_message_reply(
                 chat_id=chat_id,
-                text=(
-                    f"❌ Game ‘{game_code}’ is not accepting players right now"
+                text=self._translate(
+                    ModelTextKeys.JOIN_NOT_ACCEPTING,
+                    lang=user_language,
+                    user_id=user_id,
+                    code=game_code,
                 ),
                 message_id=update.effective_message.message_id,
             )
@@ -1953,11 +2019,14 @@ class PokerBotModel:
 
         await self._view.send_message_reply(
             chat_id=chat_id,
-            text=(
-                f"✅ Successfully joined game ‘{game_code}’!\n\n"
-                f"🎰 Stake: {stake_config.name}\n"
-                f"👥 Players: {len(game.players)}/{MAX_PLAYERS}\n\n"
-                "Waiting for host to start the game…"
+            text=self._translate(
+                ModelTextKeys.JOIN_SUCCESS,
+                lang=user_language,
+                user_id=user_id,
+                code=game_code,
+                stake=stake_config.name,
+                players=len(game.players),
+                max_players=MAX_PLAYERS,
             ),
             message_id=update.effective_message.message_id,
         )
