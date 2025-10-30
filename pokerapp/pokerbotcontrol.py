@@ -38,7 +38,7 @@ log_helper = LoggerHelper.for_logger(logger)
 
 
 class ControllerTextKeys:
-    FOLD_CONFIRM_PROMPT = "controller.toast.fold_prompt"
+    FOLD_CONFIRM_PROMPT = "popup.toast.fold_prompt"
     LOBBY_LEFT = "controller.lobby.left"
     INVITE_ACCEPT_HELP = "controller.invite.accept_help"
     INVITE_DECLINE_HELP = "controller.invite.decline_help"

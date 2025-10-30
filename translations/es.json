@@ -1,130 +1,198 @@
 {
-  "game.state.initial": "Esperando jugadores",
-  "game.state.pre_flop": "Pre-flop",
-  "game.state.flop": "Flop",
-  "game.state.turn": "Turn",
-  "game.state.river": "River",
-  "game.state.finished": "Showdown",
-  "game.round.pre_flop": "🎴 Pre-flop - Ciegas pagadas",
-  "game.round.flop": "🃏 Flop - 3 cartas reveladas",
-  "game.round.turn": "🎯 Turn - 4.ª carta revelada",
-  "game.round.river": "🌊 River - 5.ª carta revelada",
-  "game.round.showdown": "🏆 Showdown - Revelando manos",
-  
-  "action.check": "Pasar",
-  "action.call": "Igualar",
-  "action.fold": "Retirarse",
-  "action.raise": "Subir",
-  "action.all_in": "All-In",
-  
-  "button.check": "✅ Pasar",
-  "button.call": "💵 Igualar ${amount}",
-  "button.fold": "❌ Retirarse",
-  "button.raise": "⬆️ Subir",
-  "button.all_in": "🔥 All-In",
-  "button.ready": "✋ Listo",
-  "button.start": "🎮 Iniciar Juego",
-  "button.join": "➕ Unirse",
-  "button.leave": "➖ Salir",
-  "button.sit": "🪑 Tomar asiento",
-  "button.stand": "🚶 Levantarse",
-  
-  "msg.welcome": "👋 ¡Bienvenido al Póker Texas Hold'em!",
-  "msg.game_started": "🎮 ¡Juego iniciado! ¡Buena suerte!",
-  "msg.your_turn": "🎯 ¡Es tu turno!",
-  "msg.player_folded": "❌ {player} se retiró",
-  "msg.player_called": "💵 {player} igualó ${amount}",
-  "msg.player_raised": "⬆️ {player} subió a ${amount}",
-  "msg.player_checked": "✅ {player} pasó",
-  "msg.player_all_in": "🔥 {player} fue all-in con ${amount}",
-  "msg.turn_timeout": "⏱️ {player} se quedó sin tiempo y se retiró",
-  "msg.player_wins": "🏆 ¡{player} gana el bote!",
-  "msg.split_pot": "🤝 Bote dividido entre {count} jugadores",
-  "msg.winner": "🏆 ¡{player} gana ${amount}!",
-  "msg.pot": "💰 Bote: ${amount}",
-  "msg.current_bet": "🎯 Apuesta actual: ${amount}",
-  
-  "error.not_your_turn": "❌ ¡No es tu turno!",
-  "error.invalid_action": "❌ Acción inválida",
-  "error.insufficient_funds": "❌ Fondos insuficientes",
-  "error.insufficient_funds_detail": "❌ ¡Fondos insuficientes!\n\nTu saldo: {balance}\nRequerido: {required}",
-  "error.no_game": "❌ No hay juego activo",
-  "error.game_in_progress": "❌ Juego ya en progreso",
-  "error.not_enough_players": "❌ Se necesitan al menos 2 jugadores para iniciar",
-  "error.max_players": "❌ Máximo {max} jugadores permitidos",
-  
-  "help.title": "🎴 Cómo Jugar Póker",
-  "help.commands": "📋 Comandos",
-  "help.ready": "/ready - Unirse al juego",
-  "help.start": "/start - Comenzar a jugar",
-  "help.status": "/status - Ver estado del juego",
-  "help.help": "/help - Mostrar este mensaje",
-  "help.language": "/language - Cambiar idioma",
-  
-  "lobby.title": "🎮 Sala de Juego",
-  "lobby.players": "👥 Jugadores ({count}/{max})",
-  "lobby.waiting": "⏳ Esperando que el anfitrión inicie...",
-  "lobby.ready_to_start": "✅ ¡Listo para comenzar! Pulsa el botón abajo.",
-  "lobby.host": "👑 Anfitrión",
-  "lobby.joined": "✅ ¡{player} se unió!",
-  "lobby.left": "👋 {player} salió",
-  "model.join.code_required": "❌ Proporciona un código de partida: /join <code>",
-  "model.join.code_invalid": "❌ Formato de código no válido: '{code}'\n\nLos códigos deben tener exactamente 6 caracteres alfanuméricos.",
-  "model.join.usage": "❌ Formato de comando no válido\n\nUso: /join <code>\nEjemplo: /join ABC123",
-  "model.join.game_not_found": "❌ Partida ‘{code}’ no encontrada\n\nLa partida puede haber terminado o el código es incorrecto",
-  "model.join.game_started": "❌ La partida ‘{code}’ ya ha empezado\n\nNo puedes unirte a una partida en curso",
-  "model.join.already_in_game": "✅ Ya estás en la partida ‘{code}’.",
-  "model.join.game_full": "❌ La partida ‘{code}’ está llena\n\nMáximo {max_players} jugadores permitidos",
-  "model.join.not_accepting": "❌ La partida ‘{code}’ no acepta jugadores en este momento",
-  "model.join.success": "✅ Te uniste correctamente a la partida ‘{code}’.\n\n🎰 Apuesta: {stake}\n👥 Jugadores: {players}/{max_players}\n\nEsperando a que el anfitrión inicie la partida…",
-  "controller.toast.fold_prompt": "⚠️ Confirma la retirada",
-  "controller.lobby.left": "🚶 Saliste de la mesa. Usa /ready para volver.",
-  "controller.invite.accept_help": "ℹ️ Para aceptar una invitación, usa los botones del mensaje de invitación.\n\nSi perdiste el mensaje, pide al anfitrión que te invite de nuevo.",
-  "controller.invite.decline_help": "ℹ️ Para rechazar una invitación, usa los botones del mensaje de invitación.\n\nSi perdiste el mensaje, simplemente ignóralo (las invitaciones caducan en 1 hora).",
-  "controller.fold.expired": "♻️ La acción de retirada caducó. Actualiza los botones.",
-  "controller.fold.success": "🚪 Retirado",
-  "controller.fold.failure": "❌ No se pudo procesar la retirada. Intenta de nuevo.",
-  "controller.fold.cancelled": "Retirada cancelada",
-  "controller.action.submitted": "✅ Acción enviada",
-  "controller.action.check": "✅ Pasar",
-  "controller.action.call": "✅ Igualar {amount}",
-  "controller.action.call_check": "✅ Pasar",
-  "controller.action.fold": "✅ Retirado",
-  "controller.action.raise": "✅ Subida enviada",
-  "controller.action.raise_to": "✅ Subir a {amount}",
-  "controller.action.all_in": "🔥 All-in enviado",
-  "controller.raise.error_context": "❌ No se pudo resolver el mensaje",
-  "controller.raise.error_user": "❌ No se pudo identificar al usuario",
-  "controller.raise.error_no_game": "❌ No hay una partida activa",
-  "controller.raise.error_unavailable": "❌ Selector de subida no disponible",
-  "controller.raise.error_invalid": "❌ Acción de subida no válida",
-  "controller.raise.error_selection": "❌ Selección de subida no válida",
-  "controller.raise.error_expired": "♻️ La acción caducó. Actualiza los botones.",
-  "controller.raise.error_choose_amount": "Elige un monto primero",
-  "controller.raise.error_unknown": "❌ Acción de subida desconocida",
-  "viewer.hand.header": "🃏 Tu mano:",
-  "viewer.hand.empty": "—",
-  "viewer.table.header": "🧩 Mesa:",
-  "viewer.table.waiting": "Esperando al flop…",
-  "viewer.hand.pot": "💰 Bote: {amount}",
-  "viewer.fold_confirmation.body": "⚠️ <b>CONFIRMAR RETIRADA</b>\n\n💰 Bote: {pot}\n💸 Tu inversión: {investment} ({percentage}%)\n\n¿Seguro que quieres retirarte?",
-  "viewer.fold_confirmation.confirm_button": "❌ Sí, retirarme",
-  "viewer.fold_confirmation.cancel_button": "↩️ Cancelar",
-  "card.suit.spades": "Picas",
-  "card.suit.hearts": "Corazones",
-  "card.suit.diamonds": "Diamantes",
-  "card.suit.clubs": "Tréboles",
-  
-  "hand.royal_flush": "Escalera Real",
-  "hand.straight_flush": "Escalera de Color",
-  "hand.four_of_kind": "Póker",
-  "hand.full_house": "Full House",
-  "hand.flush": "Color",
-  "hand.straight": "Escalera",
-  "hand.three_of_kind": "Trío",
-  "hand.two_pair": "Doble Pareja",
-  "hand.pair": "Pareja",
-  "hand.high_card": "Carta Alta",
-  "settings.choose_language": "🌐 Elige tu idioma\n\nSelecciona tu idioma preferido para el bot:",
-  "settings.language_changed": "✅ ¡Idioma cambiado exitosamente!"
+  "game": {
+    "card": {
+      "rank": {
+        "10": "Diez",
+        "2": "Dos",
+        "3": "Tres",
+        "4": "Cuatro",
+        "5": "Cinco",
+        "6": "Seis",
+        "7": "Siete",
+        "8": "Ocho",
+        "9": "Nueve",
+        "A": "As",
+        "J": "Jota",
+        "K": "Rey",
+        "Q": "Reina"
+      },
+      "suit": {
+        "clubs": "Tréboles",
+        "diamonds": "Diamantes",
+        "hearts": "Corazones",
+        "spades": "Picas"
+      }
+    },
+    "hand": {
+      "flush": "Color",
+      "four_of_kind": "Póker",
+      "full_house": "Full House",
+      "high_card": "Carta Alta",
+      "pair": "Pareja",
+      "royal_flush": "Escalera Real",
+      "straight": "Escalera",
+      "straight_flush": "Escalera de Color",
+      "three_of_kind": "Trío",
+      "two_pair": "Doble Pareja"
+    },
+    "round": {
+      "flop": "🃏 Flop - 3 cartas reveladas",
+      "pre_flop": "🎴 Pre-flop - Ciegas pagadas",
+      "river": "🌊 River - 5.ª carta revelada",
+      "showdown": "🏆 Showdown - Revelando manos",
+      "turn": "🎯 Turn - 4.ª carta revelada"
+    },
+    "state": {
+      "finished": "Showdown",
+      "flop": "Flop",
+      "initial": "Esperando jugadores",
+      "pre_flop": "Pre-flop",
+      "river": "River",
+      "turn": "Turn"
+    }
+  },
+  "help": {
+    "commands": "📋 Comandos",
+    "help": "/help - Mostrar este mensaje",
+    "language": "/language - Cambiar idioma",
+    "ready": "/ready - Unirse al juego",
+    "start": "/start - Comenzar a jugar",
+    "status": "/status - Ver estado del juego",
+    "title": "🎴 Cómo Jugar Póker"
+  },
+  "meta": {
+    "font": "system",
+    "rtl": false
+  },
+  "msg": {
+    "current_bet": "🎯 Apuesta actual: ${amount}",
+    "error": {
+      "game_in_progress": "❌ Juego ya en progreso",
+      "insufficient_funds": "❌ Fondos insuficientes",
+      "insufficient_funds_detail": "❌ ¡Fondos insuficientes!\n\nTu saldo: {balance}\nRequerido: {required}",
+      "invalid_action": "❌ Acción inválida",
+      "max_players": "❌ Máximo {max} jugadores permitidos",
+      "no_game": "❌ No hay juego activo",
+      "not_enough_players": "❌ Se necesitan al menos 2 jugadores para iniciar",
+      "not_your_turn": "❌ ¡No es tu turno!"
+    },
+    "game_started": "🎮 ¡Juego iniciado! ¡Buena suerte!",
+    "player_all_in": "🔥 {player} fue all-in con ${amount}",
+    "player_called": "💵 {player} igualó ${amount}",
+    "player_checked": "✅ {player} pasó",
+    "player_folded": "❌ {player} se retiró",
+    "player_raised": "⬆️ {player} subió a ${amount}",
+    "player_wins": "🏆 ¡{player} gana el bote!",
+    "pot": "💰 Bote: ${amount}",
+    "split_pot": "🤝 Bote dividido entre {count} jugadores",
+    "turn_timeout": "⏱️ {player} se quedó sin tiempo y se retiró",
+    "welcome": "👋 ¡Bienvenido al Póker Texas Hold'em!",
+    "winner": "🏆 ¡{player} gana ${amount}!",
+    "your_turn": "🎯 ¡Es tu turno!"
+  },
+  "popup": {
+    "fold_confirmation": {
+      "body": "⚠️ <b>CONFIRMAR RETIRADA</b>\n\n💰 Bote: {pot}\n💸 Tu inversión: {investment} ({percentage}%)\n\n¿Seguro que quieres retirarte?",
+      "cancel_button": "↩️ Cancelar",
+      "confirm_button": "❌ Sí, retirarme"
+    },
+    "toast": {
+      "fold_prompt": "⚠️ Confirma la retirada"
+    }
+  },
+  "ui": {
+    "action": {
+      "all_in": "All-In",
+      "call": "Igualar",
+      "check": "Pasar",
+      "fold": "Retirarse",
+      "raise": "Subir"
+    },
+    "button": {
+      "all_in": "🔥 All-In",
+      "call": "💵 Igualar ${amount}",
+      "check": "✅ Pasar",
+      "fold": "❌ Retirarse",
+      "join": "➕ Unirse",
+      "leave": "➖ Salir",
+      "raise": "⬆️ Subir",
+      "ready": "✋ Listo",
+      "sit": "🪑 Tomar asiento",
+      "stand": "🚶 Levantarse",
+      "start": "🎮 Iniciar Juego"
+    },
+    "controller": {
+      "action": {
+        "all_in": "🔥 All-in enviado",
+        "call": "✅ Igualar {amount}",
+        "call_check": "✅ Pasar",
+        "check": "✅ Pasar",
+        "fold": "✅ Retirado",
+        "raise": "✅ Subida enviada",
+        "raise_to": "✅ Subir a {amount}",
+        "submitted": "✅ Acción enviada"
+      },
+      "fold": {
+        "cancelled": "Retirada cancelada",
+        "expired": "♻️ La acción de retirada caducó. Actualiza los botones.",
+        "failure": "❌ No se pudo procesar la retirada. Intenta de nuevo.",
+        "success": "🚪 Retirado"
+      },
+      "invite": {
+        "accept_help": "ℹ️ Para aceptar una invitación, usa los botones del mensaje de invitación.\n\nSi perdiste el mensaje, pide al anfitrión que te invite de nuevo.",
+        "decline_help": "ℹ️ Para rechazar una invitación, usa los botones del mensaje de invitación.\n\nSi perdiste el mensaje, simplemente ignóralo (las invitaciones caducan en 1 hora)."
+      },
+      "lobby": {
+        "left": "🚶 Saliste de la mesa. Usa /ready para volver."
+      },
+      "raise": {
+        "error_choose_amount": "Elige un monto primero",
+        "error_context": "❌ No se pudo resolver el mensaje",
+        "error_expired": "♻️ La acción caducó. Actualiza los botones.",
+        "error_invalid": "❌ Acción de subida no válida",
+        "error_no_game": "❌ No hay una partida activa",
+        "error_selection": "❌ Selección de subida no válida",
+        "error_unavailable": "❌ Selector de subida no disponible",
+        "error_unknown": "❌ Acción de subida desconocida",
+        "error_user": "❌ No se pudo identificar al usuario"
+      }
+    },
+    "lobby": {
+      "host": "👑 Anfitrión",
+      "joined": "✅ ¡{player} se unió!",
+      "left": "👋 {player} salió",
+      "players": "👥 Jugadores ({count}/{max})",
+      "ready_to_start": "✅ ¡Listo para comenzar! Pulsa el botón abajo.",
+      "title": "🎮 Sala de Juego",
+      "waiting": "⏳ Esperando que el anfitrión inicie..."
+    },
+    "model": {
+      "join": {
+        "already_in_game": "✅ Ya estás en la partida ‘{code}’.",
+        "code_invalid": "❌ Formato de código no válido: '{code}'\n\nLos códigos deben tener exactamente 6 caracteres alfanuméricos.",
+        "code_required": "❌ Proporciona un código de partida: /join <code>",
+        "game_full": "❌ La partida ‘{code}’ está llena\n\nMáximo {max_players} jugadores permitidos",
+        "game_not_found": "❌ Partida ‘{code}’ no encontrada\n\nLa partida puede haber terminado o el código es incorrecto",
+        "game_started": "❌ La partida ‘{code}’ ya ha empezado\n\nNo puedes unirte a una partida en curso",
+        "not_accepting": "❌ La partida ‘{code}’ no acepta jugadores en este momento",
+        "success": "✅ Te uniste correctamente a la partida ‘{code}’.\n\n🎰 Apuesta: {stake}\n👥 Jugadores: {players}/{max_players}\n\nEsperando a que el anfitrión inicie la partida…",
+        "usage": "❌ Formato de comando no válido\n\nUso: /join <code>\nEjemplo: /join ABC123"
+      }
+    },
+    "settings": {
+      "choose_language": "🌐 Elige tu idioma\n\nSelecciona tu idioma preferido para el bot:",
+      "language_changed": "✅ ¡Idioma cambiado exitosamente!"
+    },
+    "viewer": {
+      "hand": {
+        "empty": "—",
+        "header": "🃏 Tu mano:",
+        "pot": "💰 Bote: {amount}"
+      },
+      "table": {
+        "header": "🧩 Mesa:",
+        "waiting": "Esperando al flop…"
+      }
+    }
+  }
 }

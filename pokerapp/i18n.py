@@ -94,6 +94,7 @@ class TranslationManager:
         """
         self.translations_dir = Path(translations_dir)
         self.translations: Dict[str, Dict[str, str]] = {}
+        self.metadata: Dict[str, Dict[str, Any]] = {}
         self._kvstore: Optional[Any] = None
         self._load_translations()
 
@@ -136,7 +137,11 @@ class TranslationManager:
 
         code = self.resolve_language(lang=language)
         direction = "rtl" if self.is_rtl(code) else "ltr"
-        font = self._LANGUAGE_FONT_MAP.get(code)
+        font: Optional[str] = None
+        if code in self.metadata:
+            font = self.metadata[code].get("font")
+        if not font:
+            font = self._LANGUAGE_FONT_MAP.get(code)
         if font is None:
             font = self._DEFAULT_FONT_RTL if direction == "rtl" else self._DEFAULT_FONT_LTR
 
@@ -172,7 +177,10 @@ class TranslationManager:
             lang_code = lang_file.stem
             try:
                 with open(lang_file, "r", encoding="utf-8") as f:
-                    self.translations[lang_code] = json.load(f)
+                    payload = json.load(f)
+                strings, meta = self._normalize_translation_payload(payload, lang_code)
+                self.translations[lang_code] = strings
+                self.metadata[lang_code] = meta
                 logger.info("✅ Loaded translations for: %s", lang_code)
             except Exception as exc:
                 logger.error(
@@ -184,6 +192,124 @@ class TranslationManager:
         # Ensure English exists as fallback
         if "en" not in self.translations:
             self._create_default_english()
+
+    def _normalize_translation_payload(
+        self, payload: Dict[str, Any], lang_code: str
+    ) -> tuple[Dict[str, str], Dict[str, Any]]:
+        """Validate payload sections and flatten into lookup dictionary."""
+
+        required_sections = {"ui", "msg", "help", "game", "popup"}
+        missing = required_sections.difference(payload)
+        if missing:
+            raise ValueError(
+                f"Translation file '{lang_code}.json' missing sections: {sorted(missing)}"
+            )
+
+        meta = payload.get("meta", {})
+        if not isinstance(meta, dict):
+            raise ValueError(
+                f"Translation file '{lang_code}.json' meta section must be an object"
+            )
+
+        rtl = meta.get("rtl", False)
+        if not isinstance(rtl, bool):
+            raise ValueError(
+                f"Translation file '{lang_code}.json' meta.rtl must be boolean"
+            )
+
+        font = meta.get("font")
+        if font is not None and not isinstance(font, str):
+            raise ValueError(
+                f"Translation file '{lang_code}.json' meta.font must be a string when provided"
+            )
+
+        flattened: Dict[str, str] = {}
+
+        def _flatten(prefix: str, value: Any) -> None:
+            if isinstance(value, dict):
+                for child_key, child_value in value.items():
+                    child_prefix = f"{prefix}.{child_key}" if prefix else child_key
+                    _flatten(child_prefix, child_value)
+            else:
+                if not isinstance(value, str):
+                    raise ValueError(
+                        f"Translation value for '{prefix}' in '{lang_code}.json' must be a string"
+                    )
+                flattened[prefix] = value
+
+        # Flatten UI without prefix, keep nested namespaces
+        _flatten("", payload["ui"])
+        # Flatten other sections with their namespace prefixes
+        for section in ("game", "help", "msg"):
+            _flatten(section, payload[section])
+
+        # Popup namespace
+        _flatten("popup", payload["popup"])
+
+        return flattened, {"rtl": rtl, "font": font}
+
+    @staticmethod
+    def _build_structured_payload(flat: Dict[str, str]) -> Dict[str, Any]:
+        """Convert flat translation keys into sectioned payload."""
+
+        structured: Dict[str, Any] = {
+            "meta": {},
+            "ui": {},
+            "msg": {},
+            "help": {},
+            "game": {},
+            "popup": {},
+        }
+
+        prefix_section_map: Dict[str, tuple[str, bool]] = {
+            "game": ("game", True),
+            "action": ("ui", False),
+            "button": ("ui", False),
+            "msg": ("msg", True),
+            "error": ("msg", False),
+            "help": ("help", True),
+            "lobby": ("ui", False),
+            "model": ("ui", False),
+            "controller": ("ui", False),
+            "viewer": ("ui", False),
+            "card": ("game", False),
+            "hand": ("game", False),
+            "settings": ("ui", False),
+        }
+
+        def insert(target: Dict[str, Any], parts: List[str], value: str) -> None:
+            key = parts[0]
+            if len(parts) == 1:
+                target[key] = value
+                return
+            child = target.setdefault(key, {})
+            if not isinstance(child, dict):
+                raise ValueError(
+                    f"Cannot insert into non-dict node for key: {'.'.join(parts)}"
+                )
+            insert(child, parts[1:], value)
+
+        for full_key, value in flat.items():
+            parts = full_key.split(".")
+            prefix = parts[0]
+
+            if prefix == "viewer" and len(parts) > 1 and parts[1] == "fold_confirmation":
+                insert(structured["popup"], parts[1:], value)
+                continue
+
+            if prefix == "controller" and len(parts) > 1 and parts[1] == "toast":
+                insert(structured["popup"], parts[1:], value)
+                continue
+
+            mapping = prefix_section_map.get(prefix)
+            if not mapping:
+                raise KeyError(f"No section mapping for translation key: {full_key}")
+
+            section, drop_prefix = mapping
+            target_parts = parts[1:] if drop_prefix else parts
+            insert(structured[section], target_parts, value)
+
+        return structured
 
     def _create_default_english(self) -> None:
         """Create default English translation file."""
@@ -286,12 +412,17 @@ class TranslationManager:
             "hand.high_card": "High Card",
         }
 
+        payload = self._build_structured_payload(default_translations)
+        payload["meta"] = {"rtl": False, "font": self._DEFAULT_FONT_LTR}
+
         # Save to file
         en_file = self.translations_dir / "en.json"
         with open(en_file, "w", encoding="utf-8") as f:
-            json.dump(default_translations, f, indent=2, ensure_ascii=False)
+            json.dump(payload, f, indent=2, ensure_ascii=False, sort_keys=True)
 
-        self.translations["en"] = default_translations
+        strings, meta = self._normalize_translation_payload(payload, "en")
+        self.translations["en"] = strings
+        self.metadata["en"] = meta
         logger.info("✅ Created default English translations")
 
     def detect_language(self, telegram_language_code: Optional[str]) -> str:
@@ -396,6 +527,10 @@ class TranslationManager:
         Returns:
             True if RTL language
         """
+        if language in self.metadata:
+            rtl = self.metadata[language].get("rtl")
+            if isinstance(rtl, bool):
+                return rtl
         return language in self.RTL_LANGUAGES
 
     def format_currency(
