@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+from contextvars import ContextVar
 
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -44,7 +45,9 @@ class PokerBotViewer:
             logger = logging.getLogger(__name__)
         self._logger = logger
         self._kv = ensure_kv(kv)
-        self._user_language = user_language
+        self._user_language_var: ContextVar[str] = ContextVar(
+            "pokerbot_viewer_user_language", default=user_language
+        )
         self._render_cache = RenderCache(self._kv, self._logger)
         self._live_manager = LiveMessageManager(
             bot=bot,
@@ -59,7 +62,7 @@ class PokerBotViewer:
 
         return translation_manager.translate(
             key,
-            language=self._user_language,
+            language=self._get_active_language(),
             **kwargs,
         )
 
@@ -69,9 +72,31 @@ class PokerBotViewer:
         symbol = "$" if include_symbol else ""
         return translation_manager.format_currency(
             amount,
-            language=self._user_language,
+            language=self._get_active_language(),
             currency_symbol=symbol,
         )
+
+    def _get_active_language(self) -> str:
+        """Return the language active for the current async context."""
+
+        return self._user_language_var.get()
+
+    def set_user_language(self, language: str) -> None:
+        """Set the active language for the current async context."""
+
+        if not language:
+            language = "en"
+        self._user_language_var.set(language)
+
+    @property
+    def _user_language(self) -> str:  # pragma: no cover - compatibility shim
+        """Compat accessor returning the active language."""
+
+        return self._get_active_language()
+
+    @_user_language.setter
+    def _user_language(self, language: str) -> None:  # pragma: no cover
+        self.set_user_language(language)
 
     _SUIT_EMOJIS = {
         "spades": "♠️",
