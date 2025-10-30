@@ -2,7 +2,7 @@
 
 import inspect
 import logging
-from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Iterable, List, Optional, Tuple, TYPE_CHECKING
 
 from telegram import (
     BotCommand,
@@ -690,29 +690,12 @@ Send 💰 /money once per day for free chips!
 
         current_lang = self._kv.get_user_language(user.id) or translation_manager.DEFAULT_LANGUAGE
 
-        languages = translation_manager.get_supported_languages()
-        buttons: List[List[InlineKeyboardButton]] = []
+        # Ensure we persist the detected language preference in storage so
+        # follow-up renders stay consistent even if invoked before a
+        # callback selection is made.
+        self._kv.set_user_language(user.id, current_lang)
 
-        for i in range(0, len(languages), 2):
-            row: List[InlineKeyboardButton] = []
-            for lang_info in languages[i:i + 2]:
-                code = lang_info["code"]
-                name = lang_info["name"]
-
-                if code == current_lang:
-                    text = f"✅ {name}"
-                else:
-                    text = name
-
-                row.append(
-                    InlineKeyboardButton(
-                        text=text,
-                        callback_data=f"lang:{code}",
-                    )
-                )
-            buttons.append(row)
-
-        markup = InlineKeyboardMarkup(buttons)
+        markup = self._build_language_keyboard(current_lang)
 
         header = translation_manager.t(
             "settings.choose_language",
@@ -744,6 +727,11 @@ Send 💰 /money once per day for free chips!
 
         self._kv.set_user_language(user.id, lang_code)
 
+        # Update view language metadata immediately so subsequent renders use
+        # the new locale before the next user-triggered update arrives.
+        if hasattr(self, "_view"):
+            self._view.set_language_context(lang_code, user_id=user.id)
+
         confirmation = translation_manager.t(
             "settings.language_changed",
             user_id=user.id,
@@ -752,7 +740,47 @@ Send 💰 /money once per day for free chips!
 
         await query.answer(confirmation, show_alert=True)
 
+        # Re-render any active UI (live games, menus, etc.) that depend on the
+        # translation context before showing the refreshed language picker.
+        if hasattr(self, "_model") and hasattr(self._model, "refresh_language_for_user"):
+            await self._model.refresh_language_for_user(user.id)
+
         await self._handle_language(update, context)
+
+    def _build_language_keyboard(self, current_lang: str) -> InlineKeyboardMarkup:
+        """Construct a two-column language selector with flags and labels."""
+
+        languages = translation_manager.get_supported_languages()
+
+        def batched(iterable: Iterable[Any], size: int) -> Iterable[List[Any]]:
+            chunk: List[Any] = []
+            for item in iterable:
+                chunk.append(item)
+                if len(chunk) == size:
+                    yield chunk
+                    chunk = []
+            if chunk:
+                yield chunk
+
+        rows: List[List[InlineKeyboardButton]] = []
+        for pair in batched(languages, 2):
+            row: List[InlineKeyboardButton] = []
+            for lang_info in pair:
+                code = lang_info["code"]
+                name = lang_info.get("name", code.upper())
+                flag = lang_info.get("flag", "🏳️")
+                label = f"{flag} {name}"
+                if code == current_lang:
+                    label = f"✅ {label}"
+                row.append(
+                    InlineKeyboardButton(
+                        text=label,
+                        callback_data=f"lang:{code}",
+                    )
+                )
+            rows.append(row)
+
+        return InlineKeyboardMarkup(rows)
 
     async def _handle_button_clicked(
         self,

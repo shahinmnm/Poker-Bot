@@ -572,12 +572,12 @@ class TranslationManager:
         return formatter(amount, currency_symbol)
 
     def get_supported_languages(self) -> List[Dict[str, str]]:
-        """
-        Get list of supported languages with native names.
+        """Return metadata for supported languages.
 
-        Returns:
-            List of dicts with 'code' and 'name' keys
+        Each entry includes the ISO code, a native display name, and an
+        associated flag emoji for richer language picker UIs.
         """
+
         language_names = {
             "en": "English",
             "es": "Español",
@@ -601,10 +601,40 @@ class TranslationManager:
             "he": "עברית",
         }
 
-        return [
-            {"code": code, "name": language_names.get(code, code.upper())}
-            for code in sorted(self.translations.keys())
-        ]
+        language_flags = {
+            "en": "🇺🇸",
+            "es": "🇪🇸",
+            "fr": "🇫🇷",
+            "de": "🇩🇪",
+            "pt": "🇵🇹",
+            "ru": "🇷🇺",
+            "zh": "🇨🇳",
+            "ja": "🇯🇵",
+            "ko": "🇰🇷",
+            "ar": "🇸🇦",
+            "hi": "🇮🇳",
+            "it": "🇮🇹",
+            "nl": "🇳🇱",
+            "pl": "🇵🇱",
+            "tr": "🇹🇷",
+            "vi": "🇻🇳",
+            "th": "🇹🇭",
+            "id": "🇮🇩",
+            "fa": "🇮🇷",
+            "he": "🇮🇱",
+        }
+
+        supported = []
+        for code in sorted(self.translations.keys()):
+            supported.append(
+                {
+                    "code": code,
+                    "name": language_names.get(code, code.upper()),
+                    "flag": language_flags.get(code, "🏳️"),
+                }
+            )
+
+        return supported
 
 
 # Singleton instance

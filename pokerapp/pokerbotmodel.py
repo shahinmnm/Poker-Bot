@@ -264,6 +264,55 @@ class PokerBotModel:
         self._view.set_language_context(user_language, user_id=getattr(update.effective_user, "id", None))
         return user_language
 
+    async def refresh_language_for_user(self, user_id: int) -> None:
+        """Re-render active UI components when a user changes language."""
+
+        affected_games: List[Tuple[int, Game]] = []
+
+        for chat_id, chat_data in self._application.chat_data.items():
+            if not isinstance(chat_data, dict):
+                continue
+
+            game = chat_data.get(KEY_CHAT_DATA_GAME)
+            if not isinstance(game, Game):
+                continue
+
+            players = getattr(game, "players", []) or []
+            if any(getattr(player, "user_id", None) == user_id for player in players):
+                try:
+                    chat_id_int = int(chat_id)
+                except (TypeError, ValueError):
+                    continue
+                affected_games.append((chat_id_int, game))
+
+        if not affected_games:
+            return
+
+        async def _refresh(chat_id: int, game: Game) -> None:
+            current_player = None
+            players = getattr(game, "players", []) or []
+            index = getattr(game, "current_player_index", -1)
+            if 0 <= index < len(players):
+                current_player = players[index]
+
+            try:
+                await self._coordinator._send_or_update_game_state(
+                    game=game,
+                    current_player=current_player,
+                    chat_id=chat_id,
+                )
+            except Exception as exc:  # pragma: no cover - network side-effects
+                self._logger.warning(
+                    "Failed to refresh UI for chat %s after language change: %s",
+                    chat_id,
+                    exc,
+                )
+
+        await asyncio.gather(
+            *(_refresh(chat_id, game) for chat_id, game in affected_games),
+            return_exceptions=True,
+        )
+
     def _lookup_user_by_username(self, username: str) -> Optional[int]:
         """Resolve @username to user_id."""
 
