@@ -10,13 +10,14 @@ import hashlib
 import html
 import inspect
 import json
+import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
-from pokerapp.entities import Game, Player, PlayerAction, PlayerState
+from pokerapp.entities import Game, GameState, Player, PlayerAction, PlayerState
 from pokerapp.device_detector import (
     DeviceDetector,
     DeviceProfile,
@@ -24,6 +25,7 @@ from pokerapp.device_detector import (
 )
 from pokerapp.kvstore import ensure_kv
 from pokerapp.render_cache import RenderCache, RenderResult
+from pokerapp.compact_formatter import CompactFormatter
 
 
 @dataclass(slots=True)
@@ -46,6 +48,7 @@ class ChatRenderState:
     last_content_hash: Optional[str] = None
     last_keyboard_json: str = ""
     banner_task: Optional[asyncio.Task] = None
+    pending_task: Optional[asyncio.Task] = None
     stable_text: str = ""
     stable_markup: Optional[InlineKeyboardMarkup] = None
     last_actor_user_id: Optional[int] = None
@@ -53,6 +56,11 @@ class ChatRenderState:
     raise_order: List[str] = field(default_factory=list)
     raise_selections: Dict[int, Optional[str]] = field(default_factory=dict)
     device_profile: Optional[DeviceProfile] = None
+    last_game_snapshot: Optional[dict] = None
+    last_update_latency_ms: float = 0.0
+    avg_latency_ms: float = 0.0
+    latency_samples: int = 0
+    network_quality: str = "unknown"
 
 
 @dataclass(slots=True)
@@ -216,7 +224,7 @@ class LiveMessageManager:
             self._chat_locks[chat_key] = lock
 
         async with lock:
-            await self._apply_debounce(chat_key)
+            await self._apply_debounce(chat_key, state)
             loop = asyncio.get_running_loop()
             try:
                 return await self._send_or_update_locked(
@@ -421,6 +429,29 @@ class LiveMessageManager:
             self._chat_states[chat_key] = state
         return state
 
+    def _get_debounce_delay(self, render_state: ChatRenderState) -> float:
+        """Calculate adaptive debounce delay based on network quality."""
+
+        quality = render_state.network_quality
+        delay_map = {
+            "fast": 0.1,
+            "slow": 0.3,
+            "poor": 1.0,
+            "unknown": 0.2,
+        }
+        delay = delay_map.get(quality, 0.2)
+
+        if getattr(render_state, "pending_task", None) is not None:
+            delay *= 1.5
+
+        self._logger.debug(
+            "Adaptive debounce: %.1fms (quality=%s)",
+            delay * 1000,
+            quality,
+        )
+
+        return delay
+
     def _resolve_device_profile(
         self,
         chat_id: int,
@@ -441,10 +472,12 @@ class LiveMessageManager:
         state.device_profile = profile
         return profile
 
-    async def _apply_debounce(self, chat_key: str) -> None:
+    async def _apply_debounce(
+        self, chat_key: str, state: ChatRenderState
+    ) -> None:
         """Sleep briefly if the last update happened too recently."""
 
-        window = self.DEBOUNCE_WINDOW
+        window = self._get_debounce_delay(state)
         if window <= 0:
             return
 
@@ -470,6 +503,17 @@ class LiveMessageManager:
         next_version = None
         if current_player is not None:
             next_version = game.next_live_message_version()
+
+        old_snapshot = state.last_game_snapshot
+        new_snapshot = self._capture_game_snapshot(game)
+        state_diff = self._calculate_state_diff(old_snapshot, new_snapshot)
+        if state_diff.get("type") == "incremental":
+            changed_keys = [key for key in state_diff.keys() if key != "type"]
+            self._logger.debug(
+                "Incremental update detected: %s",
+                changed_keys,
+            )
+        state.last_game_snapshot = new_snapshot
 
         await self._ensure_flash_state(chat_id)
 
@@ -565,6 +609,7 @@ class LiveMessageManager:
             chat_id=chat_id,
             game=game,
             bundle=bundle,
+            state=state,
         )
 
         if message_id is None:
@@ -625,6 +670,7 @@ class LiveMessageManager:
         stable_text: Optional[str] = None
         reply_markup: Optional[InlineKeyboardMarkup] = None
         options: List[RaiseOptionMeta] = []
+        compact_mode = self._should_use_compact_mode(device_profile, state)
 
         use_cache = (
             mode == "actions"
@@ -646,10 +692,13 @@ class LiveMessageManager:
             if stable_text is None:
                 display = self._build_display_strings(context, state.last_context)
                 stable_text = self._compose_message_body(
+                    game=game,
+                    current_player=current_player,
                     context=context,
                     display=display,
                     preview_raise=None,
                     device_profile=device_profile,
+                    compact=compact_mode,
                 )
 
             options = self._compute_raise_options(game, current_player)
@@ -686,10 +735,13 @@ class LiveMessageManager:
                 context_options={opt.key: opt for opt in options},
             )
             stable_text = self._compose_message_body(
+                game=game,
+                current_player=current_player,
                 context=context,
                 display=display,
                 preview_raise=preview_text,
                 device_profile=device_profile,
+                compact=compact_mode,
             )
 
         stable_text_value = stable_text or ""
@@ -846,17 +898,35 @@ class LiveMessageManager:
     def _compose_message_body(
         self,
         *,
+        game: Game,
+        current_player: Optional[Player],
         context: Dict[str, Any],
         display: Dict[str, str],
         preview_raise: Optional[str],
         device_profile: DeviceProfile,
+        compact: bool,
     ) -> str:
         if device_profile.device_type == DeviceType.MOBILE:
-            return self._compose_mobile_body(
-                context=context,
-                preview_raise=preview_raise,
-                device_profile=device_profile,
+            body = self._compose_mobile_body(
+                game,
+                current_player,
+                device_profile,
+                compact=compact,
             )
+
+            extra_lines: List[str] = []
+            if preview_raise is not None:
+                extra_lines.extend(["", f"🎯 <b>Selected raise:</b> {preview_raise}"])
+
+            recent = context.get("recent_actions", [])
+            if recent:
+                extra_lines.extend(["", "📝 <b>Recent</b>"])
+                extra_lines.extend(f"• {action}" for action in recent)
+
+            if extra_lines:
+                body = body + "\n" + "\n".join(extra_lines)
+
+            return body
 
         lines: List[str] = []
         lines.append(self._build_hud_block(context, display))
@@ -881,44 +951,210 @@ class LiveMessageManager:
 
     def _compose_mobile_body(
         self,
-        *,
-        context: Dict[str, Any],
-        preview_raise: Optional[str],
+        game: Game,
+        current_player: Optional[Player],
         device_profile: DeviceProfile,
+        *,
+        compact: bool = True,
     ) -> str:
+        """Compose a mobile-friendly summary, optionally using compact mode."""
+
         lines: List[str] = []
         lines.append("🎴 <b>TEXAS HOLD'EM</b> 🎴")
+
+        board_cards = list(getattr(game, "cards_table", []) or [])
+        if compact:
+            board_text = CompactFormatter.format_cards(board_cards)
+        else:
+            board_text = self._format_board_line(board_cards)
+
         lines.append("")
-        lines.append("🃏 <b>COMMUNITY CARDS</b>")
-        lines.append(
-            self._format_mobile_board(
-                context,
-                device_profile=device_profile,
+        if compact:
+            lines.append("🃏 <b>BOARD</b>")
+            lines.append(html.escape(board_text))
+        else:
+            stage_name = self.STAGE_NAMES.get(len(board_cards), "Pre-flop")
+            stage_icon = self.STAGE_ICONS.get(len(board_cards), "♠️")
+            lines.append(f"🃏 <b>{stage_icon} {html.escape(stage_name)}</b>")
+            board_display = board_text or "—"
+            max_chars = getattr(device_profile, "max_line_length", 0) or 0
+            if max_chars and len(board_display) > max_chars:
+                board_display = board_display[: max_chars - 1] + "…"
+            lines.append(html.escape(board_display))
+
+        side_pots = getattr(game, "side_pots", None)
+        if side_pots:
+            side_values = [getattr(pot, "amount", pot) for pot in side_pots]
+        else:
+            side_values = None
+
+        if compact:
+            pot_line = CompactFormatter.format_pot_compact(
+                getattr(game, "pot", 0), side_values
             )
-        )
+        else:
+            pot_line = f"💰 <b>Pot:</b> {html.escape(self._format_chips(getattr(game, 'pot', 0)))}"
+
         lines.append("")
-
-        pot_value = html.escape(self._format_chips(context.get("pot_value", 0)))
-        lines.append(f"💰 <b>Pot:</b> {pot_value}")
-
-        if preview_raise is not None:
-            lines.append("")
-            lines.append(f"🎯 <b>Selected raise:</b> {preview_raise}")
+        lines.append(pot_line)
 
         lines.append("")
         lines.append("👥 <b>PLAYERS</b>")
-        player_rows = context.get("player_rows_mobile") or []
-        if not player_rows:
-            player_rows = ["ℹ️ No players seated yet"]
-        lines.extend(player_rows)
+        if not getattr(game, "players", []):
+            lines.append("ℹ️ No players seated yet")
+        else:
+            show_cards = getattr(game, "state", None) == GameState.FINISHED
+            for player in getattr(game, "players", []) or []:
+                player_line = CompactFormatter.format_player_compact(
+                    player,
+                    show_cards=show_cards,
+                )
+                lines.append(html.escape(player_line))
 
-        recent = context.get("recent_actions", [])
-        if recent:
+        actor_name = self._get_player_name(current_player)
+        if compact and actor_name not in {"", "—"}:
+            lines.append("")
+            lines.append(f"🎯 To act: {html.escape(actor_name)}")
+
+        recent_actions = getattr(game, "recent_actions", []) or []
+        if recent_actions and not compact:
             lines.append("")
             lines.append("📝 <b>Recent</b>")
-            lines.extend(f"• {action}" for action in recent)
+            lines.extend(f"• {html.escape(action)}" for action in recent_actions[-3:])
 
-        return "\n".join(lines)
+        body = "\n".join(lines)
+        size_bytes = self._calculate_message_bytes(body)
+        self._logger.debug(
+            "Mobile message composed: %d bytes (compact=%s)",
+            size_bytes,
+            compact,
+        )
+
+        return body
+
+    @staticmethod
+    def _calculate_message_bytes(text: str) -> int:
+        """Calculate UTF-8 byte size of message."""
+
+        return len(text.encode("utf-8"))
+
+    def _capture_game_snapshot(self, game: Game) -> dict:
+        """Capture minimal game state for diff comparison."""
+
+        return {
+            "pot": getattr(game, "pot", 0),
+            "board": [str(card) for card in getattr(game, "cards_table", []) or []],
+            "players": {
+                getattr(p, "user_id", idx): {
+                    "stack": getattr(p.wallet, "value", lambda: 0)(),
+                    "bet": getattr(p, "round_rate", 0),
+                    "state": getattr(getattr(p, "state", None), "name", "UNKNOWN"),
+                }
+                for idx, p in enumerate(getattr(game, "players", []) or [])
+            },
+            "state": getattr(getattr(game, "state", None), "name", "UNKNOWN"),
+        }
+
+    def _calculate_state_diff(
+        self,
+        old_snapshot: Optional[dict],
+        new_snapshot: dict,
+    ) -> dict:
+        """Return dictionary of changes between snapshots."""
+
+        if not old_snapshot:
+            return {"type": "full_refresh"}
+
+        diff: Dict[str, Any] = {"type": "incremental"}
+
+        if old_snapshot.get("pot") != new_snapshot.get("pot"):
+            diff["pot"] = {
+                "old": old_snapshot.get("pot"),
+                "new": new_snapshot.get("pot"),
+            }
+
+        old_board = old_snapshot.get("board", [])
+        new_board = new_snapshot.get("board", [])
+        if len(new_board) > len(old_board):
+            diff["new_cards"] = new_board[len(old_board) :]
+
+        player_diffs: Dict[Any, Dict[str, Any]] = {}
+        for pid, new_data in new_snapshot.get("players", {}).items():
+            old_data = old_snapshot.get("players", {}).get(pid, {})
+            player_diff: Dict[str, Any] = {}
+
+            if old_data.get("stack") != new_data.get("stack"):
+                player_diff["stack"] = {
+                    "old": old_data.get("stack"),
+                    "new": new_data.get("stack"),
+                }
+
+            if old_data.get("bet") != new_data.get("bet"):
+                player_diff["bet"] = {
+                    "old": old_data.get("bet", 0),
+                    "new": new_data.get("bet"),
+                }
+
+            if old_data.get("state") != new_data.get("state"):
+                player_diff["state"] = new_data.get("state")
+
+            if player_diff:
+                player_diffs[pid] = player_diff
+
+        if player_diffs:
+            diff["players"] = player_diffs
+
+        return diff
+
+    def _update_network_metrics(
+        self,
+        render_state: ChatRenderState,
+        latency_ms: float,
+    ) -> None:
+        """Update rolling average latency and determine quality."""
+
+        n = min(render_state.latency_samples, 9)
+        old_avg = render_state.avg_latency_ms
+        new_avg = (old_avg * n + latency_ms) / (n + 1)
+
+        render_state.last_update_latency_ms = latency_ms
+        render_state.avg_latency_ms = new_avg
+        render_state.latency_samples += 1
+
+        if new_avg < 200:
+            render_state.network_quality = "fast"
+        elif new_avg < 1000:
+            render_state.network_quality = "slow"
+        else:
+            render_state.network_quality = "poor"
+
+        self._logger.debug(
+            "Network quality: %s (latency: %.1fms, avg: %.1fms)",
+            render_state.network_quality,
+            latency_ms,
+            new_avg,
+        )
+
+    def _should_use_compact_mode(
+        self,
+        device_profile: DeviceProfile,
+        render_state: ChatRenderState,
+    ) -> bool:
+        """Determine if compact mode should be used."""
+
+        if device_profile.device_type == DeviceType.MOBILE:
+            return True
+
+        if (
+            device_profile.device_type == DeviceType.TABLET
+            and render_state.network_quality == "slow"
+        ):
+            return True
+
+        if render_state.network_quality == "poor":
+            return True
+
+        return False
 
     def _build_hud_block(
         self, context: Dict[str, Any], display: Dict[str, str]
@@ -1879,10 +2115,12 @@ class LiveMessageManager:
         chat_id: int,
         game: Game,
         bundle: RenderBundle,
+        state: ChatRenderState,
     ) -> Optional[int]:
         message_id = None
 
         if game.has_group_message():
+            start_time = time.perf_counter()
             try:
                 message = await self._bot.edit_message_text(
                     chat_id=chat_id,
@@ -1892,6 +2130,8 @@ class LiveMessageManager:
                     parse_mode=self.PARSE_MODE,
                     disable_web_page_preview=True,
                 )
+                latency_ms = (time.perf_counter() - start_time) * 1000
+                self._update_network_metrics(state, latency_ms)
                 message_id = getattr(
                     message,
                     "message_id",
@@ -1934,6 +2174,7 @@ class LiveMessageManager:
 
         try:
             self._logger.debug("Sending new live message to chat %s", chat_id)
+            start_time = time.perf_counter()
             message = await self._bot.send_message(
                 chat_id=chat_id,
                 text=bundle.message_text,
@@ -1942,6 +2183,8 @@ class LiveMessageManager:
                 disable_notification=True,
                 disable_web_page_preview=True,
             )
+            latency_ms = (time.perf_counter() - start_time) * 1000
+            self._update_network_metrics(state, latency_ms)
             message_id = getattr(message, "message_id", None)
 
             if message_id is not None:
