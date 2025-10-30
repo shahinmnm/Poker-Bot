@@ -17,6 +17,11 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
 from pokerapp.entities import Game, Player, PlayerState
+from pokerapp.device_detector import (
+    DeviceDetector,
+    DeviceProfile,
+    DeviceType,
+)
 from pokerapp.kvstore import ensure_kv
 from pokerapp.render_cache import RenderCache, RenderResult
 
@@ -47,6 +52,7 @@ class ChatRenderState:
     raise_options: Dict[str, RaiseOptionMeta] = field(default_factory=dict)
     raise_order: List[str] = field(default_factory=list)
     raise_selections: Dict[int, Optional[str]] = field(default_factory=dict)
+    device_profile: Optional[DeviceProfile] = None
 
 
 @dataclass(slots=True)
@@ -135,6 +141,7 @@ class LiveMessageManager:
         self._kv = ensure_kv(kv) if kv is not None else None
         cache_backend = ensure_kv(kv) if kv is not None else ensure_kv(None)
         self._render_cache = render_cache or RenderCache(cache_backend, logger)
+        self._device_detector = DeviceDetector()
 
     @staticmethod
     def _format_chips(amount: int, width: int = 6) -> str:
@@ -248,6 +255,11 @@ class LiveMessageManager:
                 if message_version is not None
                 else game.get_live_message_version()
             )
+            device_profile = self._resolve_device_profile(
+                chat_id,
+                state,
+                user_id=getattr(current_player, "user_id", None),
+            )
             bundle = self._prepare_render_bundle(
                 chat_key=chat_key,
                 game=game,
@@ -261,6 +273,7 @@ class LiveMessageManager:
                     self._active_flash_cards.get(chat_id, set())
                 )
                 or None,
+                device_profile=device_profile,
             )
 
             if bundle.reply_markup is None:
@@ -313,6 +326,11 @@ class LiveMessageManager:
 
         async with lock:
             self._cancel_banner_task(state)
+            device_profile = self._resolve_device_profile(
+                chat_id,
+                state,
+                user_id=getattr(current_player, "user_id", None),
+            )
             bundle = self._prepare_render_bundle(
                 chat_key=chat_key,
                 game=game,
@@ -325,6 +343,7 @@ class LiveMessageManager:
                     self._active_flash_cards.get(chat_id, set())
                 )
                 or None,
+                device_profile=device_profile,
             )
 
             try:
@@ -389,6 +408,26 @@ class LiveMessageManager:
             state = ChatRenderState()
             self._chat_states[chat_key] = state
         return state
+
+    def _resolve_device_profile(
+        self,
+        chat_id: int,
+        state: ChatRenderState,
+        *,
+        user_id: Optional[int] = None,
+    ) -> DeviceProfile:
+        """Return the device profile associated with the chat."""
+
+        if state.device_profile is not None:
+            return state.device_profile
+
+        chat_type = "private" if chat_id > 0 else "group"
+        profile = self._device_detector.detect_device(
+            user_id=user_id,
+            chat_type=chat_type,
+        )
+        state.device_profile = profile
+        return profile
 
     async def _apply_debounce(self, chat_key: str) -> None:
         """Sleep briefly if the last update happened too recently."""
@@ -478,6 +517,12 @@ class LiveMessageManager:
 
             asyncio.create_task(cleanup_flash())
 
+        device_profile = self._resolve_device_profile(
+            chat_id,
+            state,
+            user_id=getattr(current_player, "user_id", None),
+        )
+
         bundle = self._prepare_render_bundle(
             chat_key=chat_key,
             game=game,
@@ -487,6 +532,7 @@ class LiveMessageManager:
             mode="actions",
             include_banner=True,
             flash_cards=active_flash_cards or None,
+            device_profile=device_profile,
         )
 
         content_hash = hashlib.sha256(bundle.message_text.encode()).hexdigest()
@@ -552,6 +598,7 @@ class LiveMessageManager:
         include_banner: bool,
         selected_raise: Optional[str] = None,
         flash_cards: Optional[Set[str]] = None,
+        device_profile: DeviceProfile,
     ) -> RenderBundle:
         """Build message text, markup, and hashes for a render pass."""
 
@@ -559,6 +606,7 @@ class LiveMessageManager:
             game,
             current_player,
             flash_cards=flash_cards,
+            device_profile=device_profile,
         )
 
         preview_text: Optional[str] = None
@@ -589,6 +637,7 @@ class LiveMessageManager:
                     context=context,
                     display=display,
                     preview_raise=None,
+                    device_profile=device_profile,
                 )
 
             options = self._compute_raise_options(game, current_player)
@@ -627,6 +676,7 @@ class LiveMessageManager:
                 context=context,
                 display=display,
                 preview_raise=preview_text,
+                device_profile=device_profile,
             )
 
         stable_text_value = stable_text or ""
@@ -683,6 +733,7 @@ class LiveMessageManager:
         current_player: Optional[Player],
         *,
         flash_cards: Optional[Set[str]] = None,
+        device_profile: DeviceProfile,
     ) -> Dict[str, Any]:
         players = list(getattr(game, "players", []) or [])
         active_count = sum(1 for p in players if p.state != PlayerState.FOLD)
@@ -727,6 +778,14 @@ class LiveMessageManager:
             "table_code": str(getattr(game, "id", "----"))[:4].upper(),
             "seat_label": f"{len(players)}-max",
         }
+
+        context["device_profile"] = device_profile
+        context["player_rows_mobile"] = self._format_players_mobile(
+            players,
+            actor_user_id,
+            timer_seconds=getattr(game, "time_remaining", None),
+            device_profile=device_profile,
+        )
 
         return context
 
@@ -777,7 +836,15 @@ class LiveMessageManager:
         context: Dict[str, Any],
         display: Dict[str, str],
         preview_raise: Optional[str],
+        device_profile: DeviceProfile,
     ) -> str:
+        if device_profile.device_type == DeviceType.MOBILE:
+            return self._compose_mobile_body(
+                context=context,
+                preview_raise=preview_raise,
+                device_profile=device_profile,
+            )
+
         lines: List[str] = []
         lines.append(self._build_hud_block(context, display))
         lines.append("")
@@ -790,6 +857,47 @@ class LiveMessageManager:
             f"👥 <b>Players ({context.get('active_count', 0)} active)</b>"
         )
         lines.extend(context.get("player_rows", []))
+
+        recent = context.get("recent_actions", [])
+        if recent:
+            lines.append("")
+            lines.append("📝 <b>Recent</b>")
+            lines.extend(f"• {action}" for action in recent)
+
+        return "\n".join(lines)
+
+    def _compose_mobile_body(
+        self,
+        *,
+        context: Dict[str, Any],
+        preview_raise: Optional[str],
+        device_profile: DeviceProfile,
+    ) -> str:
+        lines: List[str] = []
+        lines.append("🎴 <b>TEXAS HOLD'EM</b> 🎴")
+        lines.append("")
+        lines.append("🃏 <b>COMMUNITY CARDS</b>")
+        lines.append(
+            self._format_mobile_board(
+                context,
+                device_profile=device_profile,
+            )
+        )
+        lines.append("")
+
+        pot_value = html.escape(self._format_chips(context.get("pot_value", 0)))
+        lines.append(f"💰 <b>Pot:</b> {pot_value}")
+
+        if preview_raise is not None:
+            lines.append("")
+            lines.append(f"🎯 <b>Selected raise:</b> {preview_raise}")
+
+        lines.append("")
+        lines.append("👥 <b>PLAYERS</b>")
+        player_rows = context.get("player_rows_mobile") or []
+        if not player_rows:
+            player_rows = ["ℹ️ No players seated yet"]
+        lines.extend(player_rows)
 
         recent = context.get("recent_actions", [])
         if recent:
@@ -820,6 +928,26 @@ class LiveMessageManager:
         ]
 
         return "<pre>" + "\n".join(hud_lines) + "</pre>"
+
+    def _format_mobile_board(
+        self,
+        context: Dict[str, Any],
+        *,
+        device_profile: DeviceProfile,
+    ) -> str:
+        board_raw = context.get("board_display_raw") or "—"
+        stage_icon = context.get("stage_icon", "♠️")
+        stage_name = html.escape(context.get("stage_name", "Pre-flop"))
+
+        if board_raw.strip() in {"—", "🂠 🂠 🂠"}:
+            return "🔒 Cards will be revealed during betting"
+
+        board_display = html.escape(board_raw)
+        max_chars = max(device_profile.max_line_length, 10)
+        if len(board_display) > max_chars:
+            board_display = board_display[: max_chars - 1] + "…"
+
+        return f"{stage_icon} <b>{stage_name}</b>\n📋 <b>{board_display}</b>"
 
     def _format_players(
         self,
@@ -871,6 +999,80 @@ class LiveMessageManager:
             rows.append("ℹ️ No players seated yet")
 
         return rows
+
+    def _format_players_mobile(
+        self,
+        players: List[Player],
+        actor_user_id: Optional[int],
+        *,
+        timer_seconds: Optional[int],
+        device_profile: DeviceProfile,
+    ) -> List[str]:
+        if device_profile.device_type != DeviceType.MOBILE:
+            return self._format_players(
+                players,
+                actor_user_id,
+                timer_seconds=timer_seconds,
+            )
+
+        if not players:
+            return ["ℹ️ No players seated yet"]
+
+        lines: List[str] = []
+        max_length = max(device_profile.max_line_length, 5)
+
+        for player in players:
+            raw_name = self._get_player_name(player)
+            if len(raw_name) > max_length:
+                raw_name = raw_name[: max_length - 3] + "..."
+            safe_name = html.escape(raw_name)
+
+            is_current = player.user_id == actor_user_id
+            status_icon = "▶️" if is_current else "⏸"
+            state_icon = self._get_player_state_icon(getattr(player, "state", None))
+
+            stack_value = max(player.wallet.value(), 0)
+            bet_value = max(player.round_rate, 0)
+            stack_text = html.escape(self._format_chips(stack_value))
+            bet_text = html.escape(self._format_chips(bet_value))
+
+            if getattr(player, "state", None) == PlayerState.ALL_IN:
+                state_label = "All-In"
+            elif getattr(player, "state", None) == PlayerState.FOLD:
+                state_label = "Folded"
+            else:
+                state_label = "Active"
+
+            header_line = f"{status_icon} <b>{safe_name}</b>"
+            if is_current:
+                header_line += " <i>(Your turn)</i>"
+
+            timer_suffix = ""
+            if is_current and timer_seconds is not None and timer_seconds > 0:
+                timer_suffix = f" · {timer_seconds}s"
+
+            detail_line = (
+                f"   {state_icon} {state_label} · Stack: {stack_text} | Bet: {bet_text}"
+                f"{timer_suffix}"
+            )
+
+            lines.append(f"{header_line}\n{detail_line}")
+
+        return lines
+
+    def _get_player_state_icon(
+        self, state: Optional[PlayerState]
+    ) -> str:
+        mapping = {
+            PlayerState.ACTIVE: "✅",
+            PlayerState.FOLD: "❌",
+            PlayerState.ALL_IN: "🔥",
+        }
+
+        if state is None:
+            return "❓"
+
+        return mapping.get(state, "❓")
 
     def _format_recent_actions(self, game: Game) -> List[str]:
         recent = getattr(game, "recent_actions", []) or []
