@@ -4,12 +4,60 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Dict, List, Optional
+import contextlib
+import datetime as _dt
+import hashlib
+import html
+import json
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
 from pokerapp.entities import Game, Player, PlayerState
+
+
+@dataclass(slots=True)
+class RaiseOptionMeta:
+    """Metadata describing a single raise selection option."""
+
+    key: str
+    button_label: str
+    preview_label: str
+    amount: Optional[int]
+    kind: str  # "amount", "pot", "all_in"
+
+
+@dataclass(slots=True)
+class ChatRenderState:
+    """Mutable rendering data tracked per chat for diffing & UX features."""
+
+    last_context: Dict[str, Any] = field(default_factory=dict)
+    last_payload_hash: Optional[str] = None
+    last_keyboard_json: str = ""
+    banner_task: Optional[asyncio.Task] = None
+    stable_text: str = ""
+    stable_markup: Optional[InlineKeyboardMarkup] = None
+    last_actor_user_id: Optional[int] = None
+    raise_options: Dict[str, RaiseOptionMeta] = field(default_factory=dict)
+    raise_order: List[str] = field(default_factory=list)
+    raise_selections: Dict[int, Optional[str]] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class RenderBundle:
+    """Container describing a prepared message payload."""
+
+    message_text: str
+    stable_text: str
+    reply_markup: Optional[InlineKeyboardMarkup]
+    keyboard_json: str
+    payload_hash: str
+    banner: Optional[str]
+    context: Dict[str, Any]
+    raise_options: Dict[str, RaiseOptionMeta]
+    raise_order: List[str]
 
 
 class LiveMessageManager:
@@ -23,7 +71,6 @@ class LiveMessageManager:
         5: "🌃",  # River
     }
 
-    # Stage names
     STAGE_NAMES = {
         0: "Pre-flop",
         3: "Flop",
@@ -31,15 +78,45 @@ class LiveMessageManager:
         5: "River",
     }
 
+    STAGE_ICONS = {
+        0: "♠️",
+        3: "🌼",
+        4: "🔁",
+        5: "🧊",
+    }
+
     PARSE_MODE = "HTML"
     # Minimum spacing between consecutive updates per chat (seconds)
     DEBOUNCE_WINDOW = 0.35
+    # Seconds before the transient banner is cleared
+    BANNER_DURATION = 2.5
+    # Duration before deleting the private "your turn" ping
+    TURN_PING_TTL = 5
+    # Approximate per-turn timer in seconds (aligned with model default)
+    DEFAULT_TURN_SECONDS = 120
+
+    STATE_CONTEXT_KEYS: Tuple[str, ...] = (
+        "street_display_raw",
+        "stage_name",
+        "stage_icon",
+        "to_act_display_raw",
+        "actor_user_id",
+        "pot_value",
+        "last_bet_value",
+        "board_display_raw",
+        "timer_bucket",
+    )
 
     def __init__(self, bot, logger):
         self._bot = bot
         self._logger = logger
         self._chat_locks: Dict[str, asyncio.Lock] = {}
         self._last_update_at: Dict[str, float] = {}
+        self._chat_states: Dict[str, ChatRenderState] = {}
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     async def send_or_update_live_message(
         self,
@@ -48,6 +125,7 @@ class LiveMessageManager:
         current_player: Player,
     ) -> Optional[int]:
         """Public wrapper maintaining backwards compatibility."""
+
         game_identifier = getattr(game, "game_id", getattr(game, "id", "?"))
         self._logger.info(
             "🔍 LiveMessageManager.send_or_update_live_message called - "
@@ -70,6 +148,7 @@ class LiveMessageManager:
         """Send a new live message or update the existing one."""
 
         chat_key = str(chat_id)
+        state = self._get_state(chat_key)
         lock = self._chat_locks.get(chat_key)
         if lock is None:
             lock = asyncio.Lock()
@@ -81,11 +160,171 @@ class LiveMessageManager:
             try:
                 return await self._send_or_update_locked(
                     chat_id=chat_id,
+                    chat_key=chat_key,
                     game=game,
                     current_player=current_player,
+                    state=state,
                 )
             finally:
                 self._last_update_at[chat_key] = loop.time()
+
+    async def present_raise_selector(
+        self,
+        chat_id: int,
+        game: Game,
+        current_player: Player,
+        *,
+        user_id: int,
+        message_id: int,
+        message_version: Optional[int],
+        selection_key: Optional[str],
+    ) -> bool:
+        """Swap the main action keyboard for the raise amount selector."""
+
+        chat_key = str(chat_id)
+        state = self._get_state(chat_key)
+        lock = self._chat_locks.setdefault(chat_key, asyncio.Lock())
+
+        async with lock:
+            self._cancel_banner_task(state)
+            version = (
+                message_version
+                if message_version is not None
+                else game.get_live_message_version()
+            )
+            bundle = self._prepare_render_bundle(
+                chat_key=chat_key,
+                game=game,
+                current_player=current_player,
+                state=state,
+                version=version,
+                mode="raise_selection",
+                include_banner=False,
+                selected_raise=selection_key,
+            )
+
+            if bundle.reply_markup is None:
+                self._logger.debug(
+                    "Raise selector unavailable - no options",
+                )
+                return False
+
+            try:
+                await self._bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=bundle.stable_text,
+                    reply_markup=bundle.reply_markup,
+                    parse_mode=self.PARSE_MODE,
+                    disable_web_page_preview=True,
+                )
+            except TelegramError as exc:
+                self._logger.error(
+                    "Failed to present raise selector in chat %s: %s",
+                    chat_id,
+                    exc,
+                )
+                return False
+
+            state.last_context = bundle.context
+            state.last_payload_hash = bundle.payload_hash
+            state.last_keyboard_json = bundle.keyboard_json
+            state.stable_text = bundle.stable_text
+            state.stable_markup = bundle.reply_markup
+            state.raise_options = bundle.raise_options
+            state.raise_order = bundle.raise_order
+            state.raise_selections[user_id] = selection_key
+
+            return True
+
+    async def restore_action_keyboard(
+        self,
+        chat_id: int,
+        game: Game,
+        current_player: Player,
+        *,
+        message_id: int,
+    ) -> bool:
+        """Restore the default action keyboard after leaving raise picker."""
+
+        chat_key = str(chat_id)
+        state = self._get_state(chat_key)
+        lock = self._chat_locks.setdefault(chat_key, asyncio.Lock())
+
+        async with lock:
+            self._cancel_banner_task(state)
+            bundle = self._prepare_render_bundle(
+                chat_key=chat_key,
+                game=game,
+                current_player=current_player,
+                state=state,
+                version=game.get_live_message_version(),
+                mode="actions",
+                include_banner=False,
+            )
+
+            try:
+                await self._bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=bundle.stable_text,
+                    reply_markup=bundle.reply_markup,
+                    parse_mode=self.PARSE_MODE,
+                    disable_web_page_preview=True,
+                )
+            except TelegramError as exc:
+                self._logger.error(
+                    "Failed to restore action keyboard in chat %s: %s",
+                    chat_id,
+                    exc,
+                )
+                return False
+
+            state.last_context = bundle.context
+            state.last_payload_hash = bundle.payload_hash
+            state.last_keyboard_json = bundle.keyboard_json
+            state.stable_text = bundle.stable_text
+            state.stable_markup = bundle.reply_markup
+            state.raise_options = bundle.raise_options
+            state.raise_order = bundle.raise_order
+            state.raise_selections.clear()
+
+            return True
+
+    def get_raise_selection(
+        self, chat_id: int, user_id: int
+    ) -> Tuple[Optional[str], Optional[RaiseOptionMeta]]:
+        """Return the raise selection currently stored for a user."""
+
+        state = self._chat_states.get(str(chat_id))
+        if state is None:
+            return None, None
+
+        key = state.raise_selections.get(user_id)
+        if key is None:
+            return None, None
+
+        return key, state.raise_options.get(key)
+
+    def clear_raise_selection(self, chat_id: int, user_id: int) -> None:
+        """Remove the stored raise selection for a given user."""
+
+        state = self._chat_states.get(str(chat_id))
+        if state is None:
+            return
+
+        state.raise_selections.pop(user_id, None)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _get_state(self, chat_key: str) -> ChatRenderState:
+        state = self._chat_states.get(chat_key)
+        if state is None:
+            state = ChatRenderState()
+            self._chat_states[chat_key] = state
+        return state
 
     async def _apply_debounce(self, chat_key: str) -> None:
         """Sleep briefly if the last update happened too recently."""
@@ -106,8 +345,10 @@ class LiveMessageManager:
     async def _send_or_update_locked(
         self,
         chat_id: int,
+        chat_key: str,
         game: Game,
         current_player: Player,
+        state: ChatRenderState,
     ) -> Optional[int]:
         """Internal helper executing the actual message update."""
 
@@ -115,221 +356,500 @@ class LiveMessageManager:
         if current_player is not None:
             next_version = game.next_live_message_version()
 
-        message_text = self._build_game_state_text(game, current_player)
-        reply_markup = None
-        if current_player is not None:
-            reply_markup = self._build_action_inline_keyboard(
-                game,
-                current_player,
-                next_version,
-            )
-
-        self._logger.info(
-            "🔍 Sending update - has_buttons=%s, button_count=%s",
-            reply_markup is not None,
-            len(reply_markup.inline_keyboard)
-            if getattr(reply_markup, "inline_keyboard", None)
-            else 0,
+        bundle = self._prepare_render_bundle(
+            chat_key=chat_key,
+            game=game,
+            current_player=current_player,
+            state=state,
+            version=next_version,
+            mode="actions",
+            include_banner=True,
         )
 
-        message_id = None
-
-        # Try to edit existing message first
-        if game.has_group_message():
-            try:
-                self._logger.debug(
-                    "Attempting to edit message %s in chat %s",
-                    game.group_message_id,
-                    chat_id,
-                )
-                message = await self._bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=game.group_message_id,
-                    text=message_text,
-                    reply_markup=reply_markup,
-                    parse_mode=self.PARSE_MODE,
-                    disable_web_page_preview=True,
-                )
-                message_id = getattr(
-                    message,
-                    "message_id",
-                    game.group_message_id,
-                )
-                if next_version is not None:
-                    game.mark_live_message_version(next_version)
-                self._logger.debug(
-                    "✅ Successfully edited message %s", message_id
-                )
-                return message_id
-
-            except TelegramError as exc:
-                error_msg = str(exc).lower()
-
-                if (
-                    "not modified" in error_msg
-                    or "message is not modified" in error_msg
-                ):
-                    self._logger.debug(
-                        "Message %s content unchanged, skipping update",
-                        game.group_message_id,
-                    )
-                    return game.group_message_id
-
-                if (
-                    "message to edit not found" in error_msg
-                    or "message can't be edited" in error_msg
-                    or "message_id_invalid" in error_msg
-                ):
-                    self._logger.warning(
-                        "Message %s no longer exists, will send new message",
-                        game.group_message_id,
-                    )
-                    game.group_message_id = None
-                else:
-                    self._logger.error(
-                        "Failed to edit message %s: %s, will send new message",
-                        game.group_message_id,
-                        exc,
-                    )
-                    game.group_message_id = None
-
-        # Send new message if no existing one or edit failed critically
-        try:
-            self._logger.debug("Sending new live message to chat %s", chat_id)
-            message = await self._bot.send_message(
-                chat_id=chat_id,
-                text=message_text,
-                reply_markup=reply_markup,
-                parse_mode=self.PARSE_MODE,
-                disable_notification=True,
-                disable_web_page_preview=True,
-            )
-            message_id = getattr(message, "message_id", None)
-
-            if message_id is not None:
-                self._logger.info(
-                    "✅ Created new live message %s in chat %s",
-                    message_id,
-                    chat_id,
-                )
-                game.set_group_message(message_id)
-                if next_version is not None:
-                    game.mark_live_message_version(next_version)
-
-            return message_id
-
-        except TelegramError as exc:
-            self._logger.error(
-                "❌ Unable to send new live message to chat %s: %s",
+        if bundle.payload_hash == state.last_payload_hash:
+            self._logger.debug(
+                "Message payload unchanged for chat %s; skipping edit",
                 chat_id,
-                exc,
             )
+            return game.group_message_id if game.has_group_message() else None
+
+        message_id = await self._dispatch_payload(
+            chat_id=chat_id,
+            game=game,
+            bundle=bundle,
+        )
+
+        if message_id is None:
             return None
 
-    def _build_game_state_text(
-        self, game: Game, _current_player: Player
-    ) -> str:
-        """Construct the full text body shown in the live game message."""
+        state.last_context = bundle.context
+        state.last_payload_hash = bundle.payload_hash
+        state.last_keyboard_json = bundle.keyboard_json
+        state.stable_text = bundle.stable_text
+        state.stable_markup = bundle.reply_markup
+        state.raise_options = bundle.raise_options
+        state.raise_order = bundle.raise_order
+        state.raise_selections.clear()
 
-        return self._format_game_state(game)
+        if next_version is not None:
+            game.mark_live_message_version(next_version)
 
-    def _get_player_name(self, player: Player) -> str:
-        """Extract display name from player for UI display."""
-        mention = getattr(player, "mention_markdown", None)
-
-        if mention and mention.startswith("[") and "](" in mention:
-            try:
-                name = mention.split("]")[0][1:]
-                if name:
-                    return name
-            except (IndexError, AttributeError):
-                pass
-
-        return f"User {player.user_id}"
-
-    def _format_game_state(self, game: Game) -> str:
-        """Format the live message using the Phase 8+ layout."""
-
-        lines: List[str] = []
-
-        # === HEADER ===
-        lines.append("🎴 <b>TEXAS HOLD'EM</b> 🎴")
-        lines.append("")
-
-        # === COMMUNITY CARDS ===
-        lines.append("🃏 <b>COMMUNITY CARDS</b>")
-
-        num_cards = len(game.cards_table) if game.cards_table else 0
-        stage_emoji = self.STAGE_EMOJIS.get(num_cards, "🔒")
-        stage_name = self.STAGE_NAMES.get(num_cards, "Pre-flop")
-
-        if num_cards == 0:
-            lines.append(
-                f"{stage_emoji} Cards will be revealed during betting rounds"
+        if bundle.banner:
+            self._schedule_banner_clear(
+                chat_key=chat_key,
+                chat_id=chat_id,
+                message_id=message_id,
+                expected_hash=bundle.payload_hash,
+                state=state,
             )
         else:
-            from pokerapp.pokerbotview import PokerBotViewer
+            self._cancel_banner_task(state)
 
-            cards_display = PokerBotViewer._format_cards_line(game.cards_table)
-            lines.append(f"{stage_emoji} {stage_name}: {cards_display}")
+        await self._ping_player_if_needed(state, bundle.context)
 
-        lines.append("")
+        return message_id
 
-        # === POT & BETS ===
-        lines.append("💰 <b>POT & BETS</b>")
-        lines.append(f"💵 Total Pot: ${game.pot}")
+    def _prepare_render_bundle(
+        self,
+        *,
+        chat_key: str,
+        game: Game,
+        current_player: Optional[Player],
+        state: ChatRenderState,
+        version: Optional[int],
+        mode: str,
+        include_banner: bool,
+        selected_raise: Optional[str] = None,
+    ) -> RenderBundle:
+        """Build message text, markup, and hashes for a render pass."""
 
-        if game.max_round_rate > 0:
-            lines.append(f"🎯 Current Bet: ${game.max_round_rate}")
+        context = self._build_render_context(game, current_player)
+        display = self._build_display_strings(context, state.last_context)
 
-        lines.append("")
+        preview_text: Optional[str] = None
+        if mode == "raise_selection":
+            preview_text = self._format_raise_preview(
+                selected_raise,
+                state_options=state.raise_options,
+                options_order=state.raise_order,
+                context_options=None,
+            )
 
-        # === PLAYERS ===
-        active_count = sum(
-            1 for p in game.players if p.state != PlayerState.FOLD
+        stable_text = self._compose_message_body(
+            context=context,
+            display=display,
+            preview_raise=preview_text,
         )
-        lines.append(f"👥 <b>PLAYERS ({active_count} active)</b>")
 
-        for player in game.players:
-            name = self._get_player_name(player)
+        banner = None
+        if include_banner:
+            banner = self._select_banner(context, state.last_context)
+
+        message_text = f"{banner}\n{stable_text}" if banner else stable_text
+
+        if mode == "actions":
+            reply_markup, options = self._build_action_inline_keyboard(
+                game=game,
+                player=current_player,
+                version=version,
+            )
+        else:
+            options = self._compute_raise_options(game, current_player)
+            reply_markup = self._build_raise_selection_keyboard(
+                game=game,
+                player=current_player,
+                version=version,
+                options=options,
+                selected_key=selected_raise,
+            )
+            preview_text = self._format_raise_preview(
+                selected_raise,
+                state_options=None,
+                options_order=None,
+                context_options={opt.key: opt for opt in options},
+            )
+            stable_text = self._compose_message_body(
+                context=context,
+                display=display,
+                preview_raise=preview_text,
+            )
+            message_text = f"{banner}\n{stable_text}" if banner else stable_text
+
+        option_map = {opt.key: opt for opt in options}
+        option_order = [opt.key for opt in options]
+
+        keyboard_json = self._serialize_reply_markup(reply_markup)
+        payload_hash = self._payload_hash(message_text, keyboard_json)
+
+        diff_context = {
+            key: context.get(key)
+            for key in self.STATE_CONTEXT_KEYS
+        }
+
+        return RenderBundle(
+            message_text=message_text,
+            stable_text=stable_text,
+            reply_markup=reply_markup,
+            keyboard_json=keyboard_json,
+            payload_hash=payload_hash,
+            banner=banner,
+            context=diff_context,
+            raise_options=option_map,
+            raise_order=option_order,
+        )
+
+    def _build_render_context(
+        self, game: Game, current_player: Optional[Player]
+    ) -> Dict[str, Any]:
+        players = list(getattr(game, "players", []) or [])
+        active_count = sum(1 for p in players if p.state != PlayerState.FOLD)
+        num_cards = len(game.cards_table or [])
+        stage_name = self.STAGE_NAMES.get(num_cards, "Pre-flop")
+        stage_icon = self.STAGE_ICONS.get(num_cards, "♠️")
+        board_line = self._format_board_line(game.cards_table or [])
+
+        actor_user_id = getattr(current_player, "user_id", None)
+        to_act_name = self._get_player_name(current_player) if current_player else None
+        if to_act_name:
+            to_act_display = f"{to_act_name} · YOUR TURN"
+        else:
+            to_act_display = "Waiting…"
+
+        timer_bucket = self._timer_bucket(game)
+        timer_label = "—" if timer_bucket is None else f"{timer_bucket}s"
+
+        context = {
+            "stage_name": stage_name,
+            "stage_icon": stage_icon,
+            "stage_emoji": self.STAGE_EMOJIS.get(num_cards, "🔒"),
+            "street_display_raw": f"{stage_icon} {stage_name}",
+            "board_display_raw": board_line or "—",
+            "pot_value": getattr(game, "pot", 0),
+            "last_bet_value": getattr(game, "max_round_rate", 0),
+            "actor_user_id": actor_user_id,
+            "to_act_display_raw": to_act_display,
+            "timer_bucket": timer_bucket,
+            "timer_label": timer_label,
+            "stack_line": self._format_stack_line(players),
+            "active_count": active_count,
+            "player_rows": self._format_players(players, actor_user_id),
+            "recent_actions": self._format_recent_actions(game),
+            "table_code": str(getattr(game, "id", "----"))[:4].upper(),
+            "seat_label": f"{len(players)}-max",
+        }
+
+        return context
+
+    def _build_display_strings(
+        self, context: Dict[str, Any], previous: Dict[str, Any]
+    ) -> Dict[str, str]:
+        display: Dict[str, str] = {}
+
+        display["street"] = self._format_diff_value(
+            previous.get("street_display_raw"),
+            context.get("street_display_raw"),
+            formatter=lambda value: html.escape(value or "—"),
+        )
+        display["to_act"] = self._format_diff_value(
+            previous.get("to_act_display_raw"),
+            context.get("to_act_display_raw"),
+            formatter=lambda value: html.escape(value or "Waiting…"),
+        )
+        display["pot"] = self._format_currency_diff(
+            previous.get("pot_value"),
+            context.get("pot_value", 0),
+        )
+        display["last_bet"] = self._format_currency_diff(
+            previous.get("last_bet_value"),
+            context.get("last_bet_value", 0),
+        )
+        display["board"] = self._format_diff_value(
+            (
+                previous.get("board_display_raw"),
+                previous.get("stage_icon"),
+            ),
+            (
+                context.get("board_display_raw"),
+                context.get("stage_icon"),
+            ),
+            formatter=lambda value: self._format_board_display(*value),
+        )
+        display["timer"] = html.escape(context.get("timer_label", "—"))
+        display["stacks"] = html.escape(context.get("stack_line", "—"))
+        display["table"] = html.escape(f"#{context.get('table_code', '----')}")
+        display["seats"] = html.escape(context.get("seat_label", "—"))
+
+        return display
+
+    def _compose_message_body(
+        self,
+        *,
+        context: Dict[str, Any],
+        display: Dict[str, str],
+        preview_raise: Optional[str],
+    ) -> str:
+        lines: List[str] = []
+        lines.append(self._build_hud_block(context, display))
+        lines.append("")
+
+        if preview_raise is not None:
+            lines.append(f"🎯 <b>Selected raise:</b> {preview_raise}")
+            lines.append("")
+
+        lines.append(
+            f"👥 <b>Players ({context.get('active_count', 0)} active)</b>"
+        )
+        lines.extend(context.get("player_rows", []))
+
+        recent = context.get("recent_actions", [])
+        if recent:
+            lines.append("")
+            lines.append("📝 <b>Recent</b>")
+            lines.extend(f"• {action}" for action in recent)
+
+        return "\n".join(lines)
+
+    def _build_hud_block(
+        self, context: Dict[str, Any], display: Dict[str, str]
+    ) -> str:
+        hud_lines = [
+            (
+                "Table     : "
+                f"{display['table']}  {display['seats']}     Street: {display['street']}"
+            ),
+            (
+                "To Act    : "
+                f"{display['to_act']}     Timer: {display['timer']}"
+            ),
+            (
+                "Pot       : "
+                f"{display['pot']}     Last bet: {display['last_bet']}"
+            ),
+            f"Stacks    : {display['stacks']}",
+            f"Board     : {display['board']}",
+        ]
+
+        return "<pre>" + "\n".join(hud_lines) + "</pre>"
+
+    def _format_players(
+        self, players: List[Player], actor_user_id: Optional[int]
+    ) -> List[str]:
+        rows: List[str] = []
+
+        for idx, player in enumerate(players, start=1):
+            name = html.escape(self._get_player_name(player))
             balance = player.wallet.value()
+            bet = player.round_rate
 
             if player.state == PlayerState.FOLD:
                 icon = "❌"
                 status = " (folded)"
             elif player.state == PlayerState.ALL_IN:
                 icon = "🔥"
-                status = f" (ALL-IN: ${player.round_rate})"
-            elif player.round_rate > 0:
+                status = f" (ALL-IN ${bet})" if bet else " (ALL-IN)"
+            elif bet > 0:
                 icon = "✅"
-                status = f" (bet: ${player.round_rate})"
+                status = f" (bet ${bet})"
             else:
                 icon = "✅"
                 status = ""
 
-            lines.append(f"{icon} {name} - ${balance}{status}")
+            prefix = ""
+            if player.user_id == actor_user_id:
+                prefix = "👉 "
+                name = f"<b>{name}</b>"
 
-        lines.append("")
+            rows.append(
+                f"{prefix}{icon} {name} — ${balance}{status}"
+            )
 
-        # === RECENT ACTIVITY ===
-        if game.recent_actions:
-            lines.append("📋 <b>RECENT ACTIVITY</b>")
-            for action in game.recent_actions[-3:]:
-                lines.append(f"{action}")
-            lines.append("")
+        if not rows:
+            rows.append("ℹ️ No players seated yet")
 
-        return "\n".join(lines)
+        return rows
+
+    def _format_recent_actions(self, game: Game) -> List[str]:
+        recent = getattr(game, "recent_actions", []) or []
+        return [html.escape(action) for action in recent[-3:]]
+
+    def _format_stack_line(self, players: List[Player]) -> str:
+        if not players:
+            return "—"
+
+        entries: List[str] = []
+        for idx, player in enumerate(players, start=1):
+            stack = max(player.wallet.value(), 0)
+            entries.append(f"P{idx}:{stack:>4}")
+
+        return " | ".join(entries)
+
+    def _format_board_line(self, cards) -> str:
+        if not cards:
+            return "🂠 🂠 🂠"
+
+        from pokerapp.pokerbotview import PokerBotViewer
+
+        return PokerBotViewer._format_cards_line(cards)
+
+    def _format_board_display(self, board_text: Optional[str], icon: Optional[str]) -> str:
+        text = board_text or "—"
+        symbol = icon or "♠️"
+        return f"{symbol} {html.escape(text)}"
+
+    def _timer_bucket(self, game: Game) -> Optional[int]:
+        last_turn = getattr(game, "last_turn_time", None)
+        if not isinstance(last_turn, _dt.datetime):
+            return None
+
+        now = _dt.datetime.now(tz=last_turn.tzinfo)
+        elapsed = int((now - last_turn).total_seconds())
+        remaining = self.DEFAULT_TURN_SECONDS - elapsed
+        if remaining <= 0:
+            return 0
+        if remaining <= 5:
+            return remaining
+        if remaining <= 10:
+            return 10
+        bucket = (remaining // 5) * 5
+        return max(bucket, 5)
+
+    def _format_diff_value(
+        self,
+        previous: Any,
+        current: Any,
+        *,
+        formatter,
+    ) -> str:
+        if current is None:
+            current_text = formatter(current)
+        else:
+            current_text = formatter(current)
+
+        if previous is None or previous == current:
+            return current_text
+
+        previous_text = formatter(previous)
+        return f"<b>{previous_text} → {current_text}</b>"
+
+    def _format_currency_diff(
+        self, previous: Optional[int], current: int
+    ) -> str:
+        def formatter(value: Optional[int]) -> str:
+            amount = value or 0
+            return html.escape(f"${amount}")
+
+        return self._format_diff_value(previous, current, formatter=formatter)
+
+    def _select_banner(
+        self, context: Dict[str, Any], previous: Dict[str, Any]
+    ) -> Optional[str]:
+        if not previous:
+            return None
+
+        stage_changed = context.get("stage_name") != previous.get("stage_name")
+        actor_changed = (
+            context.get("actor_user_id") is not None
+            and context.get("actor_user_id") != previous.get("actor_user_id")
+        )
+        pot_changed = context.get("pot_value") != previous.get("pot_value")
+
+        if stage_changed:
+            stage_name = context.get("stage_name", "Stage").upper()
+            icon = context.get("stage_icon", "♠️")
+            if actor_changed:
+                return f"🔔 <b>{icon} {stage_name} dealt — your move!</b>"
+            return f"🔔 <b>{icon} {stage_name} dealt</b>"
+
+        if actor_changed:
+            to_act = context.get("to_act_display_raw", "Your move")
+            return f"🔔 <b>{html.escape(to_act)}</b>"
+
+        if pot_changed:
+            old_pot = previous.get("pot_value", 0)
+            new_pot = context.get("pot_value", 0)
+            return f"🔔 <b>Pot ${old_pot} → ${new_pot}</b>"
+
+        return None
+
+    def _compute_raise_options(
+        self, game: Game, player: Optional[Player]
+    ) -> List[RaiseOptionMeta]:
+        if player is None:
+            return []
+
+        wallet = max(player.wallet.value(), 0)
+        current_bet = max(game.max_round_rate, 0)
+        player_bet = max(player.round_rate, 0)
+        total_stack = player_bet + wallet
+        if wallet <= 0 or total_stack <= current_bet:
+            return []
+
+        big_blind = max((getattr(game, "table_stake", 0) or 0) * 2, 1)
+        min_raise = max(current_bet * 2, big_blind)
+
+        options: List[RaiseOptionMeta] = []
+        amounts: List[int] = []
+
+        if min_raise <= total_stack:
+            amounts.append(min_raise)
+            for multiplier in (3, 4, 5, 6, 8):
+                candidate = big_blind * multiplier
+                if candidate >= min_raise and candidate <= total_stack:
+                    amounts.append(candidate)
+            candidate = current_bet + big_blind
+            if candidate >= min_raise and candidate <= total_stack:
+                amounts.append(candidate)
+
+        unique_amounts = sorted({amount for amount in amounts if amount >= min_raise})
+        for amount in unique_amounts:
+            options.append(
+                RaiseOptionMeta(
+                    key=str(amount),
+                    button_label=f"${amount}",
+                    preview_label=f"Raise to ${amount}",
+                    amount=amount,
+                    kind="amount",
+                )
+            )
+
+        pot_amount = getattr(game, "pot", 0)
+        if (
+            pot_amount
+            and pot_amount >= min_raise
+            and pot_amount <= total_stack
+            and pot_amount not in unique_amounts
+        ):
+            options.append(
+                RaiseOptionMeta(
+                    key="POT",
+                    button_label=f"Pot (${pot_amount})",
+                    preview_label=f"Pot (${pot_amount})",
+                    amount=pot_amount,
+                    kind="pot",
+                )
+            )
+
+        if total_stack > current_bet:
+            options.append(
+                RaiseOptionMeta(
+                    key="ALLIN",
+                    button_label=f"All-in (${total_stack})",
+                    preview_label=f"All-in (${total_stack})",
+                    amount=total_stack,
+                    kind="all_in",
+                )
+            )
+
+        return options
 
     def _build_action_inline_keyboard(
         self,
         game: Game,
-        player: Player,
+        player: Optional[Player],
         version: Optional[int],
-    ) -> Optional[InlineKeyboardMarkup]:
-        """Build the inline keyboard for the player's available actions."""
-
+    ) -> Tuple[Optional[InlineKeyboardMarkup], List[RaiseOptionMeta]]:
         if player is None:
-            return None
+            return None, []
 
         buttons: List[List[InlineKeyboardButton]] = []
 
@@ -337,8 +857,10 @@ class LiveMessageManager:
         player_bet = player.round_rate
         player_balance = player.wallet.value()
         call_amount = max(current_bet - player_bet, 0)
-        game_id = str(game.id)
-        version_segment = [str(version)] if version is not None else []
+        game_id = str(getattr(game, "id", ""))
+        version_segment: List[str] = []
+        if version is not None:
+            version_segment.append(str(version))
 
         first_row: List[InlineKeyboardButton] = []
         show_primary_all_in = False
@@ -382,47 +904,22 @@ class LiveMessageManager:
         )
         buttons.append(first_row)
 
-        big_blind = (game.table_stake or 0) * 2
-        min_raise = max(current_bet * 2, big_blind)
-        can_raise = (
-            player_balance > call_amount and player_balance >= min_raise
-        )
+        options = self._compute_raise_options(game, player)
+        can_raise = any(opt.kind in {"amount", "pot"} for opt in options)
+        has_all_in_option = any(opt.kind == "all_in" for opt in options)
 
-        raise_amounts: List[int] = []
-        if can_raise:
-            pot_raise = game.pot
-            close_threshold = min_raise * 0.1
-
-            primary_raise = min_raise
-            merged_pot_raise = False
-
-            if pot_raise > 0 and player_balance >= pot_raise:
-                if abs(pot_raise - min_raise) <= close_threshold:
-                    merged_pot_raise = True
-                    if pot_raise > min_raise:
-                        primary_raise = pot_raise
-            raise_amounts.append(primary_raise)
-
-            if (
-                pot_raise > min_raise
-                and player_balance >= pot_raise
-                and not merged_pot_raise
-            ):
-                raise_amounts.append(pot_raise)
-
-        if player_balance > 0 and (can_raise or not show_primary_all_in):
+        if player_balance > 0:
             second_row: List[InlineKeyboardButton] = []
 
-            if can_raise and raise_amounts:
-                primary_raise_amount = raise_amounts[0]
+            if can_raise:
                 second_row.append(
                     InlineKeyboardButton(
-                        f"📈 Raise ${primary_raise_amount}",
+                        "📈 Raise",
                         callback_data=":".join(
                             [
                                 "action",
                                 "raise",
-                                str(primary_raise_amount),
+                                "start",
                                 *version_segment,
                                 game_id,
                             ]
@@ -430,7 +927,7 @@ class LiveMessageManager:
                     )
                 )
 
-            if not show_primary_all_in:
+            if not show_primary_all_in and has_all_in_option:
                 second_row.append(
                     InlineKeyboardButton(
                         f"💥 All-In (${player_balance})",
@@ -443,28 +940,346 @@ class LiveMessageManager:
             if second_row:
                 buttons.append(second_row)
 
-        extra_amounts = sorted(set(raise_amounts[1:]))
-        if extra_amounts:
-            for i in range(0, len(extra_amounts), 2):
-                row: List[InlineKeyboardButton] = []
-                for amount in extra_amounts[i:i + 2]:
-                    row.append(
-                        InlineKeyboardButton(
-                            f"${amount}",
-                            callback_data=":".join(
-                                [
-                                    "action",
-                                    "raise",
-                                    str(amount),
-                                    *version_segment,
-                                    game_id,
-                                ]
-                            ),
-                        )
-                    )
-                buttons.append(row)
-
         if not buttons:
+            return None, options
+
+        return InlineKeyboardMarkup(buttons), options
+
+    def _build_raise_selection_keyboard(
+        self,
+        *,
+        game: Game,
+        player: Optional[Player],
+        version: Optional[int],
+        options: List[RaiseOptionMeta],
+        selected_key: Optional[str],
+    ) -> Optional[InlineKeyboardMarkup]:
+        if player is None or not options:
             return None
 
-        return InlineKeyboardMarkup(buttons)
+        version_segment: List[str] = []
+        if version is not None:
+            version_segment.append(str(version))
+
+        game_id = str(getattr(game, "id", ""))
+        rows: List[List[InlineKeyboardButton]] = []
+
+        regular = [opt for opt in options if opt.kind == "amount"]
+        specials = [opt for opt in options if opt.kind == "pot"]
+        all_in_opts = [opt for opt in options if opt.kind == "all_in"]
+
+        row: List[InlineKeyboardButton] = []
+        for opt in regular:
+            text = opt.button_label
+            if selected_key == opt.key:
+                text = f"✅ {text}"
+            row.append(
+                InlineKeyboardButton(
+                    text,
+                    callback_data=":".join(
+                        [
+                            "raise_amt",
+                            opt.key,
+                            *version_segment,
+                            game_id,
+                        ]
+                    ),
+                )
+            )
+            if len(row) == 3:
+                rows.append(row)
+                row = []
+        if row:
+            rows.append(row)
+
+        if specials:
+            special_row: List[InlineKeyboardButton] = []
+            for opt in specials:
+                text = opt.button_label
+                if selected_key == opt.key:
+                    text = f"✅ {text}"
+                special_row.append(
+                    InlineKeyboardButton(
+                        text,
+                        callback_data=":".join(
+                            [
+                                "raise_amt",
+                                opt.key,
+                                *version_segment,
+                                game_id,
+                            ]
+                        ),
+                    )
+                )
+            rows.append(special_row)
+
+        if all_in_opts:
+            opt = all_in_opts[0]
+            text = opt.button_label
+            if selected_key == opt.key:
+                text = f"✅ {text}"
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text,
+                        callback_data=":".join(
+                            [
+                                "raise_amt",
+                                opt.key,
+                                *version_segment,
+                                game_id,
+                            ]
+                        ),
+                    )
+                ]
+            )
+
+        control_row = [
+            InlineKeyboardButton(
+                "⬅ Back",
+                callback_data=":".join(
+                    ["raise_back", *version_segment, game_id]
+                ),
+            ),
+            InlineKeyboardButton(
+                "✔ Confirm",
+                callback_data=":".join(
+                    ["raise_confirm", *version_segment, game_id]
+                ),
+            ),
+        ]
+        rows.append(control_row)
+
+        return InlineKeyboardMarkup(rows)
+
+    def _format_raise_preview(
+        self,
+        selected_key: Optional[str],
+        *,
+        state_options: Optional[Dict[str, RaiseOptionMeta]],
+        options_order: Optional[List[str]],
+        context_options: Optional[Dict[str, RaiseOptionMeta]],
+    ) -> Optional[str]:
+        if selected_key is None:
+            return "—"
+
+        if state_options is not None:
+            option = state_options.get(selected_key)
+            if option is not None:
+                return f"<b>{html.escape(option.preview_label)}</b>"
+        if context_options is not None:
+            option = context_options.get(selected_key)
+            if option is not None:
+                return f"<b>{html.escape(option.preview_label)}</b>"
+        return "—"
+
+    def _serialize_reply_markup(
+        self, reply_markup: Optional[InlineKeyboardMarkup]
+    ) -> str:
+        if reply_markup is None:
+            return ""
+        try:
+            return json.dumps(reply_markup.to_dict(), sort_keys=True)
+        except Exception:
+            return ""
+
+    def _payload_hash(self, text: str, keyboard_json: str) -> str:
+        data = f"{text}\u241E{keyboard_json}"
+        return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+    def _cancel_banner_task(self, state: ChatRenderState) -> None:
+        task = state.banner_task
+        if task and not task.done():
+            task.cancel()
+        state.banner_task = None
+
+    def _schedule_banner_clear(
+        self,
+        *,
+        chat_key: str,
+        chat_id: int,
+        message_id: int,
+        expected_hash: str,
+        state: ChatRenderState,
+    ) -> None:
+        self._cancel_banner_task(state)
+
+        if not state.stable_text:
+            return
+
+        async def _clear() -> None:
+            await asyncio.sleep(self.BANNER_DURATION)
+            if state.last_payload_hash != expected_hash:
+                return
+            try:
+                await self._bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=state.stable_text,
+                    reply_markup=state.stable_markup,
+                    parse_mode=self.PARSE_MODE,
+                    disable_web_page_preview=True,
+                )
+            except TelegramError as exc:
+                error_msg = str(exc).lower()
+                if "not modified" not in error_msg:
+                    self._logger.debug(
+                        "Banner clear skipped for chat %s: %s",
+                        chat_id,
+                        exc,
+                    )
+                return
+
+            keyboard_json = self._serialize_reply_markup(state.stable_markup)
+            state.last_payload_hash = self._payload_hash(
+                state.stable_text,
+                keyboard_json,
+            )
+            state.last_keyboard_json = keyboard_json
+
+        state.banner_task = asyncio.create_task(_clear())
+
+    async def _dispatch_payload(
+        self,
+        *,
+        chat_id: int,
+        game: Game,
+        bundle: RenderBundle,
+    ) -> Optional[int]:
+        message_id = None
+
+        if game.has_group_message():
+            try:
+                message = await self._bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=game.group_message_id,
+                    text=bundle.message_text,
+                    reply_markup=bundle.reply_markup,
+                    parse_mode=self.PARSE_MODE,
+                    disable_web_page_preview=True,
+                )
+                message_id = getattr(
+                    message,
+                    "message_id",
+                    game.group_message_id,
+                )
+                self._logger.debug(
+                    "✅ Successfully edited message %s", message_id
+                )
+                return message_id
+            except TelegramError as exc:
+                error_msg = str(exc).lower()
+
+                if (
+                    "not modified" in error_msg
+                    or "message is not modified" in error_msg
+                ):
+                    self._logger.debug(
+                        "Message %s content unchanged, skipping update",
+                        game.group_message_id,
+                    )
+                    return game.group_message_id
+
+                if (
+                    "message to edit not found" in error_msg
+                    or "message can't be edited" in error_msg
+                    or "message_id_invalid" in error_msg
+                ):
+                    self._logger.warning(
+                        "Message %s no longer exists, will send new message",
+                        game.group_message_id,
+                    )
+                    game.group_message_id = None
+                else:
+                    self._logger.error(
+                        "Failed to edit message %s: %s, will send new message",
+                        game.group_message_id,
+                        exc,
+                    )
+                    game.group_message_id = None
+
+        try:
+            self._logger.debug("Sending new live message to chat %s", chat_id)
+            message = await self._bot.send_message(
+                chat_id=chat_id,
+                text=bundle.message_text,
+                reply_markup=bundle.reply_markup,
+                parse_mode=self.PARSE_MODE,
+                disable_notification=True,
+                disable_web_page_preview=True,
+            )
+            message_id = getattr(message, "message_id", None)
+
+            if message_id is not None:
+                self._logger.info(
+                    "✅ Created new live message %s in chat %s",
+                    message_id,
+                    chat_id,
+                )
+                game.set_group_message(message_id)
+
+            return message_id
+
+        except TelegramError as exc:
+            self._logger.error(
+                "❌ Unable to send new live message to chat %s: %s",
+                chat_id,
+                exc,
+            )
+            return None
+
+    async def _ping_player_if_needed(
+        self, state: ChatRenderState, context: Dict[str, Any]
+    ) -> None:
+        actor_id = context.get("actor_user_id")
+        if not actor_id or actor_id == state.last_actor_user_id:
+            state.last_actor_user_id = actor_id
+            return
+
+        try:
+            message = await self._bot.send_message(
+                actor_id,
+                "🎯 Your turn — check the table message.",
+            )
+        except TelegramError as exc:
+            self._logger.debug(
+                "Unable to send turn ping to %s: %s",
+                actor_id,
+                exc,
+            )
+            state.last_actor_user_id = actor_id
+            return
+
+        asyncio.create_task(
+            self._auto_delete_message(
+                message.chat_id,
+                message.message_id,
+                self.TURN_PING_TTL,
+            )
+        )
+        state.last_actor_user_id = actor_id
+
+    async def _auto_delete_message(
+        self, chat_id: int, message_id: int, delay: int
+    ) -> None:
+        await asyncio.sleep(delay)
+        with contextlib.suppress(TelegramError):
+            await self._bot.delete_message(chat_id, message_id)
+
+    def _get_player_name(self, player: Optional[Player]) -> str:
+        """Extract display name from player for UI display."""
+
+        if player is None:
+            return "—"
+
+        mention = getattr(player, "mention_markdown", None)
+
+        if mention and mention.startswith("[") and "](" in mention:
+            try:
+                name = mention.split("]")[0][1:]
+                if name:
+                    return name
+            except (IndexError, AttributeError):
+                pass
+
+        return f"User {player.user_id}"

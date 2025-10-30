@@ -2,6 +2,7 @@
 
 import inspect
 import logging
+from typing import List, Optional, Tuple
 
 from telegram import (
     BotCommand,
@@ -612,6 +613,397 @@ Send 💰 /money once per day for free chips!
                 callback_data=callback_data,
             )
 
+    def _build_action_toast(
+        self,
+        action_type: str,
+        validation: PlayerActionValidation,
+    ) -> str:
+        """Return a short toast message describing the applied action."""
+
+        prepared = validation.prepared_action
+        if prepared is None:
+            return "✅ Action submitted"
+
+        game = prepared.game
+        player = prepared.current_player
+
+        if action_type == "check":
+            return "✅ Check"
+
+        if action_type == "call":
+            call_amount = max(game.max_round_rate - player.round_rate, 0)
+            if call_amount > 0:
+                return f"✅ Call ${call_amount}"
+            return "✅ Check"
+
+        if action_type == "fold":
+            return "✅ Folded"
+
+        if action_type == "raise":
+            if prepared.raise_amount:
+                return f"✅ Raise to ${prepared.raise_amount}"
+            return "✅ Raise submitted"
+
+        if action_type == "all_in":
+            return "🔥 All-in submitted"
+
+        return "✅ Action submitted"
+
+    async def _handle_raise_callback(
+        self,
+        query,
+        context: CallbackContext,
+    ) -> dict:
+        """Handle raise_* callbacks that manage the amount selector."""
+
+        data = getattr(query, "data", "") or ""
+        result: dict = {"handled": False}
+
+        if not data.startswith("raise_"):
+            return result
+
+        message = query.message
+        if message is None:
+            await NotificationManager.popup(
+                query,
+                text="❌ Cannot resolve message context",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            result["handled"] = True
+            return result
+
+        chat_id = message.chat_id
+        user_id = getattr(query.from_user, "id", None)
+        if user_id is None:
+            await NotificationManager.popup(
+                query,
+                text="❌ Cannot resolve user",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            result["handled"] = True
+            return result
+
+        game = self._model._game(chat_id)
+        if game is None:
+            await NotificationManager.popup(
+                query,
+                text="❌ No active game",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            result["handled"] = True
+            return result
+
+        live_manager = getattr(self._view, "_live_manager", None)
+        if live_manager is None:
+            await NotificationManager.popup(
+                query,
+                text="❌ Raise picker unavailable",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            result["handled"] = True
+            return result
+
+        current_player = None
+        index = getattr(game, "current_player_index", -1)
+        if 0 <= index < len(game.players):
+            current_player = game.players[index]
+
+        parts = data.split(":")
+        if len(parts) < 2:
+            await NotificationManager.popup(
+                query,
+                text="❌ Invalid raise action",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            result["handled"] = True
+            return result
+
+        action = parts[0]
+
+        def _parse_version_and_game(raw_parts: List[str], start_index: int) -> Tuple[Optional[int], Optional[str]]:
+            version_val: Optional[int] = None
+            game_val: Optional[str] = None
+            idx = start_index
+            if idx < len(raw_parts):
+                try:
+                    version_val = int(raw_parts[idx])
+                    idx += 1
+                except ValueError:
+                    version_val = None
+            if idx < len(raw_parts):
+                game_val = raw_parts[idx]
+            return version_val, game_val
+
+        if action == "raise_amt":
+            if len(parts) < 4:
+                await NotificationManager.popup(
+                    query,
+                    text="❌ Invalid raise selection",
+                    show_alert=False,
+                    event="RaiseSelectError",
+                )
+                result["handled"] = True
+                return result
+
+            selection_key = parts[1]
+            message_version, game_id = _parse_version_and_game(parts, 2)
+            if game_id is None or game_id != getattr(game, "id", None):
+                await NotificationManager.popup(
+                    query,
+                    text="♻️ Action expired. Refresh buttons.",
+                    show_alert=False,
+                    event="RaiseSelectError",
+                )
+                result["handled"] = True
+                return result
+
+            if (
+                message_version is not None
+                and message_version != game.get_live_message_version()
+            ):
+                await NotificationManager.popup(
+                    query,
+                    text="♻️ Action expired. Refresh buttons.",
+                    show_alert=False,
+                    event="RaiseSelectError",
+                )
+                result["handled"] = True
+                return result
+
+            success = await live_manager.present_raise_selector(
+                chat_id=chat_id,
+                game=game,
+                current_player=current_player,
+                user_id=user_id,
+                message_id=message.message_id,
+                message_version=message_version,
+                selection_key=selection_key,
+            )
+
+            if not success:
+                await NotificationManager.popup(
+                    query,
+                    text="❌ Raise picker unavailable",
+                    show_alert=False,
+                    event="RaiseSelectError",
+                )
+                result["handled"] = True
+                return result
+
+            await NotificationManager.popup(
+                query,
+                text=None,
+                show_alert=False,
+                event="RaiseSelectAck",
+            )
+
+            result["handled"] = True
+            return result
+
+        if action == "raise_back":
+            message_version, game_id = _parse_version_and_game(parts, 1)
+            if game_id is None or game_id != getattr(game, "id", None):
+                await NotificationManager.popup(
+                    query,
+                    text="♻️ Action expired. Refresh buttons.",
+                    show_alert=False,
+                    event="RaiseSelectError",
+                )
+                result["handled"] = True
+                return result
+
+            await live_manager.restore_action_keyboard(
+                chat_id=chat_id,
+                game=game,
+                current_player=current_player,
+                message_id=message.message_id,
+            )
+            live_manager.clear_raise_selection(chat_id, user_id)
+
+            await NotificationManager.popup(
+                query,
+                text=None,
+                show_alert=False,
+                event="RaiseSelectAck",
+            )
+
+            result["handled"] = True
+            return result
+
+        if action == "raise_confirm":
+            message_version, game_id = _parse_version_and_game(parts, 1)
+            if game_id is None or game_id != getattr(game, "id", None):
+                await NotificationManager.popup(
+                    query,
+                    text="♻️ Action expired. Refresh buttons.",
+                    show_alert=False,
+                    event="RaiseSelectError",
+                )
+                result["handled"] = True
+                return result
+
+            if (
+                message_version is not None
+                and message_version != game.get_live_message_version()
+            ):
+                await NotificationManager.popup(
+                    query,
+                    text="♻️ Action expired. Refresh buttons.",
+                    show_alert=False,
+                    event="RaiseSelectError",
+                )
+                result["handled"] = True
+                return result
+
+            selection_key, option = live_manager.get_raise_selection(
+                chat_id,
+                user_id,
+            )
+            if selection_key is None or option is None:
+                await NotificationManager.popup(
+                    query,
+                    text="Choose an amount first",
+                    show_alert=False,
+                    event="RaiseSelectAck",
+                )
+                result["handled"] = True
+                return result
+
+            action_type = "raise"
+            raise_amount = option.amount
+            if option.kind == "all_in":
+                action_type = "all_in"
+                raise_amount = None
+
+            await live_manager.restore_action_keyboard(
+                chat_id=chat_id,
+                game=game,
+                current_player=current_player,
+                message_id=message.message_id,
+            )
+            live_manager.clear_raise_selection(chat_id, user_id)
+
+            result.update(
+                {
+                    "handled": False,
+                    "action": {
+                        "action_type": action_type,
+                        "raise_amount": raise_amount,
+                        "message_version": message_version,
+                        "game_id": game_id,
+                    },
+                }
+            )
+            return result
+
+        await NotificationManager.popup(
+            query,
+            text="❌ Unknown raise action",
+            show_alert=False,
+            event="RaiseSelectError",
+        )
+        result["handled"] = True
+        return result
+
+    async def _start_raise_selection(
+        self,
+        query,
+        context: CallbackContext,
+        *,
+        game_id: Optional[str],
+        message_version: Optional[int],
+    ) -> None:
+        """Handle the initial action:raise:start callback."""
+
+        message = query.message
+        if message is None:
+            await NotificationManager.popup(
+                query,
+                text="❌ Cannot resolve message context",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            return
+
+        chat_id = message.chat_id
+        user_id = getattr(query.from_user, "id", None)
+        if user_id is None:
+            await NotificationManager.popup(
+                query,
+                text="❌ Cannot resolve user",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            return
+
+        game = self._model._game(chat_id)
+        if game is None or game_id != getattr(game, "id", None):
+            await NotificationManager.popup(
+                query,
+                text="♻️ Action expired. Refresh buttons.",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            return
+
+        if (
+            message_version is not None
+            and message_version != game.get_live_message_version()
+        ):
+            await NotificationManager.popup(
+                query,
+                text="♻️ Action expired. Refresh buttons.",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            return
+
+        live_manager = getattr(self._view, "_live_manager", None)
+        if live_manager is None:
+            await NotificationManager.popup(
+                query,
+                text="❌ Raise picker unavailable",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            return
+
+        current_player = None
+        index = getattr(game, "current_player_index", -1)
+        if 0 <= index < len(game.players):
+            current_player = game.players[index]
+
+        success = await live_manager.present_raise_selector(
+            chat_id=chat_id,
+            game=game,
+            current_player=current_player,
+            user_id=user_id,
+            message_id=message.message_id,
+            message_version=message_version,
+            selection_key=None,
+        )
+
+        if not success:
+            await NotificationManager.popup(
+                query,
+                text="❌ Raise picker unavailable",
+                show_alert=False,
+                event="RaiseSelectError",
+            )
+            return
+
+        await NotificationManager.popup(
+            query,
+            text="Pick a raise amount",
+            show_alert=False,
+            event="RaiseSelectAck",
+        )
+
     async def _handle_action_button(
         self,
         update: Update,
@@ -619,7 +1011,7 @@ Send 💰 /money once per day for free chips!
     ) -> None:
         """Handle new action button format from inline keyboards.
 
-        Format: action:TYPE:GAME_ID or action:raise:AMOUNT:GAME_ID
+        Supported formats include versioned actions and the dynamic raise flow.
         """
 
         query = update.callback_query
@@ -645,118 +1037,168 @@ Send 💰 /money once per day for free chips!
             )
 
         try:
-            parts = query.data.split(":")
+            data = query.data
 
-            if len(parts) < 3:
-                log_helper.warn(
-                    "ActionDataInvalid",
-                    query_data=query.data,
-                    reason="too_few_parts",
-                )
+            raise_result = await self._handle_raise_callback(query, context)
+            if raise_result.get("handled"):
+                return
+
+            override = raise_result.get("action") if raise_result else None
+            raise_amount: Optional[int] = None
+            message_version: Optional[int] = None
+            game_id: Optional[str] = None
+
+            if override:
+                action_type = override.get("action_type")
+                raise_amount = override.get("raise_amount")
+                message_version = override.get("message_version")
+                game_id = override.get("game_id")
+            else:
+                parts = data.split(":")
+
+                if len(parts) < 3:
+                    log_helper.warn(
+                        "ActionDataInvalid",
+                        query_data=query.data,
+                        reason="too_few_parts",
+                    )
+                    await show_popup(
+                        "❌ Invalid action format",
+                        is_alert=False,
+                    )
+                    return
+
+                action_type = parts[1]
+
+                if action_type == "raise" and len(parts) >= 3 and parts[2] == "start":
+                    idx = 3
+                    msg_version: Optional[int] = None
+                    if idx < len(parts) - 1:
+                        try:
+                            msg_version = int(parts[idx])
+                            idx += 1
+                        except ValueError:
+                            msg_version = None
+
+                    if idx >= len(parts):
+                        log_helper.warn(
+                            "ActionDataInvalid",
+                            query_data=query.data,
+                            reason="missing_game_id",
+                        )
+                        await show_popup(
+                            "❌ Invalid action format",
+                            is_alert=False,
+                        )
+                        return
+
+                    await self._start_raise_selection(
+                        query,
+                        context,
+                        game_id=parts[idx],
+                        message_version=msg_version,
+                    )
+                    return
+
+                if action_type == "raise":
+                    if len(parts) < 4:
+                        log_helper.warn(
+                            "ActionDataInvalid",
+                            query_data=query.data,
+                            reason="missing_raise_params",
+                        )
+                        await self._respond_to_query(
+                            query,
+                            "❌ Invalid raise format",
+                            event="ActionPopup",
+                        )
+                        return
+
+                    try:
+                        raise_amount = int(parts[2])
+                    except (ValueError, IndexError):
+                        log_helper.warn(
+                            "ActionDataInvalid",
+                            query_data=query.data,
+                            reason="invalid_raise_amount",
+                        )
+                        await self._respond_to_query(
+                            query,
+                            "❌ Invalid raise amount",
+                            event="ActionPopup",
+                        )
+                        return
+
+                    if len(parts) == 4:
+                        game_id = parts[3]
+                    else:
+                        try:
+                            message_version = int(parts[3])
+                        except (ValueError, IndexError):
+                            log_helper.warn(
+                                "ActionDataInvalid",
+                                query_data=query.data,
+                                reason="invalid_version",
+                            )
+                            await self._respond_to_query(
+                                query,
+                                "❌ Invalid action version",
+                                event="ActionPopup",
+                            )
+                            return
+                        try:
+                            game_id = parts[4]
+                        except IndexError:
+                            log_helper.warn(
+                                "ActionDataInvalid",
+                                query_data=query.data,
+                                reason="missing_game_id",
+                            )
+                            await self._respond_to_query(
+                                query,
+                                "❌ Invalid action format",
+                                event="ActionPopup",
+                            )
+                            return
+                else:
+                    if len(parts) == 3:
+                        game_id = parts[2]
+                    else:
+                        try:
+                            message_version = int(parts[2])
+                        except (ValueError, IndexError):
+                            log_helper.warn(
+                                "ActionDataInvalid",
+                                query_data=query.data,
+                                reason="invalid_version",
+                            )
+                            await self._respond_to_query(
+                                query,
+                                "❌ Invalid action version",
+                                event="ActionPopup",
+                            )
+                            return
+                        try:
+                            game_id = parts[3]
+                        except IndexError:
+                            log_helper.warn(
+                                "ActionDataInvalid",
+                                query_data=query.data,
+                                reason="missing_game_id",
+                            )
+                            await self._respond_to_query(
+                                query,
+                                "❌ Invalid action format",
+                                event="ActionPopup",
+                            )
+                            return
+
+            if not game_id:
                 await show_popup(
                     "❌ Invalid action format",
                     is_alert=False,
                 )
                 return
-
-            action_type = parts[1]  # fold, call, check, raise, all_in
-
-            # For raise, format is action:raise:AMOUNT:GAME_ID
-            if action_type == "raise":
-                if len(parts) < 4:
-                    log_helper.warn(
-                        "ActionDataInvalid",
-                        query_data=query.data,
-                        reason="missing_raise_params",
-                    )
-                    await self._respond_to_query(
-                        query,
-                        "❌ Invalid raise format",
-                        event="ActionPopup",
-                    )
-                    return
-
-                try:
-                    raise_amount = int(parts[2])
-                except (ValueError, IndexError):
-                    log_helper.warn(
-                        "ActionDataInvalid",
-                        query_data=query.data,
-                        reason="invalid_raise_amount",
-                    )
-                    await self._respond_to_query(
-                        query,
-                        "❌ Invalid raise amount",
-                        event="ActionPopup",
-                    )
-                    return
-                message_version = None
-                if len(parts) == 4:
-                    game_id = parts[3]
-                else:
-                    try:
-                        message_version = int(parts[3])
-                    except (ValueError, IndexError):
-                        log_helper.warn(
-                            "ActionDataInvalid",
-                            query_data=query.data,
-                            reason="invalid_version",
-                        )
-                        await self._respond_to_query(
-                            query,
-                            "❌ Invalid action version",
-                            event="ActionPopup",
-                        )
-                        return
-                    try:
-                        game_id = parts[4]
-                    except IndexError:
-                        log_helper.warn(
-                            "ActionDataInvalid",
-                            query_data=query.data,
-                            reason="missing_game_id",
-                        )
-                        await self._respond_to_query(
-                            query,
-                            "❌ Invalid action format",
-                            event="ActionPopup",
-                        )
-                        return
-            else:
-                # For other actions: action:TYPE:GAME_ID
-                raise_amount = None
-                message_version = None
-                if len(parts) == 3:
-                    game_id = parts[2]
-                else:
-                    try:
-                        message_version = int(parts[2])
-                    except (ValueError, IndexError):
-                        log_helper.warn(
-                            "ActionDataInvalid",
-                            query_data=query.data,
-                            reason="invalid_version",
-                        )
-                        await self._respond_to_query(
-                            query,
-                            "❌ Invalid action version",
-                            event="ActionPopup",
-                        )
-                        return
-                    try:
-                        game_id = parts[3]
-                    except IndexError:
-                        log_helper.warn(
-                            "ActionDataInvalid",
-                            query_data=query.data,
-                            reason="missing_game_id",
-                        )
-                        await self._respond_to_query(
-                            query,
-                            "❌ Invalid action format",
-                            event="ActionPopup",
-                        )
-                        return
 
             user_id = query.from_user.id
             chat_id = query.message.chat_id if query.message else None
@@ -813,11 +1255,9 @@ Send 💰 /money once per day for free chips!
                     )
                     return
 
-                await NotificationManager.popup(
-                    query,
-                    text=None,
-                    show_alert=False,
-                    event="ActionAck",
+                toast_message = self._build_action_toast(
+                    action_type,
+                    validation,
                 )
 
                 success = await self._model.execute_player_action(
@@ -837,11 +1277,15 @@ Send 💰 /money once per day for free chips!
                     )
                     return
 
-                await self._respond_to_query(query)
+                await NotificationManager.popup(
+                    query,
+                    text=toast_message,
+                    show_alert=False,
+                    event="ActionAck",
+                )
                 return
 
             if "action_type" in signature.parameters:
-                # Preferred fallback when validation helpers are unavailable
                 success = await handle_action(
                     user_id=user_id,
                     chat_id=chat_id,
@@ -849,7 +1293,6 @@ Send 💰 /money once per day for free chips!
                     raise_amount=raise_amount,
                 )
             else:
-                # Legacy fallback using PlayerAction enum based API
                 legacy_map = {
                     "check": PlayerAction.CHECK,
                     "call": PlayerAction.CALL,
@@ -878,7 +1321,12 @@ Send 💰 /money once per day for free chips!
                 )
 
             if success:
-                await self._respond_to_query(query)
+                await NotificationManager.popup(
+                    query,
+                    text="✅ Action submitted",
+                    show_alert=False,
+                    event="ActionAck",
+                )
             else:
                 await self._respond_to_query(
                     query,
