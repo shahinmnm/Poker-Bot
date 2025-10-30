@@ -22,7 +22,7 @@ from pokerapp.entities import (
     Mention,
 )
 from pokerapp.device_detector import DeviceProfile, DeviceType
-from pokerapp.i18n import translation_manager
+from pokerapp.i18n import LanguageContext, translation_manager
 from pokerapp.kvstore import RedisKVStore, ensure_kv
 from pokerapp.live_message import LiveMessageManager
 from pokerapp.render_cache import RenderCache
@@ -37,14 +37,20 @@ class PokerBotViewer:
         bot: Bot,
         logger: logging.Logger = logger,
         kv: Optional[RedisKVStore] = None,
-        user_language: str = "en",
+        user_language: Optional[str] = None,
+        language_context: Optional[LanguageContext] = None,
     ) -> None:
         self._bot = bot
         if logger is None:
             logger = logging.getLogger(__name__)
         self._logger = logger
         self._kv = ensure_kv(kv)
-        self._user_language = user_language
+        if user_language is None:
+            user_language = translation_manager.DEFAULT_LANGUAGE
+        if language_context is None:
+            language_context = translation_manager.get_language_context(user_language)
+        self._language_context: LanguageContext = language_context
+        self._user_language = self._language_context.code
         self._render_cache = RenderCache(self._kv, self._logger)
         self._live_manager = LiveMessageManager(
             bot=bot,
@@ -52,14 +58,19 @@ class PokerBotViewer:
             kv=self._kv,
             render_cache=self._render_cache,
         )
+        self._live_manager.set_language_metadata(
+            code=self._language_context.code,
+            direction=self._language_context.direction,
+            font=self._language_context.font,
+        )
         self._logger.info("🔍 PokerBotViewer initialized with LiveMessageManager")
 
     def _t(self, key: str, **kwargs: Any) -> str:
         """Translate message key for the active user language."""
 
-        return translation_manager.translate(
+        return translation_manager.t(
             key,
-            language=self._user_language,
+            lang=self._language_context.code,
             **kwargs,
         )
 
@@ -69,9 +80,54 @@ class PokerBotViewer:
         symbol = "$" if include_symbol else ""
         return translation_manager.format_currency(
             amount,
-            language=self._user_language,
+            language=self._language_context.code,
             currency_symbol=symbol,
         )
+
+    def set_language_context(
+        self,
+        language: Optional[str] = None,
+        *,
+        user_id: Optional[int] = None,
+    ) -> None:
+        """Update rendering metadata for subsequent responses."""
+
+        resolved_code = translation_manager.resolve_language(
+            user_id=user_id,
+            lang=language,
+        )
+        self._language_context = translation_manager.get_language_context(resolved_code)
+        self._user_language = self._language_context.code
+        if self._live_manager is not None:
+            self._live_manager.set_language_metadata(
+                code=self._language_context.code,
+                direction=self._language_context.direction,
+                font=self._language_context.font,
+            )
+
+    @property
+    def language_context(self) -> LanguageContext:
+        """Expose active language metadata for consumers."""
+
+        return self._language_context
+
+    def _apply_direction(self, text: str) -> str:
+        if not text:
+            return text
+        if self._language_context.direction != "rtl":
+            return text
+        if text.startswith("\u202B") and text.endswith("\u202C"):
+            return text
+        return f"\u202B{text}\u202C"
+
+    def _localize_text(self, text: str) -> str:
+        return self._apply_direction(text)
+
+    async def _send_localized_message(self, *, chat_id: int, text: str, **kwargs: Any):
+        """Send message with direction-aware wrapping."""
+
+        localized = self._localize_text(text)
+        return await self._bot.send_message(chat_id=chat_id, text=localized, **kwargs)
 
     _SUIT_EMOJIS = {
         "spades": "♠️",
@@ -241,7 +297,7 @@ class PokerBotViewer:
 
         is_mobile = device_profile.device_type == DeviceType.MOBILE
         emoji_scale = getattr(device_profile, "emoji_size_multiplier", 1.0)
-        cache_variant = getattr(device_profile.device_type, "value", "default")
+        cache_variant = f"{getattr(device_profile.device_type, 'value', 'default')}:{self._language_context.code}"
 
         cache_enabled = use_cache and self._render_cache is not None and not is_mobile
         if cache_enabled:
@@ -564,7 +620,7 @@ class PokerBotViewer:
             ]
         )
 
-        await self._bot.send_message(
+        await self._send_localized_message(
             chat_id=chat_id,
             text=message,
             reply_markup=keyboard,
@@ -606,7 +662,7 @@ class PokerBotViewer:
                     version=next_version,
                 )
 
-            message = await self._bot.send_message(
+            message = await self._send_localized_message(
                 chat_id=chat_id,
                 text=text,
                 parse_mode=ParseMode.HTML,
@@ -678,7 +734,7 @@ class PokerBotViewer:
             await self._bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=text,
+                text=self._localize_text(text),
                 parse_mode=ParseMode.HTML,
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
@@ -698,7 +754,7 @@ class PokerBotViewer:
         text: str,
         reply_markup: ReplyKeyboardMarkup = None,
     ) -> None:
-        await self._bot.send_message(
+        await self._send_localized_message(
             chat_id=chat_id,
             parse_mode=ParseMode.MARKDOWN,
             text=text,
@@ -741,7 +797,7 @@ class PokerBotViewer:
         message_id: MessageId,
         text: str,
     ) -> None:
-        await self._bot.send_message(
+        await self._send_localized_message(
             reply_to_message_id=message_id,
             chat_id=chat_id,
             parse_mode=ParseMode.MARKDOWN,
@@ -785,6 +841,7 @@ class PokerBotViewer:
         if ready_message_id is not None:
             send_kwargs["reply_to_message_id"] = ready_message_id
 
+        send_kwargs["text"] = self._localize_text(send_kwargs["text"])
         await self._bot.send_message(**send_kwargs)
 
     async def send_or_update_private_hand(
@@ -820,12 +877,12 @@ class PokerBotViewer:
                 await self._bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=message_id,
-                    text=message_text,
+                    text=self._localize_text(message_text),
                     parse_mode=ParseMode.MARKDOWN,
                 )
                 return message_id
 
-            message = await self._bot.send_message(
+            message = await self._send_localized_message(
                 chat_id=chat_id,
                 text=message_text,
                 reply_markup=reply_markup,
@@ -910,7 +967,7 @@ class PokerBotViewer:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await self._bot.send_message(
+        await self._send_localized_message(
             chat_id=chat_id,
             text=(
                 "🔒 CREATE PRIVATE GAME\n\n"
@@ -952,7 +1009,7 @@ class PokerBotViewer:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await self._bot.send_message(
+        await self._send_localized_message(
             chat_id=chat_id,
             text=(
                 "🎰 PRIVATE GAME INVITATION\n\n"
@@ -1024,7 +1081,7 @@ class PokerBotViewer:
             f"{readiness}"
         )
 
-        await self._bot.send_message(
+        await self._send_localized_message(
             chat_id=chat_id,
             text=message,
             reply_markup=reply_markup,
@@ -1048,7 +1105,7 @@ class PokerBotViewer:
             required=required_display,
         )
 
-        await self._bot.send_message(
+        await self._send_localized_message(
             chat_id=chat_id,
             text=text,
             reply_to_message_id=reply_to_message_id,
@@ -1082,7 +1139,7 @@ class PokerBotViewer:
             text_parts.append("")
             text_parts.append(self._t("lobby.ready_to_start"))
 
-        return await self._bot.send_message(
+        return await self._send_localized_message(
             chat_id=chat_id,
             text="\n".join(text_parts),
         )
@@ -1095,7 +1152,7 @@ class PokerBotViewer:
 
         text = self._t("msg.game_started")
 
-        await self._bot.send_message(
+        await self._send_localized_message(
             chat_id=chat_id,
             text=text,
         )

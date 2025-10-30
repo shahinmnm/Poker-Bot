@@ -150,6 +150,23 @@ class LiveMessageManager:
         cache_backend = ensure_kv(kv) if kv is not None else ensure_kv(None)
         self._render_cache = render_cache or RenderCache(cache_backend, logger)
         self._device_detector = DeviceDetector()
+        self._language_code = "en"
+        self._language_direction = "ltr"
+        self._language_font = "system"
+
+    def set_language_metadata(self, *, code: str, direction: str, font: str) -> None:
+        """Update active language metadata for renders."""
+
+        self._language_code = code
+        self._language_direction = direction
+        self._language_font = font
+
+    def _apply_direction(self, text: Optional[str]) -> Optional[str]:
+        if not text or self._language_direction != "rtl":
+            return text
+        if text.startswith("\u202B") and text.endswith("\u202C"):
+            return text
+        return f"\u202B{text}\u202C"
 
     @staticmethod
     def _format_chips(amount: int, width: int = 6) -> str:
@@ -670,6 +687,9 @@ class LiveMessageManager:
             flash_cards=flash_cards,
             device_profile=device_profile,
         )
+        context["language_code"] = self._language_code
+        context["layout_direction"] = self._language_direction
+        context["font_family"] = self._language_font
 
         preview_text: Optional[str] = None
         stable_text: Optional[str] = None
@@ -677,7 +697,7 @@ class LiveMessageManager:
         options: List[RaiseOptionMeta] = []
         compact_mode = self._should_use_compact_mode(device_profile, state)
 
-        cache_variant = getattr(device_profile.device_type, "value", "default")
+        cache_variant = f"{getattr(device_profile.device_type, 'value', 'default')}:{self._language_code}"
         use_cache = (
             mode == "actions"
             and current_player is not None
@@ -751,13 +771,16 @@ class LiveMessageManager:
                 compact=compact_mode,
             )
 
-        stable_text_value = stable_text or ""
+        stable_text_value = self._apply_direction(stable_text) or ""
 
         banner = None
         if include_banner:
             banner = self._select_banner(context, state.last_context)
 
-        message_text = f"{banner}\n{stable_text_value}" if banner else stable_text_value
+        banner_text = self._apply_direction(banner) if banner else None
+        message_text = (
+            f"{banner_text}\n{stable_text_value}" if banner_text else stable_text_value
+        )
 
         if use_cache and current_player is not None:
             layout_to_cache: Optional[List[List[Dict[str, str]]]] = None
@@ -787,10 +810,13 @@ class LiveMessageManager:
             key: context.get(key)
             for key in self.STATE_CONTEXT_KEYS
         }
+        diff_context["language_code"] = self._language_code
+        diff_context["layout_direction"] = self._language_direction
+        diff_context["font_family"] = self._language_font
 
         return RenderBundle(
             message_text=message_text,
-            stable_text=stable_text,
+            stable_text=stable_text_value,
             reply_markup=reply_markup,
             keyboard_json=keyboard_json,
             payload_hash=payload_hash,
@@ -1685,7 +1711,7 @@ class LiveMessageManager:
         profile = device_profile or DeviceDetector.get_profile(DeviceType.DESKTOP)
         is_mobile = profile.device_type == DeviceType.MOBILE
         emoji_scale = getattr(profile, "emoji_size_multiplier", 1.0)
-        cache_variant = getattr(profile.device_type, "value", "default")
+        cache_variant = f"{getattr(profile.device_type, 'value', 'default')}:{self._language_code}"
 
         cache_allowed = (
             use_cache

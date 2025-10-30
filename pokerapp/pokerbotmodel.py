@@ -216,7 +216,7 @@ class PokerBotModel:
         """Ensure view uses detected language for this update."""
 
         user_language = self._detect_and_cache_language(update)
-        self._view._user_language = user_language
+        self._view.set_language_context(user_language, user_id=getattr(update.effective_user, "id", None))
         return user_language
 
     def _lookup_user_by_username(self, username: str) -> Optional[int]:

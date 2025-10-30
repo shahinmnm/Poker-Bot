@@ -21,6 +21,7 @@ from telegram.ext import (
 from pokerapp.entities import Game, Player, PlayerAction
 from pokerapp.notify_utils import LoggerHelper, NotificationManager
 from pokerapp.i18n import translation_manager
+from pokerapp.kvstore import ensure_kv
 from pokerapp.pokerbotmodel import (
     PokerBotModel,
     PlayerActionValidation,
@@ -47,6 +48,8 @@ class PokerBotController:
         self,
         model: PokerBotModel,
         application: Application,
+        *,
+        kv=None,
     ) -> None:
         """
         Initialize controller with handlers.
@@ -58,6 +61,8 @@ class PokerBotController:
         self._model = model
         self._application = application
         self._view: "PokerBotViewer" = model._view
+        self._kv = ensure_kv(kv if kv is not None else getattr(model, "_kv", None))
+        translation_manager.attach_kvstore(self._kv)
         self._pending_fold_confirmations: dict[Tuple[int, str], PreparedPlayerAction] = {}
 
         application.add_handler(CommandHandler("ready", self._handle_ready))
@@ -619,7 +624,7 @@ Send 💰 /money once per day for free chips!
         if not user:
             return
 
-        current_lang = self._model._kv.get_user_language(user.id) or "en"
+        current_lang = self._kv.get_user_language(user.id) or translation_manager.DEFAULT_LANGUAGE
 
         languages = translation_manager.get_supported_languages()
         buttons: List[List[InlineKeyboardButton]] = []
@@ -645,9 +650,10 @@ Send 💰 /money once per day for free chips!
 
         markup = InlineKeyboardMarkup(buttons)
 
-        header = translation_manager.translate(
+        header = translation_manager.t(
             "settings.choose_language",
-            language=current_lang,
+            user_id=user.id,
+            lang=current_lang,
         )
 
         await update.effective_message.reply_text(
@@ -672,11 +678,12 @@ Send 💰 /money once per day for free chips!
 
         _, lang_code = query.data.split(":", 1)
 
-        self._model._kv.set_user_language(user.id, lang_code)
+        self._kv.set_user_language(user.id, lang_code)
 
-        confirmation = translation_manager.translate(
+        confirmation = translation_manager.t(
             "settings.language_changed",
-            language=lang_code,
+            user_id=user.id,
+            lang=lang_code,
         )
 
         await query.answer(confirmation, show_alert=True)

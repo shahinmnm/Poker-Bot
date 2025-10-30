@@ -20,6 +20,8 @@ from pokerapp.notify_utils import LoggerHelper
 from pokerapp.pokerbotcontrol import PokerBotController
 from pokerapp.pokerbotmodel import PokerBotModel
 from pokerapp.pokerbotview import PokerBotViewer
+from pokerapp.kvstore import ensure_kv
+from pokerapp.i18n import translation_manager
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -64,13 +66,16 @@ class PokerBot:
             .build()
         )
 
-        self._kv = redis.Redis(
+        redis_backend = redis.Redis(
             host=cfg.REDIS_HOST,
             port=cfg.REDIS_PORT,
             db=cfg.REDIS_DB,
             password=cfg.REDIS_PASS or None,
             decode_responses=False,
         )
+        self._kv = ensure_kv(redis_backend)
+
+        translation_manager.attach_kvstore(self._kv)
 
         self._analytics = AnalyticsMiddleware()
         self._rate_limiter = UserRateLimiter(
@@ -78,7 +83,12 @@ class PokerBot:
             window_seconds=60,
         )
 
-        self._view = PokerBotViewer(bot=self._application.bot, kv=self._kv)
+        initial_language = translation_manager.get_language_context()
+        self._view = PokerBotViewer(
+            bot=self._application.bot,
+            kv=self._kv,
+            language_context=initial_language,
+        )
         self._model = PokerBotModel(
             view=self._view,
             bot=self._application.bot,
@@ -89,6 +99,7 @@ class PokerBot:
         self._controller = PokerBotController(
             model=self._model,
             application=self._application,
+            kv=self._kv,
         )
 
         self._cfg = cfg
