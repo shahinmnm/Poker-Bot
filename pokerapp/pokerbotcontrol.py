@@ -1653,6 +1653,18 @@ Send 💰 /money once per day for free chips!
                     query.message.chat_id if query and query.message else None
                 ),
             )
+        finally:
+            view = getattr(self, "_view", None)
+            if view and hasattr(view, "get_render_cache_stats"):
+                stats = view.get_render_cache_stats()
+                total = stats.get("total", 0)
+                if total:
+                    logger.info(
+                        "Render cache stats: %d hits / %d total (%.1f%% hit rate)",
+                        stats.get("hits", 0),
+                        total,
+                        stats.get("hit_rate", 0.0),
+                    )
 
     async def _handle_stake_selection(
         self,

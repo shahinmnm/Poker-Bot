@@ -2,7 +2,7 @@
 
 import logging
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from telegram import (
     Message,
@@ -20,7 +20,9 @@ from pokerapp.entities import (
     ChatId,
     Mention,
 )
+from pokerapp.kvstore import ensure_kv
 from pokerapp.live_message import LiveMessageManager
+from pokerapp.render_cache import RenderCache
 
 
 logger = logging.getLogger(__name__)
@@ -29,8 +31,16 @@ logger = logging.getLogger(__name__)
 class PokerBotViewer:
     def __init__(self, bot: Bot, *, kv=None):
         self._bot = bot
-        self._live_manager = LiveMessageManager(bot=bot, logger=logger, kv=kv)
-        logger.info("🔍 PokerBotViewer initialized with LiveMessageManager")
+        self._logger = logger
+        self._kv = ensure_kv(kv)
+        self._render_cache = RenderCache(self._kv, self._logger)
+        self._live_manager = LiveMessageManager(
+            bot=bot,
+            logger=self._logger,
+            kv=self._kv,
+            render_cache=self._render_cache,
+        )
+        self._logger.info("🔍 PokerBotViewer initialized with LiveMessageManager")
 
     _SUIT_EMOJIS = {
         "spades": "♠️",
@@ -153,6 +163,8 @@ class PokerBotViewer:
         game: Game,
         current_player: Player,
         version: Optional[int] = None,
+        *,
+        use_cache: bool = True,
     ) -> InlineKeyboardMarkup:
         """
         Build inline keyboard with available actions for current player.
@@ -164,6 +176,15 @@ class PokerBotViewer:
         Returns:
             InlineKeyboardMarkup with action buttons
         """
+
+        if use_cache and self._render_cache:
+            cached = self._render_cache.get_cached_render(game, current_player)
+            if cached and cached.keyboard_layout:
+                keyboard = [
+                    [InlineKeyboardButton(**btn) for btn in row]
+                    for row in cached.keyboard_layout
+                ]
+                return InlineKeyboardMarkup(keyboard)
 
         buttons: List[List[InlineKeyboardButton]] = []
 
@@ -292,7 +313,36 @@ class PokerBotViewer:
                     )
                 buttons.append(row)
 
-        return InlineKeyboardMarkup(buttons)
+        markup = InlineKeyboardMarkup(buttons)
+
+        if use_cache and self._render_cache and buttons:
+            layout = [
+                [
+                    {"text": btn.text, "callback_data": btn.callback_data}
+                    for btn in row
+                ]
+                for row in buttons
+            ]
+            self._render_cache.cache_render_result(
+                game,
+                current_player,
+                keyboard_layout=layout,
+            )
+
+        return markup
+
+    def get_render_cache_stats(self) -> Dict[str, Any]:
+        """Expose render cache performance metrics."""
+
+        return self._render_cache.get_stats()
+
+    def invalidate_render_cache(self, game: Game) -> None:
+        """Invalidate cached render results for the given game."""
+
+        game_id = getattr(game, "id", "")
+        self._render_cache.invalidate_game(game_id)
+        if hasattr(self._live_manager, "invalidate_render_cache"):
+            self._live_manager.invalidate_render_cache(game)
 
     async def show_fold_confirmation(
         self,
