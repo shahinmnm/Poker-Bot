@@ -65,6 +65,22 @@ class ControllerTextKeys:
     RAISE_ERROR_UNKNOWN = "controller.raise.error_unknown"
 
 
+class ControllerCommandKeys:
+    START = "controller.commands.start"
+    READY = "controller.commands.ready"
+    PRIVATE = "controller.commands.private"
+    JOIN = "controller.commands.join"
+    INVITE = "controller.commands.invite"
+    ACCEPT = "controller.commands.accept"
+    DECLINE = "controller.commands.decline"
+    LEAVE = "controller.commands.leave"
+    MONEY = "controller.commands.money"
+    CARDS = "controller.commands.cards"
+    BAN = "controller.commands.ban"
+    STOP = "controller.commands.stop"
+    HELP = "controller.commands.help"
+
+
 class PokerBotController:
     """Controller for handling Telegram updates and routing to model."""
 
@@ -490,38 +506,25 @@ class PokerBotController:
 
     async def _post_init(self, application: Application) -> None:
         """Set up bot command descriptions in Telegram UI."""
+        default_lang = translation_manager.DEFAULT_LANGUAGE
+
+        def _command_text(key: str) -> str:
+            return translation_manager.t(key, lang=default_lang)
+
         commands = [
-            BotCommand("start", "🎰 Start a new poker game"),
-            BotCommand("ready", "✋ Join lobby / Sit at table"),
-            BotCommand(
-                "private",
-                "🔒 Create private game (Coming Soon)",
-            ),
-            BotCommand(
-                "join",
-                "🚪 Join private game by code (Coming Soon)",
-            ),
-            BotCommand(
-                "invite",
-                "📨 Invite user to private game (Coming Soon)",
-            ),
-            BotCommand(
-                "accept",
-                "✅ Accept private game invitation (Coming Soon)",
-            ),
-            BotCommand(
-                "decline",
-                "❌ Decline private game invitation (Coming Soon)",
-            ),
-            BotCommand(
-                "leave",
-                "🚶 Leave private game (Coming Soon)",
-            ),
-            BotCommand("money", "💰 Claim daily bonus (dice roll)"),
-            BotCommand("cards", "🃏 Show your cards again"),
-            BotCommand("ban", "⛔ Force AFK player to fold (2min+)"),
-            BotCommand("stop", "🛑 Leave current game"),
-            BotCommand("help", "❓ Show game rules and commands"),
+            BotCommand("start", _command_text(ControllerCommandKeys.START)),
+            BotCommand("ready", _command_text(ControllerCommandKeys.READY)),
+            BotCommand("private", _command_text(ControllerCommandKeys.PRIVATE)),
+            BotCommand("join", _command_text(ControllerCommandKeys.JOIN)),
+            BotCommand("invite", _command_text(ControllerCommandKeys.INVITE)),
+            BotCommand("accept", _command_text(ControllerCommandKeys.ACCEPT)),
+            BotCommand("decline", _command_text(ControllerCommandKeys.DECLINE)),
+            BotCommand("leave", _command_text(ControllerCommandKeys.LEAVE)),
+            BotCommand("money", _command_text(ControllerCommandKeys.MONEY)),
+            BotCommand("cards", _command_text(ControllerCommandKeys.CARDS)),
+            BotCommand("ban", _command_text(ControllerCommandKeys.BAN)),
+            BotCommand("stop", _command_text(ControllerCommandKeys.STOP)),
+            BotCommand("help", _command_text(ControllerCommandKeys.HELP)),
         ]
 
         try:
@@ -599,96 +602,10 @@ class PokerBotController:
         context: CallbackContext,
     ) -> None:
         """Handle /help command with game rules."""
-        help_text = """
-🎰 TEXAS HOLD’EM POKER BOT 🎰
-
-🎮 GAME MODES:
-
-🏛️ Group Games - Play in group chats with friends
-🔒 Private Games - Exclusive invite-only tables (Coming Soon!)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏛️ GROUP GAME COMMANDS:
-
-✋ /ready - Join lobby (sit at table)
-🎰 /start - Start game (or use lobby button)
-🛑 /stop - Leave current game
-
-🎲 LOBBY SYSTEM:
-
-Use /ready to join the lobby
-Interactive buttons to sit/leave/start
-Lobby shows all seated players
-Minimum 2 players to start game
-
-🔒 PRIVATE GAME COMMANDS (Coming Soon):
-
-🔒 /private - Create private game lobby
-🚪 /join <code> - Join game by secret code
-📨 /invite @username - Invite specific user
-✅ /accept - Accept invitation
-❌ /decline - Decline invitation
-🚶 /leave - Leave private game
-
-💎 GENERAL COMMANDS:
-
-💰 /money - Get daily bonus chips
-🃏 /cards - Show your cards again
-⛔ /ban - Force AFK player out (admin only)
-🌐 /language - Change bot language
-❓ /help - Show this help message
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🎯 HOW TO PLAY:
-
-🏛️ Group Mode:
-
-1️⃣ Add bot to your group chat
-2️⃣ Everyone sends ✋ /ready
-3️⃣ Host sends 🎰 /start when ready
-4️⃣ Game begins automatically!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🃏 POKER BASICS:
-
-🎴 Each player gets 2 private cards
-🃏 5 community cards revealed in stages
-💰 Best 5-card hand wins the pot!
-
-🎲 BETTING ROUNDS:
-
-🌅 Pre-flop - Only your 2 cards
-🌄 Flop - 3 community cards revealed
-🌇 Turn - 4th community card
-🌃 River - Final 5th card
-
-🎯 ACTIONS:
-
-✅ Check - Pass (no bet required)
-💵 Call - Match current bet
-📈 Raise - Increase the bet
-🚀 All-in - Bet everything!
-❌ Fold - Give up this hand
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🎁 DAILY BONUS:
-
-Send 💰 /money once per day for free chips!
-
-🎲 Bonus amounts:
-
-⚀ = 5 chips   ⚁ = 20 chips   ⚂ = 40 chips
-⚃ = 80 chips  ⚄ = 160 chips  ⚅ = 320 chips
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🍀 Good luck at the tables! 🍀
-
-"""
+        help_text = self._translate(
+            "help.controller.full_text",
+            update=update,
+        )
         await update.effective_message.reply_text(help_text)
 
     async def _handle_language(

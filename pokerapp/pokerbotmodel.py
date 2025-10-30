@@ -616,7 +616,8 @@ class PokerBotModel:
         if chat is None or user is None or message is None:
             return
 
-        self._apply_user_language(update)
+        user_language = self._apply_user_language(update)
+        user_id = getattr(update.effective_user, "id", None)
 
         chat_id = chat.id
         game = self._game_from_context(context)
@@ -716,15 +717,20 @@ class PokerBotModel:
         if chat is None or message is None:
             return
 
-        self._apply_user_language(update)
+        user_language = self._apply_user_language(update)
 
         chat_id = chat.id
         game = self._game_from_context(context)
+        user_id = getattr(user, "id", None)
 
         if game.state not in (GameState.INITIAL, GameState.FINISHED):
             await self._view.send_message(
                 chat_id=chat_id,
-                text="🎮 Game in progress! Please wait for the next round.",
+                text=self._translate(
+                    "msg.game_in_progress",
+                    user_id=user_id,
+                    lang=user_language,
+                ),
             )
             return
 
@@ -741,9 +747,10 @@ class PokerBotModel:
 
             await self._view.send_message(
                 chat_id=chat_id,
-                text=(
-                    "❌ Not enough players!\n\n"
-                    "At least 2 players must /ready first."
+                text=self._translate(
+                    "msg.error.not_enough_players_ready",
+                    user_id=user_id,
+                    lang=user_language,
                 ),
             )
             return
@@ -822,26 +829,24 @@ class PokerBotModel:
                 )
 
             if missing_funds:
-                base_message = (
-                    "❌ The following players don't have enough money for this "
-                    "table: "
-                )
-                insufficient_funds_message = (
-                    base_message + ", ".join(missing_funds)
-                )
-
                 await self._view.send_message(
                     chat_id=chat_id,
-                    text=insufficient_funds_message,
+                    text=self._translate(
+                        "msg.error.players_insufficient_funds",
+                        user_id=user_id,
+                        lang=user_language,
+                        players=", ".join(missing_funds),
+                    ),
                 )
                 return
 
             if len(valid_players) < self._min_players:
                 await self._view.send_message(
                     chat_id=chat_id,
-                    text=(
-                        "❌ Not enough players!\n\n"
-                        "At least 2 players must /ready first."
+                    text=self._translate(
+                        "msg.error.not_enough_players_ready",
+                        user_id=user_id,
+                        lang=user_language,
                     ),
                 )
                 return
@@ -859,17 +864,18 @@ class PokerBotModel:
     async def show_help(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        self._apply_user_language(update)
+        user_language = self._apply_user_language(update)
+        user_id = getattr(update.effective_user, "id", None)
 
         chat_id = update.effective_message.chat_id
         try:
             with open(DESCRIPTION_FILE, 'r', encoding='utf-8') as f:
                 text = f.read()
         except FileNotFoundError:
-            text = (
-                "Welcome to Poker Bot!\n"
-                "Use /ready to join the next game and "
-                "/money to claim your daily bonus."
+            text = self._translate(
+                "help.model.fallback",
+                user_id=user_id,
+                lang=user_language,
             )
 
         await self._view.send_message(
@@ -885,9 +891,20 @@ class PokerBotModel:
     ) -> None:
         print(f"new game: {game.id}, players count: {len(game.players)}")
 
+        language_context = getattr(self._view, "language_context", None)
+        active_lang = getattr(
+            language_context,
+            "code",
+            translation_manager.DEFAULT_LANGUAGE,
+        )
+        start_message = self._translate(
+            "msg.game_started",
+            lang=active_lang,
+        )
+
         await self._view.send_message(
             chat_id=chat_id,
-            text='The game is started! 🃏',
+            text=start_message,
             reply_markup=ReplyKeyboardMarkup(
                 keyboard=[["poker"]],
                 resize_keyboard=True,
@@ -931,7 +948,8 @@ class PokerBotModel:
     async def bonus(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        self._apply_user_language(update)
+        user_language = self._apply_user_language(update)
+        user_id = getattr(update.effective_user, "id", None)
 
         wallet = WalletManagerModel(
             update.effective_message.from_user.id, self._kv)
@@ -944,7 +962,12 @@ class PokerBotModel:
             await self._view.send_message_reply(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=f"Your money: *{money}$*\n",
+                text=self._translate(
+                    "msg.bonus.already_claimed",
+                    user_id=user_id,
+                    lang=user_language,
+                    amount=money,
+                ),
             )
             return
 
@@ -974,9 +997,13 @@ class PokerBotModel:
             await self._view.send_message_reply(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=(
-                    f"Bonus: *{bonus_amount}$* {icon}\n"
-                    f"Your money: *{money}$*\n"
+                text=self._translate(
+                    "msg.bonus.result",
+                    user_id=user_id,
+                    lang=user_language,
+                    bonus=bonus_amount,
+                    icon=icon,
+                    total=money,
                 ),
             )
 
@@ -3867,8 +3894,11 @@ class WalletManagerModel(Wallet):
     def add_daily(self, amount: Money) -> Money:
         if self.has_daily_bonus():
             raise UserException(
-                "You have already received the bonus today\n"
-                f"Your money: {self.value()}$"
+                translation_manager.t(
+                    "msg.bonus.already_claimed_plain",
+                    user_id=self.user_id,
+                    amount=self.value(),
+                )
             )
 
         key = self._prefix(self.user_id)
@@ -3883,7 +3913,12 @@ class WalletManagerModel(Wallet):
         wallet = int(self._kv.get(self._prefix(self.user_id)))
 
         if wallet + amount < 0:
-            raise UserException("not enough money")
+            raise UserException(
+                translation_manager.t(
+                    "msg.error.wallet_not_enough",
+                    user_id=self.user_id,
+                )
+            )
 
         self._kv.incrby(self._prefix(self.user_id), amount)
 

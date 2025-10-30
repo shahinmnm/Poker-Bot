@@ -58,7 +58,13 @@
     "ready": "/ready - Unirse al juego",
     "start": "/start - Comenzar a jugar",
     "status": "/status - Ver estado del juego",
-    "title": "🎴 Cómo Jugar Póker"
+    "title": "🎴 Cómo Jugar Póker",
+    "controller": {
+      "full_text": "🎰 TEXAS HOLD’EM POKER BOT 🎰\n\n🎮 GAME MODES:\n\n🏛️ Group Games - Play in group chats with friends\n🔒 Private Games - Exclusive invite-only tables (Coming Soon!)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🏛️ GROUP GAME COMMANDS:\n\n✋ /ready - Join lobby (sit at table)\n🎰 /start - Start game (or use lobby button)\n🛑 /stop - Leave current game\n\n🎲 LOBBY SYSTEM:\n\nUse /ready to join the lobby\nInteractive buttons to sit/leave/start\nLobby shows all seated players\nMinimum 2 players to start game\n\n🔒 PRIVATE GAME COMMANDS (Coming Soon):\n\n🔒 /private - Create private game lobby\n🚪 /join <code> - Join game by secret code\n📨 /invite @username - Invite specific user\n✅ /accept - Accept invitation\n❌ /decline - Decline invitation\n🚶 /leave - Leave private game\n\n💎 GENERAL COMMANDS:\n\n💰 /money - Get daily bonus chips\n🃏 /cards - Show your cards again\n⛔ /ban - Force AFK player out (admin only)\n🌐 /language - Change bot language\n❓ /help - Show this help message\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🎯 HOW TO PLAY:\n\n🏛️ Group Mode:\n\n1️⃣ Add bot to your group chat\n2️⃣ Everyone sends ✋ /ready\n3️⃣ Host sends 🎰 /start when ready\n4️⃣ Game begins automatically!\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🃏 POKER BASICS:\n\n🎴 Each player gets 2 private cards\n🃏 5 community cards revealed in stages\n💰 Best 5-card hand wins the pot!\n\n🎲 BETTING ROUNDS:\n\n🌅 Pre-flop - Only your 2 cards\n🌄 Flop - 3 community cards revealed\n🌇 Turn - 4th community card\n🌃 River - Final 5th card\n\n🎯 ACTIONS:\n\n✅ Check - Pass (no bet required)\n💵 Call - Match current bet\n📈 Raise - Increase the bet\n🚀 All-in - Bet everything!\n❌ Fold - Give up this hand\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🎁 DAILY BONUS:\n\nSend 💰 /money once per day for free chips!\n\n🎲 Bonus amounts:\n\n⚀ = 5 chips   ⚁ = 20 chips   ⚂ = 40 chips\n⚃ = 80 chips  ⚄ = 160 chips  ⚅ = 320 chips\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🍀 Good luck at the tables! 🍀"
+    },
+    "model": {
+      "fallback": "Welcome to Poker Bot!\nUse /ready to join the next game and /money to claim your daily bonus."
+    }
   },
   "meta": {
     "font": "system",
@@ -74,7 +80,10 @@
       "max_players": "❌ Máximo {max} jugadores permitidos",
       "no_game": "❌ No hay juego activo",
       "not_enough_players": "❌ Se necesitan al menos 2 jugadores para iniciar",
-      "not_your_turn": "❌ ¡No es tu turno!"
+      "not_your_turn": "❌ ¡No es tu turno!",
+      "not_enough_players_ready": "❌ Not enough players!\n\nAt least 2 players must /ready first.",
+      "players_insufficient_funds": "❌ The following players don't have enough chips for this table: {players}",
+      "wallet_not_enough": "❌ Not enough chips"
     },
     "game_started": "🎮 ¡Juego iniciado! ¡Buena suerte!",
     "player_all_in": "🔥 {player} fue all-in con ${amount}",
@@ -88,7 +97,13 @@
     "turn_timeout": "⏱️ {player} se quedó sin tiempo y se retiró",
     "welcome": "👋 ¡Bienvenido al Póker Texas Hold'em!",
     "winner": "🏆 ¡{player} gana ${amount}!",
-    "your_turn": "🎯 ¡Es tu turno!"
+    "your_turn": "🎯 ¡Es tu turno!",
+    "game_in_progress": "🎮 Game in progress! Please wait for the next round.",
+    "bonus": {
+      "already_claimed": "🎁 Daily bonus already claimed!\nYour chips: *{amount}$*",
+      "already_claimed_plain": "You have already received the bonus today.\nYour chips: {amount}$",
+      "result": "Bonus: *{bonus}$* {icon}\nYour chips: *{total}$*"
+    }
   },
   "popup": {
     "fold_confirmation": {
@@ -155,6 +170,21 @@
         "error_unavailable": "❌ Selector de subida no disponible",
         "error_unknown": "❌ Acción de subida desconocida",
         "error_user": "❌ No se pudo identificar al usuario"
+      },
+      "commands": {
+        "start": "🎰 Start a new poker game",
+        "ready": "✋ Join lobby / Sit at table",
+        "private": "🔒 Create private game (Coming Soon)",
+        "join": "🚪 Join private game by code (Coming Soon)",
+        "invite": "📨 Invite user to private game (Coming Soon)",
+        "accept": "✅ Accept private game invitation (Coming Soon)",
+        "decline": "❌ Decline private game invitation (Coming Soon)",
+        "leave": "🚶 Leave private game (Coming Soon)",
+        "money": "💰 Claim daily bonus (dice roll)",
+        "cards": "🃏 Show your cards again",
+        "ban": "⛔ Force AFK player to fold (2min+)",
+        "stop": "🛑 Leave current game",
+        "help": "❓ Show game rules and commands"
       }
     },
     "lobby": {
