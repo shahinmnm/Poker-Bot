@@ -6,6 +6,8 @@ from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from telegram import (
     BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     Update,
 )
 from telegram.error import BadRequest
@@ -18,6 +20,7 @@ from telegram.ext import (
 
 from pokerapp.entities import Game, Player, PlayerAction
 from pokerapp.notify_utils import LoggerHelper, NotificationManager
+from pokerapp.i18n import translation_manager
 from pokerapp.pokerbotmodel import (
     PokerBotModel,
     PlayerActionValidation,
@@ -82,6 +85,9 @@ class PokerBotController:
         application.add_handler(
             CommandHandler("leave", self._handle_leave_private)
         )
+        application.add_handler(
+            CommandHandler("language", self._handle_language)
+        )
         # Register callback query handlers before the fallback handler
         application.add_handler(
             CallbackQueryHandler(
@@ -111,6 +117,12 @@ class PokerBotController:
             CallbackQueryHandler(
                 self._handle_private_leave_callback,
                 pattern=r"^private_leave:",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_language_selection,
+                pattern=r"^lang:",
             )
         )
         application.add_handler(
@@ -462,6 +474,7 @@ Minimum 2 players to start game
 💰 /money - Get daily bonus chips
 🃏 /cards - Show your cards again
 ⛔ /ban - Force AFK player out (admin only)
+🌐 /language - Change bot language
 ❓ /help - Show this help message
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -515,6 +528,81 @@ Send 💰 /money once per day for free chips!
 
 """
         await update.effective_message.reply_text(help_text)
+
+    async def _handle_language(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle /language command - show language selection menu."""
+
+        user = update.effective_user
+        if not user:
+            return
+
+        current_lang = self._model._kv.get_user_language(user.id) or "en"
+
+        languages = translation_manager.get_supported_languages()
+        buttons: List[List[InlineKeyboardButton]] = []
+
+        for i in range(0, len(languages), 2):
+            row: List[InlineKeyboardButton] = []
+            for lang_info in languages[i:i + 2]:
+                code = lang_info["code"]
+                name = lang_info["name"]
+
+                if code == current_lang:
+                    text = f"✅ {name}"
+                else:
+                    text = name
+
+                row.append(
+                    InlineKeyboardButton(
+                        text=text,
+                        callback_data=f"lang:{code}",
+                    )
+                )
+            buttons.append(row)
+
+        markup = InlineKeyboardMarkup(buttons)
+
+        header = translation_manager.translate(
+            "settings.choose_language",
+            language=current_lang,
+        )
+
+        await update.effective_message.reply_text(
+            text=header,
+            reply_markup=markup,
+        )
+
+    async def _handle_language_selection(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle language selection callback."""
+
+        query = update.callback_query
+        if not query or not query.data:
+            return
+
+        user = query.from_user
+        if not user:
+            return
+
+        _, lang_code = query.data.split(":", 1)
+
+        self._model._kv.set_user_language(user.id, lang_code)
+
+        confirmation = translation_manager.translate(
+            "settings.language_changed",
+            language=lang_code,
+        )
+
+        await query.answer(confirmation, show_alert=True)
+
+        await self._handle_language(update, context)
 
     async def _handle_button_clicked(
         self,

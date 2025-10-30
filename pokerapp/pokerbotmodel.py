@@ -147,6 +147,8 @@ class PokerBotModel:
         Returns:
             True if balance sufficient, False otherwise (error sent to user)
         """
+        self._apply_user_language(update)
+
         balance = wallet.value()
         if balance < min_balance:
             await self._view.send_insufficient_balance_error(
@@ -195,6 +197,27 @@ class PokerBotModel:
                 username,
                 exc,
             )
+
+    def _detect_and_cache_language(self, update: Update) -> str:
+        """Detect user's language from Telegram and cache it."""
+
+        user = update.effective_user
+        if not user:
+            return "en"
+
+        telegram_lang = getattr(user, "language_code", None)
+
+        return self._kv.get_user_language_or_detect(
+            user_id=user.id,
+            telegram_language_code=telegram_lang,
+        )
+
+    def _apply_user_language(self, update: Update) -> str:
+        """Ensure view uses detected language for this update."""
+
+        user_language = self._detect_and_cache_language(update)
+        self._view._user_language = user_language
+        return user_language
 
     def _lookup_user_by_username(self, username: str) -> Optional[int]:
         """Resolve @username to user_id."""
@@ -499,6 +522,8 @@ class PokerBotModel:
         if chat is None or user is None or message is None:
             return
 
+        self._apply_user_language(update)
+
         chat_id = chat.id
         game = self._game_from_context(context)
 
@@ -597,6 +622,8 @@ class PokerBotModel:
         if chat is None or message is None:
             return
 
+        self._apply_user_language(update)
+
         chat_id = chat.id
         game = self._game_from_context(context)
 
@@ -637,6 +664,8 @@ class PokerBotModel:
         player_ids: List[int],
     ) -> None:
         """Initialize a group game using players from the lobby."""
+
+        self._apply_user_language(update)
 
         cache = RequestCache()
 
@@ -736,6 +765,8 @@ class PokerBotModel:
     async def show_help(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
+        self._apply_user_language(update)
+
         chat_id = update.effective_message.chat_id
         try:
             with open(DESCRIPTION_FILE, 'r', encoding='utf-8') as f:
@@ -806,6 +837,8 @@ class PokerBotModel:
     async def bonus(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
+        self._apply_user_language(update)
+
         wallet = WalletManagerModel(
             update.effective_message.from_user.id, self._kv)
         money = wallet.value()
@@ -860,6 +893,8 @@ class PokerBotModel:
         update: Update,
         context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
+        self._apply_user_language(update)
+
         game = self._game_from_context(context)
 
         current_player: Optional[Player] = None
@@ -1269,6 +1304,8 @@ class PokerBotModel:
     async def ban_player(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
+        self._apply_user_language(update)
+
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
 
@@ -1292,6 +1329,8 @@ class PokerBotModel:
     async def fold(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
+        self._apply_user_language(update)
+
         game = self._game_from_context(context)
         player = self._current_turn_player(game)
 
@@ -1313,6 +1352,8 @@ class PokerBotModel:
         update: Update,
         context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
+        self._apply_user_language(update)
+
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
@@ -1352,6 +1393,8 @@ class PokerBotModel:
         context: ContextTypes.DEFAULT_TYPE,
         raise_bet_rate: PlayerAction
     ) -> None:
+        self._apply_user_language(update)
+
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
@@ -1390,6 +1433,8 @@ class PokerBotModel:
     async def all_in(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
+        self._apply_user_language(update)
+
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
         player = self._current_turn_player(game)
@@ -1415,6 +1460,8 @@ class PokerBotModel:
         This is the entry point when user types /private command.
         After stake selection, create_private_game_with_stake() is called.
         """
+        self._apply_user_language(update)
+
         user = update.effective_message.from_user
         chat_id = update.effective_chat.id
 
@@ -1452,6 +1499,8 @@ class PokerBotModel:
             context: Callback context
             stake_level: Selected stake level ("low", "medium", "high")
         """
+        self._apply_user_language(update)
+
         from pokerapp.private_game import PrivateGame, PrivateGameState
 
         query = update.callback_query
@@ -1533,6 +1582,8 @@ class PokerBotModel:
             context: Callback context
             game_code: Game code from callback data
         """
+        self._apply_user_language(update)
+
         from pokerapp.private_game import PrivateGame, PrivateGameState
 
         query = update.callback_query
@@ -1662,6 +1713,8 @@ class PokerBotModel:
             context: Callback context
             game_code: Game code from callback data
         """
+        self._apply_user_language(update)
+
         from pokerapp.private_game import PrivateGame
 
         query = update.callback_query
@@ -1748,6 +1801,8 @@ class PokerBotModel:
         context: CallbackContext,
     ) -> None:
         """Handle /join <code> command to join private game lobby."""
+
+        self._apply_user_language(update)
 
         user = update.effective_user
         self._track_user(user.id, user.username)
@@ -1941,6 +1996,8 @@ class PokerBotModel:
         Usage: /invite @username
         """
 
+        self._apply_user_language(update)
+
         user = update.effective_user
         self._track_user(user.id, getattr(user, "username", None))
 
@@ -2086,6 +2143,8 @@ class PokerBotModel:
         """Start a private game after validating lobby requirements."""
 
         from pokerapp.private_game import PrivateGame, PrivateGameState
+
+        self._apply_user_language(update)
 
         cache = RequestCache()
 
@@ -2855,6 +2914,8 @@ class PokerBotModel:
     ) -> None:
         """Player accepts game invitation via callback button."""
 
+        self._apply_user_language(update)
+
         query = update.callback_query
 
         if query is None or not query.data:
@@ -3003,6 +3064,8 @@ class PokerBotModel:
     ) -> None:
         """Player declines game invitation via callback button."""
 
+        self._apply_user_language(update)
+
         query = update.callback_query
 
         if query is None or not query.data:
@@ -3074,6 +3137,8 @@ class PokerBotModel:
         context: CallbackContext,
     ) -> None:
         """Handle user leaving lobby."""
+
+        self._apply_user_language(update)
 
         user = update.effective_user
         user_id = user.id
@@ -3256,6 +3321,8 @@ class PokerBotModel:
         context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
         """Show current lobby for caller."""
+
+        self._apply_user_language(update)
 
         await self._view.send_private_game_status(
             chat_id=update.effective_chat.id,
