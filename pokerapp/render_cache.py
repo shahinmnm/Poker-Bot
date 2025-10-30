@@ -84,8 +84,8 @@ class RenderCache:
         signature_str = "|".join(components)
         return hashlib.sha256(signature_str.encode()).hexdigest()[:16]
 
-    def _build_cache_key(self, game_id: Any, signature: str) -> str:
-        return f"render:{game_id}:{signature}"
+    def _build_cache_key(self, game_id: Any, signature: str, variant: str) -> str:
+        return f"render:{variant}:{game_id}:{signature}"
 
     def _load_entry(self, cache_key: str) -> Optional[RenderResult]:
         try:
@@ -106,10 +106,16 @@ class RenderCache:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def get_cached_render(self, game: Game, current_player: Optional[Player]) -> Optional[RenderResult]:
+    def get_cached_render(
+        self,
+        game: Game,
+        current_player: Optional[Player],
+        *,
+        variant: str = "default",
+    ) -> Optional[RenderResult]:
         """Retrieve cached render result if available."""
         signature = self._compute_state_signature(game, current_player)
-        cache_key = self._build_cache_key(getattr(game, "id", ""), signature)
+        cache_key = self._build_cache_key(getattr(game, "id", ""), signature, variant)
 
         result = self._load_entry(cache_key)
         if result is None:
@@ -132,6 +138,7 @@ class RenderCache:
         *,
         hud_text: Optional[str] = None,
         keyboard_layout: Optional[List[List[Dict[str, str]]]] = None,
+        variant: str = "default",
     ) -> None:
         """Store rendered output for future reuse."""
         if hud_text is None and keyboard_layout is None:
@@ -139,7 +146,7 @@ class RenderCache:
 
         signature = self._compute_state_signature(game, current_player)
         game_id = getattr(game, "id", "")
-        cache_key = self._build_cache_key(game_id, signature)
+        cache_key = self._build_cache_key(game_id, signature, variant)
 
         existing = self._load_entry(cache_key)
 

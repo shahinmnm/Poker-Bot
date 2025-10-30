@@ -672,6 +672,7 @@ class LiveMessageManager:
         options: List[RaiseOptionMeta] = []
         compact_mode = self._should_use_compact_mode(device_profile, state)
 
+        cache_variant = getattr(device_profile.device_type, "value", "default")
         use_cache = (
             mode == "actions"
             and current_player is not None
@@ -683,6 +684,7 @@ class LiveMessageManager:
             cached_result: Optional[RenderResult] = self._render_cache.get_cached_render(
                 game,
                 current_player,
+                variant=cache_variant,
             )
             if cached_result is not None:
                 stable_text = cached_result.hud_text or None
@@ -767,6 +769,7 @@ class LiveMessageManager:
                 current_player,
                 hud_text=stable_text_value,
                 keyboard_layout=layout_to_cache,
+                variant=cache_variant,
             )
 
         option_map = {opt.key: opt for opt in options}
@@ -1677,6 +1680,7 @@ class LiveMessageManager:
         profile = device_profile or DeviceDetector.get_profile(DeviceType.DESKTOP)
         is_mobile = profile.device_type == DeviceType.MOBILE
         emoji_scale = getattr(profile, "emoji_size_multiplier", 1.0)
+        cache_variant = getattr(profile.device_type, "value", "default")
 
         cache_allowed = (
             use_cache
@@ -1685,7 +1689,11 @@ class LiveMessageManager:
         )
 
         if cache_allowed:
-            cached = self._render_cache.get_cached_render(game, player)
+            cached = self._render_cache.get_cached_render(
+                game,
+                player,
+                variant=cache_variant,
+            )
             if cached and cached.keyboard_layout:
                 markup = InlineKeyboardMarkup(
                     [
@@ -1911,6 +1919,7 @@ class LiveMessageManager:
                 game,
                 player,
                 keyboard_layout=layout,
+                variant=cache_variant,
             )
 
         return markup, options
