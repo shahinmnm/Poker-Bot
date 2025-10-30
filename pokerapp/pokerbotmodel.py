@@ -42,6 +42,7 @@ from pokerapp.notify_utils import NotificationManager
 from pokerapp.pokerbotview import PokerBotViewer
 from pokerapp.kvstore import ensure_kv
 from pokerapp.winnerdetermination import get_combination_name
+from pokerapp.request_cache import RequestCache
 
 
 logger = logging.getLogger(__name__)
@@ -110,12 +111,27 @@ class PokerBotModel:
 
         self._readyMessages = {}
         self._username_cache: Dict[int, str] = {}
+        self._request_cache = None  # Per-request cache instance
 
         self._lobby_manager = GroupLobbyManager(
             bot=self._bot,
             kvstore=self._kv,
             logger=self._logger,
         )
+
+    def _get_or_create_cache(self) -> RequestCache:
+        """Get or create request-scoped cache."""
+
+        if self._request_cache is None:
+            self._request_cache = RequestCache()
+        return self._request_cache
+
+    def _clear_request_cache(self) -> None:
+        """Clear and log request cache statistics."""
+
+        if self._request_cache is not None:
+            self._request_cache.log_stats("ActionHandler")
+            self._request_cache = None
 
     async def _ensure_minimum_balance(
         self,
@@ -622,84 +638,100 @@ class PokerBotModel:
     ) -> None:
         """Initialize a group game using players from the lobby."""
 
-        game = self._game_from_context(context)
-        valid_players: List[Player] = []
-        missing_funds: List[str] = []
+        cache = RequestCache()
 
-        for user_id in player_ids:
-            wallet = WalletManagerModel(user_id, self._kv)
-            balance_ok = BalanceValidator.can_afford_table(
-                balance=wallet.value(),
-                stake_config=STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL],
-            )
+        try:
+            game = self._game_from_context(context)
+            valid_players: List[Player] = []
+            missing_funds: List[str] = []
 
-            try:
-                member = await self._bot.get_chat_member(chat_id, user_id)
-                member_user = getattr(member, "user", None)
-            except Exception as exc:  # pragma: no cover - Telegram API
-                self._logger.error(
-                    "Failed to fetch chat member %s in %s: %s",
+            for user_id in player_ids:
+                wallet = await cache.get_wallet(
                     user_id,
-                    chat_id,
-                    exc,
+                    self._kv,
+                    self._logger,
                 )
-                member_user = None
-
-            display_name = getattr(member_user, "first_name", None) or (
-                getattr(member_user, "full_name", None)
-            ) or getattr(member_user, "username", None) or str(user_id)
-
-            if not balance_ok:
-                missing_funds.append(display_name)
-                continue
-
-            mention = (
-                member_user.mention_markdown()
-                if member_user is not None
-                else f"User {user_id}"
-            )
-
-            valid_players.append(
-                Player(
-                    user_id=user_id,
-                    mention_markdown=mention,
-                    wallet=wallet,
-                    ready_message_id=None,
+                balance_ok = BalanceValidator.can_afford_table(
+                    balance=wallet.value(),
+                    stake_config=STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL],
                 )
-            )
 
-        if missing_funds:
-            base_message = (
-                "❌ The following players don't have enough money for this "
-                "table: "
-            )
-            insufficient_funds_message = (
-                base_message + ", ".join(missing_funds)
-            )
+                try:
+                    member = await self._bot.get_chat_member(chat_id, user_id)
+                    member_user = getattr(member, "user", None)
+                except Exception as exc:  # pragma: no cover - Telegram API
+                    self._logger.error(
+                        "Failed to fetch chat member %s in %s: %s",
+                        user_id,
+                        chat_id,
+                        exc,
+                    )
+                    member_user = None
 
-            await self._view.send_message(
-                chat_id=chat_id,
-                text=insufficient_funds_message,
-            )
-            return
+                cached_display_name = cache.get_username(user_id)
+                display_name = (
+                    cached_display_name
+                    or getattr(member_user, "first_name", None)
+                    or getattr(member_user, "full_name", None)
+                    or getattr(member_user, "username", None)
+                    or str(user_id)
+                )
 
-        if len(valid_players) < self._min_players:
-            await self._view.send_message(
-                chat_id=chat_id,
-                text=(
-                    "❌ Not enough players!\n\n"
-                    "At least 2 players must /ready first."
-                ),
-            )
-            return
+                cache.cache_username(user_id, display_name)
 
-        game.reset()
-        game.players = valid_players
-        game.ready_users = {player.user_id for player in valid_players}
+                if not balance_ok:
+                    missing_funds.append(display_name)
+                    continue
 
-        await self._lobby_manager.delete_lobby(chat_id)
+                mention = (
+                    member_user.mention_markdown()
+                    if member_user is not None
+                    else f"User {user_id}"
+                )
 
-        await self._start_game(context=context, game=game, chat_id=chat_id)
+                valid_players.append(
+                    Player(
+                        user_id=user_id,
+                        mention_markdown=mention,
+                        wallet=wallet,
+                        ready_message_id=None,
+                    )
+                )
+
+            if missing_funds:
+                base_message = (
+                    "❌ The following players don't have enough money for this "
+                    "table: "
+                )
+                insufficient_funds_message = (
+                    base_message + ", ".join(missing_funds)
+                )
+
+                await self._view.send_message(
+                    chat_id=chat_id,
+                    text=insufficient_funds_message,
+                )
+                return
+
+            if len(valid_players) < self._min_players:
+                await self._view.send_message(
+                    chat_id=chat_id,
+                    text=(
+                        "❌ Not enough players!\n\n"
+                        "At least 2 players must /ready first."
+                    ),
+                )
+                return
+
+            game.reset()
+            game.players = valid_players
+            game.ready_users = {player.user_id for player in valid_players}
+
+            await self._lobby_manager.delete_lobby(chat_id)
+
+            await self._start_game(context=context, game=game, chat_id=chat_id)
+        finally:
+            cache.log_stats("GroupGameStart")
 
     async def show_help(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -2050,6 +2082,12 @@ class PokerBotModel:
 
         from pokerapp.private_game import PrivateGame, PrivateGameState
 
+        cache = RequestCache()
+
+        def _log_and_return():
+            cache.log_stats("PrivateGameStart")
+            return
+
         user = update.effective_user
         chat_id = update.effective_chat.id
 
@@ -2064,7 +2102,7 @@ class PokerBotModel:
                 "Create one with /private",
                 reply_to_message_id=update.effective_message.message_id,
             )
-            return
+            return _log_and_return()
 
         if isinstance(game_code, bytes):
             game_code = game_code.decode("utf-8")
@@ -2082,7 +2120,7 @@ class PokerBotModel:
                 f"❌ Game {game_code} not found or expired.",
                 reply_to_message_id=update.effective_message.message_id,
             )
-            return
+            return _log_and_return()
 
         private_game = PrivateGame.from_json(game_json)
 
@@ -2093,7 +2131,7 @@ class PokerBotModel:
                 "❌ Only the host can start the game!",
                 reply_to_message_id=update.effective_message.message_id,
             )
-            return
+            return _log_and_return()
 
         # Validate game state
         if private_game.state != PrivateGameState.LOBBY:
@@ -2102,7 +2140,7 @@ class PokerBotModel:
                 "❌ Game has already started or finished!",
                 reply_to_message_id=update.effective_message.message_id,
             )
-            return
+            return _log_and_return()
 
         # Collect accepted players
         accepted_players = [
@@ -2126,7 +2164,7 @@ class PokerBotModel:
                 ),
                 reply_to_message_id=update.effective_message.message_id,
             )
-            return
+            return _log_and_return()
 
         # Validate maximum players (prevent overflow)
         if len(accepted_players) > self._cfg.PRIVATE_MAX_PLAYERS:
@@ -2140,7 +2178,7 @@ class PokerBotModel:
                 ),
                 reply_to_message_id=update.effective_message.message_id,
             )
-            return
+            return _log_and_return()
 
         # Get stake configuration
         stake_config = self._cfg.PRIVATE_STAKES.get(private_game.stake_level)
@@ -2151,7 +2189,7 @@ class PokerBotModel:
                 "❌ Stake configuration missing for this game!",
                 reply_to_message_id=update.effective_message.message_id,
             )
-            return
+            return _log_and_return()
 
         small_blind = int(stake_config["small_blind"])
         big_blind = int(stake_config["big_blind"])
@@ -2163,12 +2201,30 @@ class PokerBotModel:
 
         # Validate ALL players have sufficient balance
         insufficient_players = []
+        wallet_map: Dict[int, Wallet] = {}
 
         for player_id in accepted_players:
-            balance = await self._get_user_balance(player_id)
+            try:
+                wallet = await cache.get_wallet(
+                    player_id,
+                    self._kv,
+                    logger,
+                )
+                wallet_map[player_id] = wallet
+                balance = wallet.value()
+            except Exception as exc:
+                logger.exception(
+                    "Failed to load wallet for user %s during private start: %s",
+                    player_id,
+                    exc,
+                )
+                wallet_map[player_id] = None
+                balance = 0
 
             if balance < minimum_required:
-                cached_name = self._username_cache.get(player_id)
+                cached_name = cache.get_username(player_id) or self._username_cache.get(
+                    player_id
+                )
                 display_name = (
                     cached_name if cached_name else f"Player {player_id}"
                 )
@@ -2214,7 +2270,22 @@ class PokerBotModel:
                 game_code,
                 keys_deleted,
             )
-            return
+            return _log_and_return()
+
+        missing_wallet_ids = [
+            pid for pid, wallet in wallet_map.items() if wallet is None
+        ]
+
+        if missing_wallet_ids:
+            fetched_wallets = await asyncio.gather(
+                *[
+                    cache.get_wallet(pid, self._kv, logger)
+                    for pid in missing_wallet_ids
+                ]
+            )
+
+            for pid, wallet in zip(missing_wallet_ids, fetched_wallets):
+                wallet_map[pid] = wallet
 
         # Re-fetch lobby to ensure no concurrent modifications
         current_json = self._kv.get(lobby_key)
@@ -2235,7 +2306,7 @@ class PokerBotModel:
                     "Please try /start again."
                 ),
             )
-            return
+            return _log_and_return()
 
         # === STEP 2A: CREATE PLAYER OBJECTS ===
 
@@ -2246,8 +2317,13 @@ class PokerBotModel:
         async def resolve_display_name(player_id: int) -> str:
             """Get cached username or fetch from Telegram."""
 
+            cached_name = cache.get_username(player_id)
+            if cached_name:
+                return cached_name
+
             cached_name = self._username_cache.get(player_id)
             if cached_name:
+                cache.cache_username(player_id, cached_name)
                 return cached_name
 
             if player_id == user.id:
@@ -2257,6 +2333,7 @@ class PokerBotModel:
                     or str(player_id)
                 )
                 self._username_cache[player_id] = name
+                cache.cache_username(player_id, name)
                 return name
 
             # Fallback: Fetch from Telegram API
@@ -2270,6 +2347,7 @@ class PokerBotModel:
                     or str(player_id)
                 )
                 self._username_cache[player_id] = name
+                cache.cache_username(player_id, name)
                 return name
             except Exception as exc:
                 logger.warning(
@@ -2277,20 +2355,32 @@ class PokerBotModel:
                     player_id,
                     exc,
                 )
-                return str(player_id)
+                name = str(player_id)
+                cache.cache_username(player_id, name)
+                return name
 
-        # Load wallets and names in parallel
-        wallet_tasks = [
-            WalletManagerModel.load(user_id, self._kv, logger)
-            for user_id in accepted_players
-        ]
+        # Load names in parallel and reuse cached wallets
         name_tasks = [
             resolve_display_name(user_id)
             for user_id in accepted_players
         ]
 
-        wallets = await asyncio.gather(*wallet_tasks)
         player_names = await asyncio.gather(*name_tasks)
+
+        wallets: List[Wallet] = []
+
+        for user_id in accepted_players:
+            wallet = wallet_map.get(user_id)
+
+            if wallet is None:
+                wallet = await cache.get_wallet(
+                    user_id,
+                    self._kv,
+                    logger,
+                )
+                wallet_map[user_id] = wallet
+
+            wallets.append(wallet)
 
         # Create Player objects for all accepted players
         for player_id, wallet, display_name in zip(
@@ -2341,6 +2431,8 @@ class PokerBotModel:
         # Store game in context (runtime memory)
         context.chat_data[KEY_CHAT_DATA_GAME] = game
         context.chat_data[KEY_OLD_PLAYERS] = list(accepted_players)
+
+        cache.cache_game(game.id, game)
 
         logger.info(
             "Initialized Game object for private game %s "
@@ -2524,6 +2616,8 @@ class PokerBotModel:
             "Private game %s fully initialized and in PLAYING state",
             game_code,
         )
+
+        cache.log_stats("PrivateGameStart")
 
     async def delete_private_game_lobby(
         self,
@@ -3177,8 +3271,11 @@ class PokerBotModel:
         action_type: str,
         raise_amount: Optional[int] = None,
         message_version: Optional[int] = None,
+        cache: Optional[RequestCache] = None,
     ) -> PlayerActionValidation:
         """Validate that a player can take an action before processing it."""
+
+        cache = cache or self._get_or_create_cache()
 
         user_id_str = str(user_id)
         chat_id_str = str(chat_id)
@@ -3197,6 +3294,13 @@ class PokerBotModel:
 
         chat_data = self._application.chat_data.get(chat_id_int, {})
         game = chat_data.get(KEY_CHAT_DATA_GAME)
+
+        if game:
+            cached_game = cache.get_game(game.id)
+            if cached_game is not None:
+                game = cached_game
+            else:
+                cache.cache_game(game.id, game)
 
         if not game:
             logger.warning(
@@ -3234,6 +3338,17 @@ class PokerBotModel:
             )
 
         current_player = game.players[game.current_player_index]
+
+        try:
+            wallet = await cache.get_wallet(user_id, self._kv, self._logger)
+            current_player.wallet = wallet
+        except Exception as exc:
+            logger.error(
+                "Failed to refresh wallet for user %s during validation: %s",
+                user_id_str,
+                exc,
+            )
+
         current_player_id_str = str(current_player.user_id)
 
         if current_player_id_str != user_id_str:
@@ -3354,12 +3469,37 @@ class PokerBotModel:
         return PlayerActionValidation(success=True, prepared_action=prepared)
 
     async def execute_player_action(
-        self, prepared: PreparedPlayerAction
+        self,
+        prepared: PreparedPlayerAction,
+        cache: Optional[RequestCache] = None,
     ) -> bool:
         """Execute a previously validated player action."""
 
-        game = prepared.game
+        cache = cache or self._get_or_create_cache()
+
+        cached_game = cache.get_game(prepared.game.id)
+        if cached_game is not None:
+            game = cached_game
+        else:
+            game = prepared.game
+            cache.cache_game(game.id, game)
+
         current_player = prepared.current_player
+
+        try:
+            wallet = await cache.get_wallet(
+                prepared.user_id,
+                self._kv,
+                self._logger,
+            )
+            current_player.wallet = wallet
+        except Exception as exc:
+            logger.error(
+                "Failed to refresh wallet for user %s during execution: %s",
+                prepared.user_id_str,
+                exc,
+            )
+
         player_name = self._get_player_name(current_player)
         action_type = prepared.action_type
         user_id_str = prepared.user_id_str
@@ -3455,17 +3595,26 @@ class PokerBotModel:
     ) -> bool:
         """Backwards-compatible wrapper for controller-driven actions."""
 
-        validation = await self.prepare_player_action(
-            user_id=user_id,
-            chat_id=chat_id,
-            action_type=action_type,
-            raise_amount=raise_amount,
-        )
+        cache = self._get_or_create_cache()
 
-        if not validation.success or validation.prepared_action is None:
-            return False
+        try:
+            validation = await self.prepare_player_action(
+                user_id=user_id,
+                chat_id=chat_id,
+                action_type=action_type,
+                raise_amount=raise_amount,
+                cache=cache,
+            )
 
-        return await self.execute_player_action(validation.prepared_action)
+            if not validation.success or validation.prepared_action is None:
+                return False
+
+            return await self.execute_player_action(
+                validation.prepared_action,
+                cache=cache,
+            )
+        finally:
+            self._clear_request_cache()
 
 
 class WalletManagerModel(Wallet):

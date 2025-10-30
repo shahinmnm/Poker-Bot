@@ -23,6 +23,7 @@ from pokerapp.pokerbotmodel import (
     PlayerActionValidation,
     PreparedPlayerAction,
 )
+from pokerapp.request_cache import RequestCache
 
 if TYPE_CHECKING:
     from pokerapp.live_message import LiveMessageManager
@@ -1475,54 +1476,61 @@ Send 💰 /money once per day for free chips!
             if "action_type" in signature.parameters and hasattr(
                 self._model, "prepare_player_action"
             ) and hasattr(self._model, "execute_player_action"):
-                validation: PlayerActionValidation = (
-                    await self._model.prepare_player_action(
-                        user_id=user_id,
-                        chat_id=chat_id,
-                        action_type=action_type,
-                        raise_amount=raise_amount,
-                        message_version=message_version,
-                    )
-                )
+                cache = RequestCache()
 
-                if (
-                    not validation.success
-                    or validation.prepared_action is None
-                ):
-                    error_message = (
-                        validation.message
-                        or "❌ Action failed - not your turn or invalid action"
-                    )
-                    await show_popup(
-                        error_message,
-                        is_alert=True,
-                        fallback_chat_id=chat_id,
-                    )
-                    return
-
-                prepared_action = validation.prepared_action
-
-                toast_message = self._build_action_toast(
-                    action_type,
-                    validation,
-                )
-
-                if action_type == "fold" and prepared_action is not None:
-                    fold_result = await self.handle_fold(
-                        user_id=user_id,
-                        game=prepared_action.game,
-                        prepared_action=prepared_action,
-                        query=query,
+                try:
+                    validation: PlayerActionValidation = (
+                        await self._model.prepare_player_action(
+                            user_id=user_id,
+                            chat_id=chat_id,
+                            action_type=action_type,
+                            raise_amount=raise_amount,
+                            message_version=message_version,
+                            cache=cache,
+                        )
                     )
 
-                    if fold_result is None:
+                    if (
+                        not validation.success
+                        or validation.prepared_action is None
+                    ):
+                        error_message = (
+                            validation.message
+                            or "❌ Action failed - not your turn or invalid action"
+                        )
+                        await show_popup(
+                            error_message,
+                            is_alert=True,
+                            fallback_chat_id=chat_id,
+                        )
                         return
 
-                    success = fold_result
-                else:
-                    success = await self._model.execute_player_action(
-                        prepared_action
+                    prepared_action = validation.prepared_action
+
+                    toast_message = self._build_action_toast(
+                        action_type,
+                        validation,
                     )
+
+                    if action_type == "fold" and prepared_action is not None:
+                        fold_result = await self.handle_fold(
+                            user_id=user_id,
+                            game=prepared_action.game,
+                            prepared_action=prepared_action,
+                            query=query,
+                        )
+
+                        if fold_result is None:
+                            return
+
+                        success = fold_result
+                    else:
+                        success = await self._model.execute_player_action(
+                            prepared_action,
+                            cache=cache,
+                        )
+                finally:
+                    cache.log_stats("ActionDispatch")
 
                 if not success:
                     log_helper.warn(
