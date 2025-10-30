@@ -522,8 +522,17 @@ class PokerBotViewer:
         chat_id: int,
         pot_size: int,
         player_invested: int,
+        *,
+        confirmation_key: str,
     ) -> None:
-        """Display a high-stakes fold confirmation dialog."""
+        """Display a high-stakes fold confirmation dialog.
+
+        Args:
+            chat_id: Destination chat identifier.
+            pot_size: Current pot value for context.
+            player_invested: Amount the player has contributed to the pot.
+            confirmation_key: Unique identifier used to correlate callbacks.
+        """
 
         investment_pct = (
             (player_invested / pot_size) * 100 if pot_size > 0 else 0
@@ -535,14 +544,21 @@ class PokerBotViewer:
             "Are you sure you want to fold?"
         )
 
+        confirm_callback = (
+            f"confirm_fold:{confirmation_key}" if confirmation_key else "confirm_fold"
+        )
+        cancel_callback = (
+            f"cancel_fold:{confirmation_key}" if confirmation_key else "cancel_fold"
+        )
+
         keyboard = InlineKeyboardMarkup(
             [
                 [
                     InlineKeyboardButton(
-                        "❌ Yes, Fold", callback_data="confirm_fold"
+                        "❌ Yes, Fold", callback_data=confirm_callback
                     ),
                     InlineKeyboardButton(
-                        "↩️ Cancel", callback_data="cancel_fold"
+                        "↩️ Cancel", callback_data=cancel_callback
                     ),
                 ]
             ]

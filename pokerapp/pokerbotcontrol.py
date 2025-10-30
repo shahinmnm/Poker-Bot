@@ -58,7 +58,7 @@ class PokerBotController:
         self._model = model
         self._application = application
         self._view: "PokerBotViewer" = model._view
-        self._pending_fold_confirmations: dict[int, PreparedPlayerAction] = {}
+        self._pending_fold_confirmations: dict[Tuple[int, str], PreparedPlayerAction] = {}
 
         application.add_handler(CommandHandler("ready", self._handle_ready))
         application.add_handler(CommandHandler("start", self._handle_start))
@@ -218,6 +218,68 @@ class PokerBotController:
 
         return is_big_pot and has_stake
 
+    @staticmethod
+    def _resolve_game_identifier(game: Game | None) -> str:
+        """Derive a stable identifier for *game* suitable for callback routing."""
+
+        if game is None:
+            return "unknown"
+
+        game_id = getattr(game, "id", None)
+        if not game_id:
+            return f"gid_{id(game)}"
+
+        return str(game_id)
+
+    def _store_pending_fold(
+        self,
+        user_id: int,
+        prepared_action: PreparedPlayerAction,
+    ) -> str:
+        """Persist *prepared_action* and return its confirmation identifier."""
+
+        game_identifier = self._resolve_game_identifier(prepared_action.game)
+        self._pending_fold_confirmations[(user_id, game_identifier)] = prepared_action
+        return game_identifier
+
+    def _get_pending_fold(
+        self,
+        user_id: int,
+        game_identifier: str | None = None,
+    ) -> Optional[PreparedPlayerAction]:
+        """Retrieve a queued fold confirmation for *user_id*.
+
+        Args:
+            user_id: Telegram identifier for the player.
+            game_identifier: Specific game identifier, if available.
+        """
+
+        if game_identifier is not None:
+            return self._pending_fold_confirmations.get((user_id, game_identifier))
+
+        for (pending_user_id, _), action in self._pending_fold_confirmations.items():
+            if pending_user_id == user_id:
+                return action
+
+        return None
+
+    def _clear_pending_fold(
+        self,
+        user_id: int,
+        game_identifier: str | None = None,
+    ) -> None:
+        """Remove cached fold confirmation(s) for *user_id*."""
+
+        if game_identifier is not None:
+            self._pending_fold_confirmations.pop((user_id, game_identifier), None)
+            return
+
+        keys_to_remove = [
+            key for key in self._pending_fold_confirmations if key[0] == user_id
+        ]
+        for key in keys_to_remove:
+            self._pending_fold_confirmations.pop(key, None)
+
     async def handle_fold(
         self,
         user_id: int,
@@ -256,14 +318,29 @@ class PokerBotController:
             )
             return False
 
+        game_identifier = self._resolve_game_identifier(
+            prepared_action.game if prepared_action is not None else game
+        )
+
         if not confirmed:
             if self._should_confirm_fold(game, player):
-                if prepared_action is not None:
-                    self._pending_fold_confirmations[user_id] = prepared_action
+                if prepared_action is None:
+                    log_helper.warn(
+                        "FoldActionMissing",
+                        "Prepared action required for confirmation but missing",
+                        user_id=user_id,
+                        game_id=game_identifier,
+                    )
+                    return False
+
+                confirmation_key = self._store_pending_fold(
+                    user_id, prepared_action
+                )
                 await self._view.show_fold_confirmation(
                     chat_id=player.user_id,
                     pot_size=getattr(game, "pot", 0),
                     player_invested=player.round_rate,
+                    confirmation_key=confirmation_key,
                 )
                 if query is not None:
                     await NotificationManager.toast(
@@ -273,13 +350,15 @@ class PokerBotController:
                     )
                 return None
 
-            self._pending_fold_confirmations.pop(user_id, None)
+            self._clear_pending_fold(user_id, game_identifier)
 
         action_to_execute = prepared_action
         if action_to_execute is None:
-            action_to_execute = self._pending_fold_confirmations.get(user_id)
+            action_to_execute = self._get_pending_fold(
+                user_id, game_identifier
+            )
 
-        self._pending_fold_confirmations.pop(user_id, None)
+        self._clear_pending_fold(user_id, game_identifier)
 
         if action_to_execute is None:
             log_helper.warn(
@@ -824,7 +903,11 @@ Send 💰 /money once per day for free chips!
         callback_data = query.data
         user_id = getattr(getattr(query, "from_user", None), "id", None)
 
-        if callback_data == "confirm_fold":
+        if callback_data.startswith("confirm_fold"):
+            _, _, confirmation_key = callback_data.partition(":")
+            if not confirmation_key:
+                confirmation_key = None
+
             if user_id is None:
                 await self._respond_to_query(
                     query,
@@ -833,7 +916,7 @@ Send 💰 /money once per day for free chips!
                 )
                 return
 
-            pending = self._pending_fold_confirmations.get(user_id)
+            pending = self._get_pending_fold(user_id, confirmation_key)
 
             if pending is None:
                 await self._respond_to_query(
@@ -878,9 +961,13 @@ Send 💰 /money once per day for free chips!
                 )
             return
 
-        if callback_data == "cancel_fold":
+        if callback_data.startswith("cancel_fold"):
+            _, _, confirmation_key = callback_data.partition(":")
+            if not confirmation_key:
+                confirmation_key = None
+
             if user_id is not None:
-                self._pending_fold_confirmations.pop(user_id, None)
+                self._clear_pending_fold(user_id, confirmation_key)
 
             message = query.message
             if message is not None:
