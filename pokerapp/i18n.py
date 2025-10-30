@@ -7,7 +7,8 @@ formatting for multi-language user experiences.
 
 import json
 import logging
-from typing import Dict, Optional, Any, List
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 from pathlib import Path
 from enum import Enum
 
@@ -39,6 +40,15 @@ class SupportedLanguage(Enum):
     HEBREW = "he"
 
 
+@dataclass(frozen=True)
+class LanguageContext:
+    """Resolved language metadata for rendering."""
+
+    code: str
+    direction: str
+    font: str
+
+
 class TranslationManager:
     """
     Manages translations and locale-specific formatting.
@@ -57,6 +67,17 @@ class TranslationManager:
     # Default fallback language
     DEFAULT_LANGUAGE = "en"
 
+    # Default font fallbacks for layout metadata
+    _DEFAULT_FONT_LTR = "system"
+    _DEFAULT_FONT_RTL = "Noto Naskh Arabic"
+
+    # Per-language font overrides to improve RTL rendering
+    _LANGUAGE_FONT_MAP = {
+        "ar": "Noto Naskh Arabic",
+        "fa": "Vazirmatn",
+        "he": "Rubik",
+    }
+
     def __init__(self, translations_dir: str = "translations"):
         """
         Initialize translation manager.
@@ -66,7 +87,66 @@ class TranslationManager:
         """
         self.translations_dir = Path(translations_dir)
         self.translations: Dict[str, Dict[str, str]] = {}
+        self._kvstore: Optional[Any] = None
         self._load_translations()
+
+    # ------------------------------------------------------------------
+    # Integration helpers
+    # ------------------------------------------------------------------
+    def attach_kvstore(self, kvstore: Any) -> None:
+        """Attach key-value store used for language lookups."""
+
+        self._kvstore = kvstore
+
+    # ------------------------------------------------------------------
+    # Translation lookups
+    # ------------------------------------------------------------------
+    def resolve_language(
+        self,
+        *,
+        user_id: Optional[int] = None,
+        lang: Optional[str] = None,
+    ) -> str:
+        """Resolve an appropriate language code for a request."""
+
+        if lang:
+            candidate = lang.lower()
+            if candidate in self.translations:
+                return candidate
+
+        if user_id is not None and self._kvstore is not None:
+            try:
+                stored = self._kvstore.get_user_language(user_id)
+            except AttributeError:
+                stored = None
+            if stored and stored in self.translations:
+                return stored
+
+        return self.DEFAULT_LANGUAGE
+
+    def get_language_context(self, language: Optional[str] = None) -> LanguageContext:
+        """Return rendering metadata for *language*."""
+
+        code = self.resolve_language(lang=language)
+        direction = "rtl" if self.is_rtl(code) else "ltr"
+        font = self._LANGUAGE_FONT_MAP.get(code)
+        if font is None:
+            font = self._DEFAULT_FONT_RTL if direction == "rtl" else self._DEFAULT_FONT_LTR
+
+        return LanguageContext(code=code, direction=direction, font=font)
+
+    def t(
+        self,
+        key: str,
+        *,
+        user_id: Optional[int] = None,
+        lang: Optional[str] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Translate *key* using the most relevant language context."""
+
+        language = self.resolve_language(user_id=user_id, lang=lang)
+        return self.translate(key, language=language, **kwargs)
 
     def _load_translations(self) -> None:
         """Load all translation files from disk."""
