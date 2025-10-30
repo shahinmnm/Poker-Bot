@@ -8,6 +8,7 @@ import contextlib
 import datetime as _dt
 import hashlib
 import html
+import inspect
 import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -16,6 +17,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
 from pokerapp.entities import Game, Player, PlayerState
+from pokerapp.kvstore import ensure_kv
 
 
 @dataclass(slots=True)
@@ -107,7 +109,9 @@ class LiveMessageManager:
         "timer_bucket",
     )
 
-    def __init__(self, bot, logger):
+    FLASH_STATE_TTL = 3600
+
+    def __init__(self, bot, logger, *, kv: Optional[Any] = None):
         self._bot = bot
         self._logger = logger
         self._chat_locks: Dict[str, asyncio.Lock] = {}
@@ -119,6 +123,7 @@ class LiveMessageManager:
         self._flash_states: Dict[int, Set[str]] = {}
         # Track cards currently highlighted with flash markers per chat
         self._active_flash_cards: Dict[int, Set[str]] = {}
+        self._kv = ensure_kv(kv) if kv is not None else None
 
     # ------------------------------------------------------------------
     # Public API
@@ -370,6 +375,8 @@ class LiveMessageManager:
         if current_player is not None:
             next_version = game.next_live_message_version()
 
+        await self._ensure_flash_state(chat_id)
+
         cards_on_table = list(getattr(game, "cards_table", []) or [])
         new_cards = self._detect_new_cards(chat_id, cards_on_table)
 
@@ -378,6 +385,7 @@ class LiveMessageManager:
             flash_state.update(new_cards)
             active_flash_cards: Set[str] = set(new_cards)
             self._active_flash_cards[chat_id] = set(new_cards)
+            await self._persist_flash_state(chat_id)
         else:
             active_flash_cards = set(
                 self._active_flash_cards.get(chat_id, set())
@@ -412,6 +420,7 @@ class LiveMessageManager:
                     for card in (getattr(game, "cards_table", []) or [])
                 }
                 self._active_flash_cards.pop(chat_id, None)
+                await self._persist_flash_state(chat_id)
                 self._logger.debug(
                     "🧹 FlashCleanup - Removing flash markers for chat %s",
                     chat_id,
@@ -838,6 +847,76 @@ class LiveMessageManager:
             )
 
         return new_cards
+
+    def _flash_storage_key(self, chat_id: int) -> str:
+        return f"flash:{chat_id}"
+
+    async def _ensure_flash_state(self, chat_id: int) -> Set[str]:
+        if chat_id in self._flash_states:
+            return self._flash_states[chat_id]
+
+        stored = await self._load_flash_state(chat_id)
+        state = stored or set()
+        self._flash_states[chat_id] = state
+        return state
+
+    async def _load_flash_state(self, chat_id: int) -> Optional[Set[str]]:
+        if self._kv is None:
+            return None
+
+        key = self._flash_storage_key(chat_id)
+        try:
+            raw = self._kv.get(key)
+            if inspect.isawaitable(raw):
+                raw = await raw
+        except Exception as exc:  # pragma: no cover - defensive logging
+            self._logger.warning(
+                "⚠️ FlashStorageRead - Failed to load flash state for chat %s: %s",
+                chat_id,
+                exc,
+            )
+            return None
+
+        if not raw:
+            return None
+
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        elif not isinstance(raw, str):
+            raw = str(raw)
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:  # pragma: no cover - defensive logging
+            self._logger.warning(
+                "⚠️ FlashStorageRead - Invalid flash payload for chat %s: %s",
+                chat_id,
+                exc,
+            )
+            return None
+
+        if isinstance(data, list):
+            return {str(item) for item in data}
+
+        return None
+
+    async def _persist_flash_state(self, chat_id: int) -> None:
+        if self._kv is None:
+            return
+
+        key = self._flash_storage_key(chat_id)
+        payload = json.dumps(sorted(self._flash_states.get(chat_id, set())))
+
+        try:
+            result = self._kv.set(key, payload, ex=self.FLASH_STATE_TTL)
+            if inspect.isawaitable(result):
+                await result
+        except Exception as exc:  # pragma: no cover - defensive logging
+            self._logger.warning(
+                "⚠️ FlashStorageWrite - Failed to persist flash state for chat %s: %s",
+                chat_id,
+                exc,
+            )
 
     def _format_cards_with_flash(
         self,

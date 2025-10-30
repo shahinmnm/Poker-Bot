@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 
 
 class PokerBotViewer:
-    def __init__(self, bot: Bot):
+    def __init__(self, bot: Bot, *, kv=None):
         self._bot = bot
-        self._live_manager = LiveMessageManager(bot=bot, logger=logger)
+        self._live_manager = LiveMessageManager(bot=bot, logger=logger, kv=kv)
         logger.info("🔍 PokerBotViewer initialized with LiveMessageManager")
 
     _SUIT_EMOJIS = {
