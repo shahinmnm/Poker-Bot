@@ -3410,18 +3410,8 @@ class PokerBotModel:
             )
 
         current_player = game.players[game.current_player_index]
-
-        try:
-            wallet = await cache.get_wallet(user_id, self._kv, self._logger)
-            current_player.wallet = wallet
-        except Exception as exc:
-            logger.error(
-                "Failed to refresh wallet for user %s during validation: %s",
-                user_id_str,
-                exc,
-            )
-
-        current_player_id_str = str(current_player.user_id)
+        current_player_id = current_player.user_id
+        current_player_id_str = str(current_player_id)
 
         if current_player_id_str != user_id_str:
             logger.warning(
@@ -3443,6 +3433,18 @@ class PokerBotModel:
             return PlayerActionValidation(
                 success=False,
                 message=error_message,
+            )
+
+        try:
+            wallet = await cache.get_wallet(
+                current_player_id, self._kv, self._logger
+            )
+            current_player.wallet = wallet
+        except Exception as exc:
+            logger.error(
+                "Failed to refresh wallet for user %s during validation: %s",
+                current_player_id_str,
+                exc,
             )
 
         active_states = {
