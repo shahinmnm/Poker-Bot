@@ -212,10 +212,15 @@ class PokerBotViewer:
 
         is_mobile = device_profile.device_type == DeviceType.MOBILE
         emoji_scale = getattr(device_profile, "emoji_size_multiplier", 1.0)
+        cache_variant = getattr(device_profile.device_type, "value", "default")
 
         cache_enabled = use_cache and self._render_cache is not None and not is_mobile
         if cache_enabled:
-            cached = self._render_cache.get_cached_render(game, current_player)
+            cached = self._render_cache.get_cached_render(
+                game,
+                current_player,
+                variant=cache_variant,
+            )
             if cached and cached.keyboard_layout:
                 keyboard = [
                     [InlineKeyboardButton(**btn) for btn in row]
@@ -449,6 +454,7 @@ class PokerBotViewer:
                 game,
                 current_player,
                 keyboard_layout=layout,
+                variant=cache_variant,
             )
 
         return markup
