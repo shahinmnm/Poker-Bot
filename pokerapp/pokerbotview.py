@@ -22,7 +22,8 @@ from pokerapp.entities import (
     Mention,
 )
 from pokerapp.device_detector import DeviceProfile, DeviceType
-from pokerapp.kvstore import ensure_kv
+from pokerapp.i18n import translation_manager
+from pokerapp.kvstore import RedisKVStore, ensure_kv
 from pokerapp.live_message import LiveMessageManager
 from pokerapp.render_cache import RenderCache
 
@@ -31,10 +32,19 @@ logger = logging.getLogger(__name__)
 
 
 class PokerBotViewer:
-    def __init__(self, bot: Bot, *, kv=None):
+    def __init__(
+        self,
+        bot: Bot,
+        logger: logging.Logger = logger,
+        kv: Optional[RedisKVStore] = None,
+        user_language: str = "en",
+    ) -> None:
         self._bot = bot
+        if logger is None:
+            logger = logging.getLogger(__name__)
         self._logger = logger
         self._kv = ensure_kv(kv)
+        self._user_language = user_language
         self._render_cache = RenderCache(self._kv, self._logger)
         self._live_manager = LiveMessageManager(
             bot=bot,
@@ -43,6 +53,25 @@ class PokerBotViewer:
             render_cache=self._render_cache,
         )
         self._logger.info("🔍 PokerBotViewer initialized with LiveMessageManager")
+
+    def _t(self, key: str, **kwargs: Any) -> str:
+        """Translate message key for the active user language."""
+
+        return translation_manager.translate(
+            key,
+            language=self._user_language,
+            **kwargs,
+        )
+
+    def _format_currency(self, amount: int, *, include_symbol: bool = True) -> str:
+        """Format currency according to the active language."""
+
+        symbol = "$" if include_symbol else ""
+        return translation_manager.format_currency(
+            amount,
+            language=self._user_language,
+            currency_symbol=symbol,
+        )
 
     _SUIT_EMOJIS = {
         "spades": "♠️",
@@ -265,7 +294,7 @@ class PokerBotViewer:
                             InlineKeyboardButton(
                                 self._format_mobile_button_text(
                                     "✅",
-                                    "CHECK",
+                                    self._t("action.check"),
                                     emoji_scale=emoji_scale,
                                 ),
                                 callback_data=_callback("check"),
@@ -273,12 +302,13 @@ class PokerBotViewer:
                         ]
                     )
                 elif PlayerAction.CALL in available_actions:
+                    call_amount_display = self._format_currency(call_amount)
                     buttons.append(
                         [
                             InlineKeyboardButton(
                                 self._format_mobile_button_text(
                                     "💰",
-                                    f"CALL ${call_amount:,}",
+                                    f"{self._t('action.call')} {call_amount_display}",
                                     emoji_scale=emoji_scale,
                                 ),
                                 callback_data=_callback("call"),
@@ -291,12 +321,24 @@ class PokerBotViewer:
                     presets: List[Tuple[str, str, int]] = []
 
                     if min_raise <= max_raise:
-                        presets.append(("📈", f"MIN (${min_raise:,})", min_raise))
+                        presets.append(
+                            (
+                                "📈",
+                                f"{self._t('button.raise')} {self._format_currency(min_raise)}",
+                                min_raise,
+                            )
+                        )
 
                     pot_amount = max(getattr(game, "pot", 0), 0)
                     two_pot = pot_amount * 2
                     if min_raise <= two_pot <= max_raise:
-                        presets.append(("📈", f"2×POT (${two_pot:,})", two_pot))
+                        presets.append(
+                            (
+                                "📈",
+                                f"{self._t('button.raise')} 2×{self._format_currency(two_pot)}",
+                                two_pot,
+                            )
+                        )
 
                     half_stack = max_raise // 2
                     if (
@@ -304,7 +346,13 @@ class PokerBotViewer:
                         and half_stack <= max_raise
                         and all(option[2] != half_stack for option in presets)
                     ):
-                        presets.append(("💼", f"½STACK (${half_stack:,})", half_stack))
+                        presets.append(
+                            (
+                                "💼",
+                                f"{self._t('button.raise')} ½×{self._format_currency(half_stack)}",
+                                half_stack,
+                            )
+                        )
 
                     for i in range(0, len(presets), 2):
                         chunk = presets[i : i + 2]
@@ -329,7 +377,7 @@ class PokerBotViewer:
                             InlineKeyboardButton(
                                 self._format_mobile_button_text(
                                     "🔥",
-                                    f"ALL-IN ${player_balance:,}",
+                                    f"{self._t('button.all_in')} {self._format_currency(player_balance)}",
                                     emoji_scale=emoji_scale,
                                 ),
                                 callback_data=_callback("all_in"),
@@ -343,7 +391,7 @@ class PokerBotViewer:
                             InlineKeyboardButton(
                                 self._format_mobile_button_text(
                                     "❌",
-                                    "FOLD",
+                                    self._t("action.fold"),
                                     emoji_scale=emoji_scale,
                                 ),
                                 callback_data=_callback("fold"),
@@ -363,21 +411,25 @@ class PokerBotViewer:
         if PlayerAction.CHECK in available_actions:
             row1.append(
                 InlineKeyboardButton(
-                    "✅ Check",
+                    self._t("button.check"),
                     callback_data=_callback("check"),
                 )
             )
         elif PlayerAction.CALL in available_actions:
+            call_amount_display = self._format_currency(
+                call_amount,
+                include_symbol=False,
+            )
             row1.append(
                 InlineKeyboardButton(
-                    f"💵 Call ${call_amount}",
+                    self._t("button.call", amount=call_amount_display),
                     callback_data=_callback("call"),
                 )
             )
 
         row1.append(
             InlineKeyboardButton(
-                "❌ Fold",
+                self._t("button.fold"),
                 callback_data=_callback("fold"),
             )
         )
@@ -388,13 +440,7 @@ class PokerBotViewer:
 
         def _format_raise_button(amount: int) -> str:
             formatted_amount = LiveMessageManager._format_chips(amount, width=4)
-            if amount == min_raise:
-                return f"📈 Raise {formatted_amount}"
-            if pot_amount and amount == pot_amount:
-                return f"💰 Pot {formatted_amount}"
-            if double_pot_amount and amount == double_pot_amount:
-                return f"🔥 2x Pot {formatted_amount}"
-            return f"💵 Raise {formatted_amount}"
+            return f"{self._t('button.raise')} {formatted_amount}"
 
         raise_amounts: List[int] = []
         if PlayerAction.RAISE_RATE in available_actions:
@@ -415,7 +461,7 @@ class PokerBotViewer:
 
             row2.append(
                 InlineKeyboardButton(
-                    f"💥 All-In {LiveMessageManager._format_chips(player_balance, width=4)}",
+                    f"{self._t('button.all_in')} {LiveMessageManager._format_chips(player_balance, width=4)}",
                     callback_data=_callback("all_in"),
                 )
             )

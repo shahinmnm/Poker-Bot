@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from typing import Any, DefaultDict, Dict, List, Optional
 
 import redis
+
+
+logger = logging.getLogger(__name__)
 
 
 def _to_bytes(value: Any) -> Optional[bytes]:
@@ -83,7 +87,7 @@ class InMemoryKV:
         return _to_bytes(value)
 
 
-class ResilientKV:
+class RedisKVStore:
     """Fallback Redis wrapper for environments without a Redis server."""
 
     def __init__(self, backend: Optional[redis.Redis] = None) -> None:
@@ -155,26 +159,83 @@ class ResilientKV:
     ):
         return self._call("rpop", key)
 
+    def set_user_language(self, user_id: int, language_code: str) -> None:
+        """Store user's preferred language."""
+
+        key = f"user:{user_id}:language"
+        try:
+            self.set(key, language_code, ex=None)  # No expiration
+            logger.debug(
+                "Stored language preference: user=%s, lang=%s",
+                user_id,
+                language_code,
+            )
+        except Exception as exc:  # pragma: no cover - logging side effect
+            logger.error(
+                "Failed to store language preference for user %s: %s",
+                user_id,
+                exc,
+            )
+
+    def get_user_language(self, user_id: int) -> Optional[str]:
+        """Retrieve user's preferred language."""
+
+        key = f"user:{user_id}:language"
+        try:
+            language = self.get(key)
+            if isinstance(language, bytes):
+                language = language.decode("utf-8")
+            return language
+        except Exception as exc:  # pragma: no cover - logging side effect
+            logger.error(
+                "Failed to retrieve language for user %s: %s",
+                user_id,
+                exc,
+            )
+            return None
+
+    def get_user_language_or_detect(
+        self,
+        user_id: int,
+        telegram_language_code: Optional[str] = None,
+    ) -> str:
+        """Get user's stored language or detect from Telegram."""
+
+        stored_language = self.get_user_language(user_id)
+        if stored_language:
+            return stored_language
+
+        from pokerapp.i18n import translation_manager
+
+        detected_language = translation_manager.detect_language(telegram_language_code)
+        self.set_user_language(user_id, detected_language)
+
+        return detected_language
+
+
+# Backwards compatibility alias for legacy imports
+ResilientKV = RedisKVStore
+
 
 _ADAPTER_ATTRIBUTE = "_pokerbot_resilient"
-_ADAPTERS: Dict[int, ResilientKV] = {}
+_ADAPTERS: Dict[int, RedisKVStore] = {}
 
 
-def ensure_kv(kv: Optional[Any]) -> ResilientKV:
-    if isinstance(kv, ResilientKV):
+def ensure_kv(kv: Optional[Any]) -> RedisKVStore:
+    if isinstance(kv, RedisKVStore):
         return kv
     if kv is None:
-        return ResilientKV()
+        return RedisKVStore()
 
     adapter = getattr(kv, _ADAPTER_ATTRIBUTE, None)
-    if isinstance(adapter, ResilientKV):
+    if isinstance(adapter, RedisKVStore):
         return adapter
 
     key = id(kv)
     if key in _ADAPTERS:
         return _ADAPTERS[key]
 
-    adapter = ResilientKV(kv)
+    adapter = RedisKVStore(kv)
     try:
         setattr(kv, _ADAPTER_ATTRIBUTE, adapter)
     except Exception:  # pragma: no cover - attribute assignment might fail
