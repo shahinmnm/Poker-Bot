@@ -84,3 +84,58 @@ def test_language_context_uses_metadata(translation_manager_instance: Translatio
     ltr_context = manager.get_language_context("en")
     assert ltr_context.direction == "ltr"
     assert ltr_context.font == "system"
+
+    persian_context = manager.get_language_context("fa")
+    assert persian_context.direction == "rtl"
+    assert persian_context.font == "Vazirmatn"
+
+    spanish_context = manager.get_language_context("es")
+    assert spanish_context.direction == "ltr"
+    assert spanish_context.font == "system"
+
+
+def test_translation_keys_remain_in_sync(translation_manager_instance: TranslationManager) -> None:
+    """Ensure every language file exposes the same translation keys as English."""
+
+    manager = translation_manager_instance
+    english_keys = set(manager.translations["en"].keys())
+
+    for code, mapping in manager.translations.items():
+        language_keys = set(mapping.keys())
+        missing = english_keys - language_keys
+        extra = language_keys - english_keys
+
+        assert not missing, f"{code}: missing translation keys {sorted(missing)}"
+        assert not extra, f"{code}: unexpected translation keys {sorted(extra)}"
+
+
+def test_translate_missing_language_falls_back_to_english() -> None:
+    """Unknown language codes should fall back to English strings."""
+
+    manager = TranslationManager(translations_dir=str(TRANSLATIONS_DIR))
+    key = "msg.welcome"
+
+    english_value = manager.translate(key, language="en")
+    fallback_value = manager.translate(key, language="zz")
+
+    assert fallback_value == english_value
+
+
+def test_translate_missing_key_uses_english_baseline() -> None:
+    """Missing keys in a locale should use the English value as a fallback."""
+
+    manager = TranslationManager(translations_dir=str(TRANSLATIONS_DIR))
+    key = next(iter(manager.translations["en"].keys()))
+
+    # Simulate a missing translation key in Spanish.
+    spanish_map = manager.translations["es"].copy()
+    original = spanish_map.pop(key, None)
+    manager.translations["es"] = spanish_map
+
+    try:
+        translated = manager.translate(key, language="es")
+        assert translated == manager.translations["en"][key]
+    finally:
+        # Restore original mapping so subsequent tests see the real data.
+        if original is not None:
+            manager.translations["es"][key] = original
