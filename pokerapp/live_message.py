@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
-from pokerapp.entities import Game, Player, PlayerState
+from pokerapp.entities import Game, Player, PlayerAction, PlayerState
 from pokerapp.device_detector import (
     DeviceDetector,
     DeviceProfile,
@@ -162,6 +162,18 @@ class LiveMessageManager:
 
         formatted = f"{amount:,}"
         return f"$ {formatted:>{width - 2}}"
+
+    @staticmethod
+    def _format_mobile_button_label(
+        emoji: str,
+        text: str,
+        *,
+        emoji_scale: float = 1.5,
+    ) -> str:
+        if emoji_scale > 1.0:
+            return f"{emoji}\u200A {text}"
+
+        return f"{emoji} {text}"
 
     # ------------------------------------------------------------------
     # Public API
@@ -655,6 +667,7 @@ class LiveMessageManager:
                     player=current_player,
                     version=version,
                     use_cache=False,
+                    device_profile=device_profile,
                 )
         else:
             display = self._build_display_strings(context, state.last_context)
@@ -1420,14 +1433,22 @@ class LiveMessageManager:
         version: Optional[int],
         *,
         use_cache: bool = True,
+        device_profile: Optional[DeviceProfile] = None,
     ) -> Tuple[Optional[InlineKeyboardMarkup], List[RaiseOptionMeta]]:
         if player is None:
             return None, []
 
-        if (
+        profile = device_profile or DeviceDetector.get_profile(DeviceType.DESKTOP)
+        is_mobile = profile.device_type == DeviceType.MOBILE
+        emoji_scale = getattr(profile, "emoji_size_multiplier", 1.0)
+
+        cache_allowed = (
             use_cache
             and getattr(self, "_render_cache", None) is not None
-        ):
+            and not is_mobile
+        )
+
+        if cache_allowed:
             cached = self._render_cache.get_cached_render(game, player)
             if cached and cached.keyboard_layout:
                 markup = InlineKeyboardMarkup(
@@ -1441,60 +1462,179 @@ class LiveMessageManager:
 
         buttons: List[List[InlineKeyboardButton]] = []
 
-        current_bet = game.max_round_rate
-        player_bet = player.round_rate
-        player_balance = player.wallet.value()
+        current_bet = max(game.max_round_rate, 0)
+        player_bet = max(player.round_rate, 0)
+        player_balance = max(player.wallet.value(), 0)
         call_amount = max(current_bet - player_bet, 0)
         game_id = str(getattr(game, "id", ""))
         version_segment: List[str] = []
         if version is not None:
             version_segment.append(str(version))
 
+        options = self._compute_raise_options(game, player)
+        can_raise = any(opt.kind in {"amount", "pot"} for opt in options)
+        has_all_in_option = any(opt.kind == "all_in" for opt in options)
+
+        stake_config = getattr(game, "stake_config", None)
+        config_big_blind = (
+            getattr(stake_config, "big_blind", 0) if stake_config else 0
+        )
+        table_big_blind = (getattr(game, "table_stake", 0) or 0) * 2
+        baseline_big_blind = max(config_big_blind, table_big_blind, 20)
+        min_raise = max(current_bet * 2, baseline_big_blind)
+
+        available_actions: Set[PlayerAction] = {PlayerAction.FOLD}
+        if call_amount <= 0:
+            available_actions.add(PlayerAction.CHECK)
+        elif call_amount < player_balance:
+            available_actions.add(PlayerAction.CALL)
+        elif player_balance > 0:
+            available_actions.add(PlayerAction.ALL_IN)
+
+        if can_raise and player_balance > 0:
+            available_actions.add(PlayerAction.RAISE_RATE)
+        if has_all_in_option and player_balance > 0:
+            available_actions.add(PlayerAction.ALL_IN)
+
+        def _callback(action: str, *extra: str) -> str:
+            return ":".join(["action", action, *extra, *version_segment, game_id])
+
+        if is_mobile:
+            def _build_mobile_buttons() -> List[List[InlineKeyboardButton]]:
+                mobile_rows: List[List[InlineKeyboardButton]] = []
+
+                if PlayerAction.CHECK in available_actions:
+                    mobile_rows.append(
+                        [
+                            InlineKeyboardButton(
+                                self._format_mobile_button_label(
+                                    "✅",
+                                    "CHECK",
+                                    emoji_scale=emoji_scale,
+                                ),
+                                callback_data=_callback("check"),
+                            )
+                        ]
+                    )
+                elif PlayerAction.CALL in available_actions:
+                    mobile_rows.append(
+                        [
+                            InlineKeyboardButton(
+                                self._format_mobile_button_label(
+                                    "💰",
+                                    f"CALL ${call_amount:,}",
+                                    emoji_scale=emoji_scale,
+                                ),
+                                callback_data=_callback("call"),
+                            )
+                        ]
+                    )
+
+                if PlayerAction.RAISE_RATE in available_actions:
+                    max_raise = player_balance
+                    presets: List[Tuple[str, str, int]] = []
+
+                    if min_raise <= max_raise:
+                        presets.append(("📈", f"MIN (${min_raise:,})", min_raise))
+
+                    pot_amount = max(getattr(game, "pot", 0), 0)
+                    two_pot = pot_amount * 2
+                    if min_raise <= two_pot <= max_raise:
+                        presets.append(("📈", f"2×POT (${two_pot:,})", two_pot))
+
+                    half_stack = max_raise // 2
+                    if (
+                        half_stack >= min_raise
+                        and half_stack <= max_raise
+                        and all(option[2] != half_stack for option in presets)
+                    ):
+                        presets.append(("💼", f"½STACK (${half_stack:,})", half_stack))
+
+                    for i in range(0, len(presets), 2):
+                        chunk = presets[i : i + 2]
+                        row: List[InlineKeyboardButton] = []
+                        for emoji, label, amount in chunk:
+                            row.append(
+                                InlineKeyboardButton(
+                                    self._format_mobile_button_label(
+                                        emoji,
+                                        label,
+                                        emoji_scale=emoji_scale,
+                                    ),
+                                    callback_data=_callback("raise", str(amount)),
+                                )
+                            )
+                        if row:
+                            mobile_rows.append(row)
+
+                if PlayerAction.ALL_IN in available_actions:
+                    mobile_rows.append(
+                        [
+                            InlineKeyboardButton(
+                                self._format_mobile_button_label(
+                                    "🔥",
+                                    f"ALL-IN ${player_balance:,}",
+                                    emoji_scale=emoji_scale,
+                                ),
+                                callback_data=_callback("all_in"),
+                            )
+                        ]
+                    )
+
+                if PlayerAction.FOLD in available_actions:
+                    mobile_rows.append(
+                        [
+                            InlineKeyboardButton(
+                                self._format_mobile_button_label(
+                                    "❌",
+                                    "FOLD",
+                                    emoji_scale=emoji_scale,
+                                ),
+                                callback_data=_callback("fold"),
+                            )
+                        ]
+                    )
+
+                return mobile_rows
+
+            mobile_keyboard = _build_mobile_buttons()
+            if mobile_keyboard:
+                return InlineKeyboardMarkup(mobile_keyboard), options
+
         first_row: List[InlineKeyboardButton] = []
         show_primary_all_in = False
 
-        if call_amount <= 0:
+        if PlayerAction.CHECK in available_actions:
             first_row.append(
                 InlineKeyboardButton(
                     "✅ Check",
-                    callback_data=":".join(
-                        ["action", "check", *version_segment, game_id]
-                    ),
+                    callback_data=_callback("check"),
                 )
             )
-        elif call_amount < player_balance:
+        elif PlayerAction.CALL in available_actions:
             first_row.append(
                 InlineKeyboardButton(
                     f"💵 Call ${call_amount}",
-                    callback_data=":".join(
-                        ["action", "call", *version_segment, game_id]
-                    ),
+                    callback_data=_callback("call"),
                 )
             )
         else:
             show_primary_all_in = player_balance > 0
-            first_row.append(
-                InlineKeyboardButton(
-                    f"🔥 All-In (${player_balance})",
-                    callback_data=":".join(
-                        ["action", "all_in", *version_segment, game_id]
-                    ),
+            if show_primary_all_in:
+                first_row.append(
+                    InlineKeyboardButton(
+                        f"🔥 All-In (${player_balance})",
+                        callback_data=_callback("all_in"),
+                    )
                 )
-            )
 
         first_row.append(
             InlineKeyboardButton(
                 "🚪 Fold",
-                callback_data=":".join(
-                    ["action", "fold", *version_segment, game_id]
-                ),
+                callback_data=_callback("fold"),
             )
         )
         buttons.append(first_row)
-
-        options = self._compute_raise_options(game, player)
-        can_raise = any(opt.kind in {"amount", "pot"} for opt in options)
-        has_all_in_option = any(opt.kind == "all_in" for opt in options)
 
         if player_balance > 0:
             second_row: List[InlineKeyboardButton] = []
@@ -1503,15 +1643,7 @@ class LiveMessageManager:
                 second_row.append(
                     InlineKeyboardButton(
                         "📈 Raise",
-                        callback_data=":".join(
-                            [
-                                "action",
-                                "raise",
-                                "start",
-                                *version_segment,
-                                game_id,
-                            ]
-                        ),
+                        callback_data=_callback("raise", "start"),
                     )
                 )
 
@@ -1519,9 +1651,7 @@ class LiveMessageManager:
                 second_row.append(
                     InlineKeyboardButton(
                         f"💥 All-In (${player_balance})",
-                        callback_data=":".join(
-                            ["action", "all_in", *version_segment, game_id]
-                        ),
+                        callback_data=_callback("all_in"),
                     )
                 )
 
@@ -1533,11 +1663,7 @@ class LiveMessageManager:
 
         markup = InlineKeyboardMarkup(buttons)
 
-        if (
-            use_cache
-            and getattr(self, "_render_cache", None) is not None
-            and buttons
-        ):
+        if cache_allowed and buttons:
             layout = [
                 [
                     {"text": btn.text, "callback_data": btn.callback_data}
