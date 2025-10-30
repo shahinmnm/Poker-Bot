@@ -38,6 +38,7 @@ class ChatRenderState:
 
     last_context: Dict[str, Any] = field(default_factory=dict)
     last_payload_hash: Optional[str] = None
+    last_content_hash: Optional[str] = None
     last_keyboard_json: str = ""
     banner_task: Optional[asyncio.Task] = None
     stable_text: str = ""
@@ -488,6 +489,13 @@ class LiveMessageManager:
             flash_cards=active_flash_cards or None,
         )
 
+        content_hash = hashlib.sha256(bundle.message_text.encode()).hexdigest()
+        if content_hash == state.last_content_hash:
+            self._logger.debug(
+                "Skipping identical message update for chat %s", chat_id
+            )
+            return game.group_message_id if game.has_group_message() else None
+
         if bundle.payload_hash == state.last_payload_hash:
             self._logger.debug(
                 "Message payload unchanged for chat %s; skipping edit",
@@ -506,6 +514,7 @@ class LiveMessageManager:
 
         state.last_context = bundle.context
         state.last_payload_hash = bundle.payload_hash
+        state.last_content_hash = content_hash
         state.last_keyboard_json = bundle.keyboard_json
         state.stable_text = bundle.stable_text
         state.stable_markup = bundle.reply_markup
