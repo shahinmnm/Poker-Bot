@@ -78,7 +78,7 @@ class PokerBot:
             window_seconds=60,
         )
 
-        self._view = PokerBotViewer(bot=self._application.bot)
+        self._view = PokerBotViewer(bot=self._application.bot, kv=self._kv)
         self._model = PokerBotModel(
             view=self._view,
             bot=self._application.bot,
