@@ -66,6 +66,12 @@ class RequestCache:
         return None
 
     def cache_game(self, game_id: str, game: Any) -> None:
+        """Cache a mutable game object for the lifetime of the request.
+
+        NOTE: Game objects are mutable. This cache assumes modifications
+        during a single request are intentional and won't cause conflicts.
+        Do not share cached games across concurrent requests.
+        """
         self._games[game_id] = game
 
     def get_custom(self, key: str) -> Optional[Any]:

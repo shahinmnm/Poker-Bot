@@ -3487,11 +3487,17 @@ class PokerBotModel:
         current_player = prepared.current_player
 
         try:
+            previous_wallet = current_player.wallet
             wallet = await cache.get_wallet(
                 prepared.user_id,
                 self._kv,
                 self._logger,
             )
+            if wallet is not previous_wallet:
+                logger.debug(
+                    "Refreshed wallet for user %s (balance changed during request)",
+                    prepared.user_id_str,
+                )
             current_player.wallet = wallet
         except Exception as exc:
             logger.error(
