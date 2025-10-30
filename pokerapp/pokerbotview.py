@@ -37,9 +37,9 @@ class ViewerTextKeys:
     TABLE_HEADER = "viewer.table.header"
     TABLE_WAITING = "viewer.table.waiting"
     POT = "viewer.hand.pot"
-    FOLD_CONFIRM_BODY = "viewer.fold_confirmation.body"
-    FOLD_CONFIRM_CONFIRM_BUTTON = "viewer.fold_confirmation.confirm_button"
-    FOLD_CONFIRM_CANCEL_BUTTON = "viewer.fold_confirmation.cancel_button"
+    FOLD_CONFIRM_BODY = "popup.fold_confirmation.body"
+    FOLD_CONFIRM_CONFIRM_BUTTON = "popup.fold_confirmation.confirm_button"
+    FOLD_CONFIRM_CANCEL_BUTTON = "popup.fold_confirmation.cancel_button"
 
 
 class PokerBotViewer:
@@ -1127,7 +1127,7 @@ class PokerBotViewer:
         required_display = self._format_currency(required)
 
         text = self._t(
-            "error.insufficient_funds_detail",
+            "msg.error.insufficient_funds_detail",
             balance=balance_display,
             required=required_display,
         )

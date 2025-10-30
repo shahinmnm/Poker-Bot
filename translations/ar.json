@@ -61,8 +61,8 @@
     "title": "🎴 How to Play Poker"
   },
   "meta": {
-    "font": "system",
-    "rtl": false
+    "font": "Noto Naskh Arabic",
+    "rtl": true
   },
   "msg": {
     "current_bet": "🎯 Current bet: ${amount}",
