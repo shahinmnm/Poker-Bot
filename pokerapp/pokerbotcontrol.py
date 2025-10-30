@@ -2,7 +2,7 @@
 
 import inspect
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from telegram import (
     BotCommand,
@@ -19,6 +19,10 @@ from telegram.ext import (
 from pokerapp.entities import PlayerAction
 from pokerapp.notify_utils import LoggerHelper, NotificationManager
 from pokerapp.pokerbotmodel import PokerBotModel, PlayerActionValidation
+
+if TYPE_CHECKING:
+    from pokerapp.live_message import LiveMessageManager
+    from pokerapp.pokerbotview import PokerBotViewer
 
 logger = logging.getLogger(__name__)
 log_helper = LoggerHelper.for_logger(logger)
@@ -45,6 +49,7 @@ class PokerBotController:
         """
         self._model = model
         self._application = application
+        self._view: "PokerBotViewer" = model._view
 
         application.add_handler(CommandHandler("ready", self._handle_ready))
         application.add_handler(CommandHandler("start", self._handle_start))
@@ -133,6 +138,44 @@ class PokerBotController:
         application.post_init = self._post_init
 
         log_helper.info("ControllerInit", "Handlers registered")
+
+    def _get_live_manager(self) -> Optional["LiveMessageManager"]:
+        """Safely retrieve :class:`LiveMessageManager` from the view.
+
+        Returns:
+            LiveMessageManager if available, otherwise ``None``.
+
+        Notes:
+            The controller defensively guards access to the view to prevent
+            attribute errors if initialization order changes or the view has
+            not finished constructing its live message helpers.
+        """
+
+        try:
+            view = getattr(self, "_view", None)
+            if view is None:
+                log_helper.warn(
+                    "ControllerViewMissing",
+                    "Controller has no view reference; cannot access LiveMessageManager",
+                )
+                return None
+
+            live_manager = getattr(view, "_live_manager", None)
+            if live_manager is None:
+                log_helper.debug(
+                    "LiveManagerMissing",
+                    "View exists but LiveMessageManager not initialized",
+                )
+
+            return live_manager
+
+        except Exception as exc:  # pragma: no cover - defensive logging
+            log_helper.error(
+                "LiveManagerAccessError",
+                f"Failed to retrieve LiveMessageManager: {exc}",
+                exc_info=True,
+            )
+            return None
 
     @classmethod
     def _is_stale_callback_query_error(cls, error: BadRequest) -> bool:
@@ -696,8 +739,14 @@ Send 💰 /money once per day for free chips!
             result["handled"] = True
             return result
 
-        live_manager = getattr(self._view, "_live_manager", None)
+        live_manager = self._get_live_manager()
         if live_manager is None:
+            log_helper.warn(
+                "RaiseLiveUpdateFailed",
+                "Cannot update live message for raise flow (LiveManager unavailable)",
+                user_id=user_id,
+                chat_id=chat_id,
+            )
             await NotificationManager.popup(
                 query,
                 text="❌ Raise picker unavailable",
@@ -963,8 +1012,14 @@ Send 💰 /money once per day for free chips!
             )
             return
 
-        live_manager = getattr(self._view, "_live_manager", None)
+        live_manager = self._get_live_manager()
         if live_manager is None:
+            log_helper.warn(
+                "RaiseLiveUpdateFailed",
+                "Cannot update live message for raise flow (LiveManager unavailable)",
+                user_id=user_id,
+                chat_id=chat_id,
+            )
             await NotificationManager.popup(
                 query,
                 text="❌ Raise picker unavailable",
