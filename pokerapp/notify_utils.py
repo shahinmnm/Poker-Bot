@@ -5,11 +5,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from time import monotonic
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 
 from telegram.error import BadRequest, TelegramError
 
 __all__ = ["LoggerHelper", "NotificationManager"]
+
+
+if TYPE_CHECKING:
+    from telegram import CallbackQuery
 
 
 class LoggerHelper:
@@ -127,7 +131,15 @@ class NotificationManager:
             )
 
     @classmethod
-    def _should_answer(cls, query) -> tuple[bool, str | None, "NotificationManager._CallbackState" | None, float]:
+    def _should_answer(
+        cls,
+        query,
+    ) -> tuple[
+        bool,
+        str | None,
+        "NotificationManager._CallbackState" | None,
+        float,
+    ]:
         """Determine whether the callback query should be answered."""
 
         query_id = getattr(query, "id", None)

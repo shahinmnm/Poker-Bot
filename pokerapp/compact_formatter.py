@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from pokerapp.cards import Card
-from pokerapp.entities import GameState, Player, PlayerState
+from pokerapp.entities import Player, PlayerState
 
 
 class CompactFormatter:
@@ -177,4 +177,3 @@ class CompactFormatter:
             entries.extend(str(max(value, 0)) for value in side_pots if value)
         joined = "+".join(entries)
         return f"💰{joined}"
-

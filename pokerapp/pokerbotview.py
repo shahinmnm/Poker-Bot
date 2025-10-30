@@ -355,7 +355,7 @@ class PokerBotViewer:
                         )
 
                     for i in range(0, len(presets), 2):
-                        chunk = presets[i : i + 2]
+                        chunk = presets[i: i + 2]
                         row: List[InlineKeyboardButton] = []
                         for emoji, label, amount in chunk:
                             row.append(
@@ -436,7 +436,6 @@ class PokerBotViewer:
         buttons.append(row1)
 
         pot_amount = getattr(game, "pot", 0)
-        double_pot_amount = pot_amount * 2 if pot_amount else 0
 
         def _format_raise_button(amount: int) -> str:
             formatted_amount = LiveMessageManager._format_chips(amount, width=4)
@@ -472,7 +471,7 @@ class PokerBotViewer:
         if extra_amounts:
             for i in range(0, len(extra_amounts), 2):
                 row: List[InlineKeyboardButton] = []
-                for amount in extra_amounts[i : i + 2]:
+                for amount in extra_amounts[i: i + 2]:
                     row.append(
                         InlineKeyboardButton(
                             _format_raise_button(amount),
