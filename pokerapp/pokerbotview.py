@@ -210,6 +210,8 @@ class PokerBotViewer:
         # Determine raise eligibility and build amount list for rows 3+
         big_blind = game.table_stake * 2
         min_raise = max(current_bet * 2, big_blind)
+        pot_amount = getattr(game, "pot", 0)
+        double_pot_amount = pot_amount * 2 if pot_amount else 0
         can_raise = (
             player_balance > call_amount and player_balance >= min_raise
         )
@@ -218,9 +220,19 @@ class PokerBotViewer:
         if can_raise:
             raise_amounts.append(min_raise)
 
-            pot_raise = game.pot
+            pot_raise = pot_amount
             if pot_raise > min_raise and player_balance >= pot_raise:
                 raise_amounts.append(pot_raise)
+
+        def _format_raise_button(amount: int) -> str:
+            formatted_amount = LiveMessageManager._format_chips(amount, width=4)
+            if amount == min_raise:
+                return f"📈 Raise {formatted_amount}"
+            if pot_amount and amount == pot_amount:
+                return f"💰 Pot {formatted_amount}"
+            if double_pot_amount and amount == double_pot_amount:
+                return f"🔥 2x Pot {formatted_amount}"
+            return f"💵 Raise {formatted_amount}"
 
         # Row 2 – aggressive actions (Raise + All-in)
         # All-in remains visible whenever the player still has chips, even if
@@ -231,7 +243,7 @@ class PokerBotViewer:
             if can_raise:
                 row2.append(
                     InlineKeyboardButton(
-                        f"📈 Raise ${min_raise}",
+                        _format_raise_button(min_raise),
                         callback_data=":".join(
                             [
                                 "action",
@@ -246,7 +258,7 @@ class PokerBotViewer:
 
             row2.append(
                 InlineKeyboardButton(
-                    "🚀 All-in",
+                    f"💥 All-In {LiveMessageManager._format_chips(player_balance, width=4)}",
                     callback_data=":".join(
                         ["action", "all_in", *version_segment, game_id_str]
                     ),
@@ -266,7 +278,7 @@ class PokerBotViewer:
                 for amount in chunk:
                     row.append(
                         InlineKeyboardButton(
-                            f"${amount}",
+                            _format_raise_button(amount),
                             callback_data=":".join(
                                 [
                                     "action",
