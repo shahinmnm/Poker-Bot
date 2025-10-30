@@ -125,6 +125,26 @@ class LiveMessageManager:
         self._active_flash_cards: Dict[int, Set[str]] = {}
         self._kv = ensure_kv(kv) if kv is not None else None
 
+    @staticmethod
+    def _format_chips(amount: int, width: int = 6) -> str:
+        """Format chip amounts with right-aligned monospace layout.
+
+        Args:
+            amount: Chip value to format
+            width: Total character width (default 6 handles up to 99,999)
+
+        Returns:
+            Formatted string like "$ 4,250" or "$ 875" or "$ 50"
+
+        Examples:
+            _format_chips(4250) -> "$ 4,250"
+            _format_chips(875) -> "$ 875"
+            _format_chips(50) -> "$ 50"
+        """
+
+        formatted = f"{amount:,}"
+        return f"$ {formatted:>{width - 2}}"
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -728,18 +748,29 @@ class LiveMessageManager:
 
         for idx, player in enumerate(players, start=1):
             name = html.escape(self._get_player_name(player))
-            balance = player.wallet.value()
-            bet = player.round_rate
+            balance = max(player.wallet.value(), 0)
+            bet = max(player.round_rate, 0)
+
+            stack_text = html.escape(self._format_chips(balance))
+
+            bet_text = ""
+            if bet:
+                minimum_width = len(f"{bet:,}") + 2
+                bet_text = html.escape(
+                    self._format_chips(bet, width=minimum_width)
+                )
 
             if player.state == PlayerState.FOLD:
                 icon = "❌"
                 status = " (folded)"
             elif player.state == PlayerState.ALL_IN:
                 icon = "🔥"
-                status = f" (ALL-IN ${bet})" if bet else " (ALL-IN)"
+                status = (
+                    f" (ALL-IN {bet_text})" if bet_text else " (ALL-IN)"
+                )
             elif bet > 0:
                 icon = "✅"
-                status = f" (bet ${bet})"
+                status = f" (bet {bet_text})"
             else:
                 icon = "✅"
                 status = ""
@@ -750,7 +781,7 @@ class LiveMessageManager:
                 name = f"<b>{name}</b>"
 
             rows.append(
-                f"{prefix}{icon} {name} — ${balance}{status}"
+                f"{prefix}{icon} {name} — <code>{stack_text}</code>{status}"
             )
 
         if not rows:
@@ -769,7 +800,7 @@ class LiveMessageManager:
         entries: List[str] = []
         for idx, player in enumerate(players, start=1):
             stack = max(player.wallet.value(), 0)
-            entries.append(f"P{idx}:{stack:>4}")
+            entries.append(f"P{idx}: {self._format_chips(stack)}")
 
         return " | ".join(entries)
 
@@ -987,7 +1018,7 @@ class LiveMessageManager:
     ) -> str:
         def formatter(value: Optional[int]) -> str:
             amount = value or 0
-            return html.escape(f"${amount}")
+            return html.escape(self._format_chips(amount))
 
         return self._format_diff_value(previous, current, formatter=formatter)
 
@@ -1018,7 +1049,11 @@ class LiveMessageManager:
         if pot_changed:
             old_pot = previous.get("pot_value", 0)
             new_pot = context.get("pot_value", 0)
-            return f"🔔 <b>Pot ${old_pot} → ${new_pot}</b>"
+            return (
+                "🔔 <b>Pot "
+                f"{html.escape(self._format_chips(old_pot))}"
+                f" → {html.escape(self._format_chips(new_pot))}</b>"
+            )
 
         return None
 
