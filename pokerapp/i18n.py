@@ -49,6 +49,13 @@ class LanguageContext:
     font: str
 
 
+class _SafeFormatDict(dict):
+    """Dictionary that leaves unknown placeholders intact during formatting."""
+
+    def __missing__(self, key: str) -> str:  # pragma: no cover - formatting guard
+        return "{" + key + "}"
+
+
 class TranslationManager:
     """
     Manages translations and locale-specific formatting.
@@ -363,10 +370,16 @@ class TranslationManager:
 
         # Format with provided variables
         try:
-            return translation.format(**kwargs)
-        except KeyError as exc:
+            safe_kwargs = _SafeFormatDict(**kwargs)
+        except TypeError:
+            safe_kwargs = _SafeFormatDict()
+            safe_kwargs.update({str(k): v for k, v in kwargs.items()})
+
+        try:
+            return translation.format_map(safe_kwargs)
+        except Exception as exc:  # pragma: no cover - defensive formatting guard
             logger.error(
-                "Missing variable in translation: %s (key=%s, lang=%s)",
+                "Failed to format translation: %s (key=%s, lang=%s)",
                 exc,
                 key,
                 language,

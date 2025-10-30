@@ -2,7 +2,7 @@
 
 import inspect
 import logging
-from typing import List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 
 from telegram import (
     BotCommand,
@@ -35,6 +35,34 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 log_helper = LoggerHelper.for_logger(logger)
+
+
+class ControllerTextKeys:
+    FOLD_CONFIRM_PROMPT = "controller.toast.fold_prompt"
+    LOBBY_LEFT = "controller.lobby.left"
+    INVITE_ACCEPT_HELP = "controller.invite.accept_help"
+    INVITE_DECLINE_HELP = "controller.invite.decline_help"
+    FOLD_EXPIRED = "controller.fold.expired"
+    FOLD_SUCCESS = "controller.fold.success"
+    FOLD_FAILURE = "controller.fold.failure"
+    FOLD_CANCELLED = "controller.fold.cancelled"
+    ACTION_SUBMITTED = "controller.action.submitted"
+    ACTION_CHECK = "controller.action.check"
+    ACTION_CALL = "controller.action.call"
+    ACTION_CALL_CHECK = "controller.action.call_check"
+    ACTION_FOLD = "controller.action.fold"
+    ACTION_RAISE_TO = "controller.action.raise_to"
+    ACTION_RAISE = "controller.action.raise"
+    ACTION_ALL_IN = "controller.action.all_in"
+    RAISE_ERROR_CONTEXT = "controller.raise.error_context"
+    RAISE_ERROR_USER = "controller.raise.error_user"
+    RAISE_ERROR_NO_GAME = "controller.raise.error_no_game"
+    RAISE_ERROR_UNAVAILABLE = "controller.raise.error_unavailable"
+    RAISE_ERROR_INVALID = "controller.raise.error_invalid"
+    RAISE_ERROR_SELECTION = "controller.raise.error_selection"
+    RAISE_ERROR_EXPIRED = "controller.raise.error_expired"
+    RAISE_ERROR_CHOOSE_AMOUNT = "controller.raise.error_choose_amount"
+    RAISE_ERROR_UNKNOWN = "controller.raise.error_unknown"
 
 
 class PokerBotController:
@@ -161,6 +189,39 @@ class PokerBotController:
         application.post_init = self._post_init
 
         log_helper.info("ControllerInit", "Handlers registered")
+
+    def _translate(
+        self,
+        key: str,
+        *,
+        update: Optional[Update] = None,
+        query=None,
+        user_id: Optional[int] = None,
+        language_code: Optional[str] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Translate *key* using the best available language context."""
+
+        if update is not None:
+            user = update.effective_user
+            if user is None and update.callback_query is not None:
+                user = update.callback_query.from_user
+            if user is not None:
+                user_id = getattr(user, "id", user_id)
+                language_code = getattr(user, "language_code", language_code)
+
+        if query is not None and user_id is None:
+            query_user = getattr(query, "from_user", None)
+            if query_user is not None:
+                user_id = getattr(query_user, "id", user_id)
+                language_code = getattr(query_user, "language_code", language_code)
+
+        return translation_manager.t(
+            key,
+            user_id=user_id,
+            lang=language_code,
+            **kwargs,
+        )
 
     def _get_live_manager(self) -> Optional["LiveMessageManager"]:
         """Safely retrieve :class:`LiveMessageManager` from the view.
@@ -350,7 +411,10 @@ class PokerBotController:
                 if query is not None:
                     await NotificationManager.toast(
                         query,
-                        text="⚠️ Confirm fold",
+                        text=self._translate(
+                            ControllerTextKeys.FOLD_CONFIRM_PROMPT,
+                            query=query,
+                        ),
                         event="FoldConfirmPrompt",
                     )
                 return None
@@ -754,7 +818,10 @@ Send 💰 /money once per day for free chips!
         )
         await self._respond_to_query(
             query,
-            text="🚶 You left the table. Use /ready to rejoin!",
+            text=self._translate(
+                ControllerTextKeys.LOBBY_LEFT,
+                query=query,
+            ),
         )
 
     async def _handle_lobby_start(
@@ -804,11 +871,7 @@ Send 💰 /money once per day for free chips!
         """Handle /accept command (manual acceptance without button)."""
 
         await update.effective_message.reply_text(
-            (
-                "ℹ️ To accept an invitation, use the buttons in the "
-                "invitation message.\n\n"
-                "If you lost the message, ask the host to re-invite you!"
-            )
+            self._translate(ControllerTextKeys.INVITE_ACCEPT_HELP, update=update)
         )
 
     async def _handle_decline_invite(
@@ -819,12 +882,7 @@ Send 💰 /money once per day for free chips!
         """Handle /decline command (manual decline without button)."""
 
         await update.effective_message.reply_text(
-            (
-                "ℹ️ To decline an invitation, use the buttons in the "
-                "invitation message.\n\n"
-                "If you lost the message, you can ignore it (invitations "
-                "expire in 1 hour)."
-            )
+            self._translate(ControllerTextKeys.INVITE_DECLINE_HELP, update=update)
         )
 
     async def _handle_leave_private(
@@ -918,7 +976,10 @@ Send 💰 /money once per day for free chips!
             if user_id is None:
                 await self._respond_to_query(
                     query,
-                    "♻️ Fold action expired. Refresh buttons.",
+                    self._translate(
+                        ControllerTextKeys.FOLD_EXPIRED,
+                        query=query,
+                    ),
                     event="FoldConfirm",
                 )
                 return
@@ -928,7 +989,10 @@ Send 💰 /money once per day for free chips!
             if pending is None:
                 await self._respond_to_query(
                     query,
-                    "♻️ Fold action expired. Refresh buttons.",
+                    self._translate(
+                        ControllerTextKeys.FOLD_EXPIRED,
+                        query=query,
+                    ),
                     event="FoldConfirm",
                 )
                 return
@@ -957,13 +1021,19 @@ Send 💰 /money once per day for free chips!
             if result:
                 await NotificationManager.toast(
                     query,
-                    text="🚪 Folded",
+                    text=self._translate(
+                        ControllerTextKeys.FOLD_SUCCESS,
+                        query=query,
+                    ),
                     event="ActionToast",
                 )
             else:
                 await self._respond_to_query(
                     query,
-                    "❌ Unable to process fold. Please try again.",
+                    self._translate(
+                        ControllerTextKeys.FOLD_FAILURE,
+                        query=query,
+                    ),
                     event="FoldConfirm",
                 )
             return
@@ -994,12 +1064,18 @@ Send 💰 /money once per day for free chips!
             if query_id is not None:
                 await self._view.answer_callback_query(
                     query_id,
-                    "Fold cancelled",
+                    self._translate(
+                        ControllerTextKeys.FOLD_CANCELLED,
+                        query=query,
+                    ),
                 )
             else:
                 await self._respond_to_query(
                     query,
-                    "Fold cancelled",
+                    self._translate(
+                        ControllerTextKeys.FOLD_CANCELLED,
+                        query=query,
+                    ),
                     event="FoldConfirmCancel",
                 )
             return
@@ -1038,32 +1114,57 @@ Send 💰 /money once per day for free chips!
 
         prepared = validation.prepared_action
         if prepared is None:
-            return "✅ Action submitted"
+            return self._translate(ControllerTextKeys.ACTION_SUBMITTED)
+
+        user_id = prepared.user_id
+        language = translation_manager.resolve_language(user_id=user_id)
+
+        def _translate(key: str, **kwargs: Any) -> str:
+            return self._translate(
+                key,
+                user_id=user_id,
+                language_code=language,
+                **kwargs,
+            )
 
         game = prepared.game
         player = prepared.current_player
 
         if action_type == "check":
-            return "✅ Check"
+            return _translate(ControllerTextKeys.ACTION_CHECK)
 
         if action_type == "call":
             call_amount = max(game.max_round_rate - player.round_rate, 0)
             if call_amount > 0:
-                return f"✅ Call ${call_amount}"
-            return "✅ Check"
+                amount_display = translation_manager.format_currency(
+                    call_amount,
+                    language=language,
+                )
+                return _translate(
+                    ControllerTextKeys.ACTION_CALL,
+                    amount=amount_display,
+                )
+            return _translate(ControllerTextKeys.ACTION_CALL_CHECK)
 
         if action_type == "fold":
-            return "✅ Folded"
+            return _translate(ControllerTextKeys.ACTION_FOLD)
 
         if action_type == "raise":
             if prepared.raise_amount:
-                return f"✅ Raise to ${prepared.raise_amount}"
-            return "✅ Raise submitted"
+                amount_display = translation_manager.format_currency(
+                    prepared.raise_amount,
+                    language=language,
+                )
+                return _translate(
+                    ControllerTextKeys.ACTION_RAISE_TO,
+                    amount=amount_display,
+                )
+            return _translate(ControllerTextKeys.ACTION_RAISE)
 
         if action_type == "all_in":
-            return "🔥 All-in submitted"
+            return _translate(ControllerTextKeys.ACTION_ALL_IN)
 
-        return "✅ Action submitted"
+        return self._translate(ControllerTextKeys.ACTION_SUBMITTED)
 
     async def _handle_raise_callback(
         self,
@@ -1082,7 +1183,10 @@ Send 💰 /money once per day for free chips!
         if message is None:
             await NotificationManager.popup(
                 query,
-                text="❌ Cannot resolve message context",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_CONTEXT,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )
@@ -1094,7 +1198,10 @@ Send 💰 /money once per day for free chips!
         if user_id is None:
             await NotificationManager.popup(
                 query,
-                text="❌ Cannot resolve user",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_USER,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )
@@ -1105,7 +1212,10 @@ Send 💰 /money once per day for free chips!
         if game is None:
             await NotificationManager.popup(
                 query,
-                text="❌ No active game",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_NO_GAME,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )
@@ -1122,7 +1232,10 @@ Send 💰 /money once per day for free chips!
             )
             await NotificationManager.popup(
                 query,
-                text="❌ Raise picker unavailable",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_UNAVAILABLE,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )
@@ -1138,7 +1251,10 @@ Send 💰 /money once per day for free chips!
         if len(parts) < 2:
             await NotificationManager.popup(
                 query,
-                text="❌ Invalid raise action",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_INVALID,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )
@@ -1165,7 +1281,10 @@ Send 💰 /money once per day for free chips!
             if len(parts) < 4:
                 await NotificationManager.popup(
                     query,
-                    text="❌ Invalid raise selection",
+                    text=self._translate(
+                        ControllerTextKeys.RAISE_ERROR_SELECTION,
+                        query=query,
+                    ),
                     show_alert=False,
                     event="RaiseSelectError",
                 )
@@ -1177,7 +1296,10 @@ Send 💰 /money once per day for free chips!
             if game_id is None or game_id != getattr(game, "id", None):
                 await NotificationManager.popup(
                     query,
-                    text="♻️ Action expired. Refresh buttons.",
+                    text=self._translate(
+                        ControllerTextKeys.RAISE_ERROR_EXPIRED,
+                        query=query,
+                    ),
                     show_alert=False,
                     event="RaiseSelectError",
                 )
@@ -1190,7 +1312,10 @@ Send 💰 /money once per day for free chips!
             ):
                 await NotificationManager.popup(
                     query,
-                    text="♻️ Action expired. Refresh buttons.",
+                    text=self._translate(
+                        ControllerTextKeys.RAISE_ERROR_EXPIRED,
+                        query=query,
+                    ),
                     show_alert=False,
                     event="RaiseSelectError",
                 )
@@ -1210,7 +1335,10 @@ Send 💰 /money once per day for free chips!
             if not success:
                 await NotificationManager.popup(
                     query,
-                    text="❌ Raise picker unavailable",
+                    text=self._translate(
+                        ControllerTextKeys.RAISE_ERROR_UNAVAILABLE,
+                        query=query,
+                    ),
                     show_alert=False,
                     event="RaiseSelectError",
                 )
@@ -1232,7 +1360,10 @@ Send 💰 /money once per day for free chips!
             if game_id is None or game_id != getattr(game, "id", None):
                 await NotificationManager.popup(
                     query,
-                    text="♻️ Action expired. Refresh buttons.",
+                    text=self._translate(
+                        ControllerTextKeys.RAISE_ERROR_EXPIRED,
+                        query=query,
+                    ),
                     show_alert=False,
                     event="RaiseSelectError",
                 )
@@ -1262,7 +1393,10 @@ Send 💰 /money once per day for free chips!
             if game_id is None or game_id != getattr(game, "id", None):
                 await NotificationManager.popup(
                     query,
-                    text="♻️ Action expired. Refresh buttons.",
+                    text=self._translate(
+                        ControllerTextKeys.RAISE_ERROR_EXPIRED,
+                        query=query,
+                    ),
                     show_alert=False,
                     event="RaiseSelectError",
                 )
@@ -1275,7 +1409,10 @@ Send 💰 /money once per day for free chips!
             ):
                 await NotificationManager.popup(
                     query,
-                    text="♻️ Action expired. Refresh buttons.",
+                    text=self._translate(
+                        ControllerTextKeys.RAISE_ERROR_EXPIRED,
+                        query=query,
+                    ),
                     show_alert=False,
                     event="RaiseSelectError",
                 )
@@ -1289,7 +1426,10 @@ Send 💰 /money once per day for free chips!
             if selection_key is None or option is None:
                 await NotificationManager.popup(
                     query,
-                    text="Choose an amount first",
+                    text=self._translate(
+                        ControllerTextKeys.RAISE_ERROR_CHOOSE_AMOUNT,
+                        query=query,
+                    ),
                     show_alert=False,
                     event="RaiseSelectAck",
                 )
@@ -1325,7 +1465,10 @@ Send 💰 /money once per day for free chips!
 
         await NotificationManager.popup(
             query,
-            text="❌ Unknown raise action",
+            text=self._translate(
+                ControllerTextKeys.RAISE_ERROR_UNKNOWN,
+                query=query,
+            ),
             show_alert=False,
             event="RaiseSelectError",
         )
@@ -1346,7 +1489,10 @@ Send 💰 /money once per day for free chips!
         if message is None:
             await NotificationManager.popup(
                 query,
-                text="❌ Cannot resolve message context",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_CONTEXT,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )
@@ -1357,7 +1503,10 @@ Send 💰 /money once per day for free chips!
         if user_id is None:
             await NotificationManager.popup(
                 query,
-                text="❌ Cannot resolve user",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_USER,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )
@@ -1367,7 +1516,10 @@ Send 💰 /money once per day for free chips!
         if game is None or game_id != getattr(game, "id", None):
             await NotificationManager.popup(
                 query,
-                text="♻️ Action expired. Refresh buttons.",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_EXPIRED,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )
@@ -1379,7 +1531,10 @@ Send 💰 /money once per day for free chips!
         ):
             await NotificationManager.popup(
                 query,
-                text="♻️ Action expired. Refresh buttons.",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_EXPIRED,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )
@@ -1395,7 +1550,10 @@ Send 💰 /money once per day for free chips!
             )
             await NotificationManager.popup(
                 query,
-                text="❌ Raise picker unavailable",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_UNAVAILABLE,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )

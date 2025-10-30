@@ -31,6 +31,17 @@ from pokerapp.render_cache import RenderCache
 logger = logging.getLogger(__name__)
 
 
+class ViewerTextKeys:
+    HAND_HEADER = "viewer.hand.header"
+    HAND_EMPTY = "viewer.hand.empty"
+    TABLE_HEADER = "viewer.table.header"
+    TABLE_WAITING = "viewer.table.waiting"
+    POT = "viewer.hand.pot"
+    FOLD_CONFIRM_BODY = "viewer.fold_confirmation.body"
+    FOLD_CONFIRM_CONFIRM_BUTTON = "viewer.fold_confirmation.confirm_button"
+    FOLD_CONFIRM_CANCEL_BUTTON = "viewer.fold_confirmation.cancel_button"
+
+
 class PokerBotViewer:
     def __init__(
         self,
@@ -225,9 +236,8 @@ class PokerBotViewer:
 
         return f"{emoji} {text}"
 
-    @classmethod
     def build_hand_panel(
-        cls,
+        self,
         hand_cards: Optional[List[Card]] = None,
         board_cards: Optional[List[Card]] = None,
         *,
@@ -239,22 +249,31 @@ class PokerBotViewer:
         lines: List[str] = []
 
         if hand_cards is not None:
-            lines.append(f"{cls._HAND_INDENT}🃏 Your hand: ")
-            hand_line = cls._format_cards_line(hand_cards) or "—"
-            lines.append(f"{cls._HAND_INDENT}{hand_line}")
+            lines.append(
+                f"{self._HAND_INDENT}{self._t(ViewerTextKeys.HAND_HEADER)}"
+            )
+            hand_line = self._format_cards_line(hand_cards) or self._t(
+                ViewerTextKeys.HAND_EMPTY
+            )
+            lines.append(f"{self._HAND_INDENT}{hand_line}")
 
         if include_table:
             if lines:
                 lines.append("")
-            lines.append(f"{cls._HAND_INDENT}🧩 Table: ")
-            board_line = cls._format_cards_line(board_cards or [])
+            lines.append(
+                f"{self._HAND_INDENT}{self._t(ViewerTextKeys.TABLE_HEADER)}"
+            )
+            board_line = self._format_cards_line(board_cards or [])
             if not board_line:
-                board_line = "Waiting for flop…"
-            lines.append(f"{cls._HAND_INDENT}{board_line}")
+                board_line = self._t(ViewerTextKeys.TABLE_WAITING)
+            lines.append(f"{self._HAND_INDENT}{board_line}")
 
         if pot is not None:
             lines.append("")
-            lines.append(f"{cls._HAND_INDENT}💰 Pot: ${pot}")
+            pot_display = self._format_currency(pot)
+            lines.append(
+                f"{self._HAND_INDENT}{self._t(ViewerTextKeys.POT, amount=pot_display)}"
+            )
 
         return "\n".join(lines)
 
@@ -593,11 +612,17 @@ class PokerBotViewer:
         investment_pct = (
             (player_invested / pot_size) * 100 if pot_size > 0 else 0
         )
-        message = (
-            "⚠️ <b>FOLD CONFIRMATION</b>\n\n"
-            f"💰 Pot: ${pot_size:,}\n"
-            f"💸 Your Investment: ${player_invested:,} ({investment_pct:.1f}%)\n\n"
-            "Are you sure you want to fold?"
+        formatted_pot = translation_manager.format_currency(
+            pot_size, language=self._language_context.code
+        )
+        formatted_investment = translation_manager.format_currency(
+            player_invested, language=self._language_context.code
+        )
+        message = self._t(
+            ViewerTextKeys.FOLD_CONFIRM_BODY,
+            pot=formatted_pot,
+            investment=formatted_investment,
+            percentage=f"{investment_pct:.1f}",
         )
 
         confirm_callback = (
@@ -611,10 +636,12 @@ class PokerBotViewer:
             [
                 [
                     InlineKeyboardButton(
-                        "❌ Yes, Fold", callback_data=confirm_callback
+                        self._t(ViewerTextKeys.FOLD_CONFIRM_CONFIRM_BUTTON),
+                        callback_data=confirm_callback,
                     ),
                     InlineKeyboardButton(
-                        "↩️ Cancel", callback_data=cancel_callback
+                        self._t(ViewerTextKeys.FOLD_CONFIRM_CANCEL_BUTTON),
+                        callback_data=cancel_callback,
                     ),
                 ]
             ]
