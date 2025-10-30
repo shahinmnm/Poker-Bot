@@ -1147,6 +1147,8 @@ class PokerBotModel:
         # ✅ FIX: Update live message immediately if cards were dealt
         # This ensures users see Flop/Turn/River cards as soon as they’re dealt
         if cards_dealt > 0:
+            if hasattr(self._view, "invalidate_render_cache"):
+                self._view.invalidate_render_cache(game)
             await self._send_live_manager_update(game, chat_id)
 
         # Check if next street needs action
@@ -1188,6 +1190,9 @@ class PokerBotModel:
 
         if dealt_cards == 0:
             return
+
+        if hasattr(self._view, "invalidate_render_cache"):
+            self._view.invalidate_render_cache(game)
 
         await self._send_live_manager_update(game, chat_id)
 
@@ -3562,6 +3567,9 @@ class PokerBotModel:
             self._save_game(prepared.chat_id, game)
 
             self._coordinator.engine.advance_after_action(game)
+
+            if hasattr(self._view, "invalidate_render_cache"):
+                self._view.invalidate_render_cache(game)
 
             turn_result, next_player = self._coordinator.process_game_turn(
                 game

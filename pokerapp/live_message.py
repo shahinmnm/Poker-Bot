@@ -18,6 +18,7 @@ from telegram.error import TelegramError
 
 from pokerapp.entities import Game, Player, PlayerState
 from pokerapp.kvstore import ensure_kv
+from pokerapp.render_cache import RenderCache, RenderResult
 
 
 @dataclass(slots=True)
@@ -111,7 +112,14 @@ class LiveMessageManager:
 
     FLASH_STATE_TTL = 3600
 
-    def __init__(self, bot, logger, *, kv: Optional[Any] = None):
+    def __init__(
+        self,
+        bot,
+        logger,
+        *,
+        kv: Optional[Any] = None,
+        render_cache: Optional[RenderCache] = None,
+    ):
         self._bot = bot
         self._logger = logger
         self._chat_locks: Dict[str, asyncio.Lock] = {}
@@ -124,6 +132,8 @@ class LiveMessageManager:
         # Track cards currently highlighted with flash markers per chat
         self._active_flash_cards: Dict[int, Set[str]] = {}
         self._kv = ensure_kv(kv) if kv is not None else None
+        cache_backend = ensure_kv(kv) if kv is not None else ensure_kv(None)
+        self._render_cache = render_cache or RenderCache(cache_backend, logger)
 
     @staticmethod
     def _format_chips(amount: int, width: int = 6) -> str:
@@ -198,6 +208,20 @@ class LiveMessageManager:
                 )
             finally:
                 self._last_update_at[chat_key] = loop.time()
+
+    def get_render_cache_stats(self) -> Dict[str, Any]:
+        """Return current cache statistics for diagnostics."""
+
+        if getattr(self, "_render_cache", None) is None:
+            return {"hits": 0, "misses": 0, "total": 0, "hit_rate": 0.0}
+        return self._render_cache.get_stats()
+
+    def invalidate_render_cache(self, game: Game) -> None:
+        """Remove cached render entries for the provided game."""
+
+        if getattr(self, "_render_cache", None) is None:
+            return
+        self._render_cache.invalidate_game(getattr(game, "id", ""))
 
     async def present_raise_selector(
         self,
@@ -527,36 +551,55 @@ class LiveMessageManager:
             current_player,
             flash_cards=flash_cards,
         )
-        display = self._build_display_strings(context, state.last_context)
 
         preview_text: Optional[str] = None
-        if mode == "raise_selection":
-            preview_text = self._format_raise_preview(
-                selected_raise,
-                state_options=state.raise_options,
-                options_order=state.raise_order,
-                context_options=None,
-            )
+        stable_text: Optional[str] = None
+        reply_markup: Optional[InlineKeyboardMarkup] = None
+        options: List[RaiseOptionMeta] = []
 
-        stable_text = self._compose_message_body(
-            context=context,
-            display=display,
-            preview_raise=preview_text,
+        use_cache = (
+            mode == "actions"
+            and current_player is not None
+            and getattr(self, "_render_cache", None) is not None
         )
 
-        banner = None
-        if include_banner:
-            banner = self._select_banner(context, state.last_context)
-
-        message_text = f"{banner}\n{stable_text}" if banner else stable_text
+        cached_layout: Optional[List[List[Dict[str, str]]]] = None
+        if use_cache:
+            cached_result: Optional[RenderResult] = self._render_cache.get_cached_render(
+                game,
+                current_player,
+            )
+            if cached_result is not None:
+                stable_text = cached_result.hud_text or None
+                cached_layout = cached_result.keyboard_layout
 
         if mode == "actions":
-            reply_markup, options = self._build_action_inline_keyboard(
-                game=game,
-                player=current_player,
-                version=version,
-            )
+            if stable_text is None:
+                display = self._build_display_strings(context, state.last_context)
+                stable_text = self._compose_message_body(
+                    context=context,
+                    display=display,
+                    preview_raise=None,
+                )
+
+            options = self._compute_raise_options(game, current_player)
+
+            if cached_layout:
+                reply_markup = InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton(**btn) for btn in row]
+                        for row in cached_layout
+                    ]
+                )
+            else:
+                reply_markup, options = self._build_action_inline_keyboard(
+                    game=game,
+                    player=current_player,
+                    version=version,
+                    use_cache=False,
+                )
         else:
+            display = self._build_display_strings(context, state.last_context)
             options = self._compute_raise_options(game, current_player)
             reply_markup = self._build_raise_selection_keyboard(
                 game=game,
@@ -576,7 +619,31 @@ class LiveMessageManager:
                 display=display,
                 preview_raise=preview_text,
             )
-            message_text = f"{banner}\n{stable_text}" if banner else stable_text
+
+        stable_text_value = stable_text or ""
+
+        banner = None
+        if include_banner:
+            banner = self._select_banner(context, state.last_context)
+
+        message_text = f"{banner}\n{stable_text_value}" if banner else stable_text_value
+
+        if use_cache and current_player is not None:
+            layout_to_cache: Optional[List[List[Dict[str, str]]]] = None
+            if reply_markup is not None and getattr(reply_markup, "inline_keyboard", None):
+                layout_to_cache = [
+                    [
+                        {"text": btn.text, "callback_data": btn.callback_data}
+                        for btn in row
+                    ]
+                    for row in reply_markup.inline_keyboard
+                ]
+            self._render_cache.cache_render_result(
+                game,
+                current_player,
+                hud_text=stable_text_value,
+                keyboard_layout=layout_to_cache,
+            )
 
         option_map = {opt.key: opt for opt in options}
         option_order = [opt.key for opt in options]
@@ -1140,9 +1207,26 @@ class LiveMessageManager:
         game: Game,
         player: Optional[Player],
         version: Optional[int],
+        *,
+        use_cache: bool = True,
     ) -> Tuple[Optional[InlineKeyboardMarkup], List[RaiseOptionMeta]]:
         if player is None:
             return None, []
+
+        if (
+            use_cache
+            and getattr(self, "_render_cache", None) is not None
+        ):
+            cached = self._render_cache.get_cached_render(game, player)
+            if cached and cached.keyboard_layout:
+                markup = InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton(**btn) for btn in row]
+                        for row in cached.keyboard_layout
+                    ]
+                )
+                options = self._compute_raise_options(game, player)
+                return markup, options
 
         buttons: List[List[InlineKeyboardButton]] = []
 
@@ -1236,7 +1320,27 @@ class LiveMessageManager:
         if not buttons:
             return None, options
 
-        return InlineKeyboardMarkup(buttons), options
+        markup = InlineKeyboardMarkup(buttons)
+
+        if (
+            use_cache
+            and getattr(self, "_render_cache", None) is not None
+            and buttons
+        ):
+            layout = [
+                [
+                    {"text": btn.text, "callback_data": btn.callback_data}
+                    for btn in row
+                ]
+                for row in buttons
+            ]
+            self._render_cache.cache_render_result(
+                game,
+                player,
+                keyboard_layout=layout,
+            )
+
+        return markup, options
 
     def _build_raise_selection_keyboard(
         self,
