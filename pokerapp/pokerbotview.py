@@ -76,22 +76,52 @@ class PokerBotViewer:
         )
         self._logger.info("🔍 PokerBotViewer initialized with LiveMessageManager")
 
-    def _t(self, key: str, **kwargs: Any) -> str:
-        """Translate message key for the active user language."""
+    def _get_language_context_for_user(
+        self,
+        *,
+        user_id: Optional[int] = None,
+        language: Optional[str] = None,
+    ) -> LanguageContext:
+        """Resolve a language context for a specific user without mutating state."""
 
+        if user_id is not None:
+            language = translation_manager.get_user_language_or_detect(user_id)
+
+        if language is None:
+            return self._language_context
+
+        return translation_manager.get_language_context(language)
+
+    def _t(
+        self,
+        key: str,
+        *,
+        context: Optional[LanguageContext] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Translate message key for the provided or active user language."""
+
+        language_context = context or self._language_context
         return translation_manager.t(
             key,
-            lang=self._language_context.code,
+            lang=language_context.code,
             **kwargs,
         )
 
-    def _format_currency(self, amount: int, *, include_symbol: bool = True) -> str:
-        """Format currency according to the active language."""
+    def _format_currency(
+        self,
+        amount: int,
+        *,
+        include_symbol: bool = True,
+        context: Optional[LanguageContext] = None,
+    ) -> str:
+        """Format currency according to the provided or active language."""
 
+        language_context = context or self._language_context
         symbol = "$" if include_symbol else ""
         return translation_manager.format_currency(
             amount,
-            language=self._language_context.code,
+            language=language_context.code,
             currency_symbol=symbol,
         )
 
@@ -122,22 +152,42 @@ class PokerBotViewer:
 
         return self._language_context
 
-    def _apply_direction(self, text: str) -> str:
+    def _apply_direction(
+        self,
+        text: str,
+        *,
+        context: Optional[LanguageContext] = None,
+    ) -> str:
         if not text:
             return text
-        if self._language_context.direction != "rtl":
+
+        language_context = context or self._language_context
+
+        if language_context.direction != "rtl":
             return text
         if text.startswith("\u202B") and text.endswith("\u202C"):
             return text
         return f"\u202B{text}\u202C"
 
-    def _localize_text(self, text: str) -> str:
-        return self._apply_direction(text)
+    def _localize_text(
+        self,
+        text: str,
+        *,
+        context: Optional[LanguageContext] = None,
+    ) -> str:
+        return self._apply_direction(text, context=context)
 
-    async def _send_localized_message(self, *, chat_id: int, text: str, **kwargs: Any):
+    async def _send_localized_message(
+        self,
+        *,
+        chat_id: int,
+        text: str,
+        context: Optional[LanguageContext] = None,
+        **kwargs: Any,
+    ):
         """Send message with direction-aware wrapping."""
 
-        localized = self._localize_text(text)
+        localized = self._localize_text(text, context=context)
         return await self._bot.send_message(chat_id=chat_id, text=localized, **kwargs)
 
     _SUIT_EMOJIS = {
@@ -243,17 +293,20 @@ class PokerBotViewer:
         *,
         include_table: bool = True,
         pot: Optional[int] = None,
+        context: Optional[LanguageContext] = None,
     ) -> str:
         """Construct the emoji panel used across private and group UIs."""
 
+        language_context = context or self._language_context
         lines: List[str] = []
 
         if hand_cards is not None:
             lines.append(
-                f"{self._HAND_INDENT}{self._t(ViewerTextKeys.HAND_HEADER)}"
+                f"{self._HAND_INDENT}{self._t(ViewerTextKeys.HAND_HEADER, context=language_context)}"
             )
             hand_line = self._format_cards_line(hand_cards) or self._t(
-                ViewerTextKeys.HAND_EMPTY
+                ViewerTextKeys.HAND_EMPTY,
+                context=language_context,
             )
             lines.append(f"{self._HAND_INDENT}{hand_line}")
 
@@ -261,18 +314,24 @@ class PokerBotViewer:
             if lines:
                 lines.append("")
             lines.append(
-                f"{self._HAND_INDENT}{self._t(ViewerTextKeys.TABLE_HEADER)}"
+                f"{self._HAND_INDENT}{self._t(ViewerTextKeys.TABLE_HEADER, context=language_context)}"
             )
             board_line = self._format_cards_line(board_cards or [])
             if not board_line:
-                board_line = self._t(ViewerTextKeys.TABLE_WAITING)
+                board_line = self._t(
+                    ViewerTextKeys.TABLE_WAITING,
+                    context=language_context,
+                )
             lines.append(f"{self._HAND_INDENT}{board_line}")
 
         if pot is not None:
             lines.append("")
-            pot_display = self._format_currency(pot)
+            pot_display = self._format_currency(
+                pot,
+                context=language_context,
+            )
             lines.append(
-                f"{self._HAND_INDENT}{self._t(ViewerTextKeys.POT, amount=pot_display)}"
+                f"{self._HAND_INDENT}{self._t(ViewerTextKeys.POT, amount=pot_display, context=language_context)}"
             )
 
         return "\n".join(lines)
@@ -599,6 +658,7 @@ class PokerBotViewer:
         player_invested: int,
         *,
         confirmation_key: str,
+        user_id: Optional[int] = None,
     ) -> None:
         """Display a high-stakes fold confirmation dialog.
 
@@ -612,17 +672,21 @@ class PokerBotViewer:
         investment_pct = (
             (player_invested / pot_size) * 100 if pot_size > 0 else 0
         )
+        language_context = self._get_language_context_for_user(user_id=user_id)
         formatted_pot = translation_manager.format_currency(
-            pot_size, language=self._language_context.code
+            pot_size,
+            language=language_context.code,
         )
         formatted_investment = translation_manager.format_currency(
-            player_invested, language=self._language_context.code
+            player_invested,
+            language=language_context.code,
         )
         message = self._t(
             ViewerTextKeys.FOLD_CONFIRM_BODY,
             pot=formatted_pot,
             investment=formatted_investment,
             percentage=f"{investment_pct:.1f}",
+            context=language_context,
         )
 
         confirm_callback = (
@@ -636,11 +700,17 @@ class PokerBotViewer:
             [
                 [
                     InlineKeyboardButton(
-                        self._t(ViewerTextKeys.FOLD_CONFIRM_CONFIRM_BUTTON),
+                        self._t(
+                            ViewerTextKeys.FOLD_CONFIRM_CONFIRM_BUTTON,
+                            context=language_context,
+                        ),
                         callback_data=confirm_callback,
                     ),
                     InlineKeyboardButton(
-                        self._t(ViewerTextKeys.FOLD_CONFIRM_CANCEL_BUTTON),
+                        self._t(
+                            ViewerTextKeys.FOLD_CONFIRM_CANCEL_BUTTON,
+                            context=language_context,
+                        ),
                         callback_data=cancel_callback,
                     ),
                 ]
@@ -654,6 +724,7 @@ class PokerBotViewer:
             parse_mode=ParseMode.HTML,
             disable_notification=True,
             disable_web_page_preview=True,
+            context=language_context,
         )
 
     async def send_game_state(
@@ -841,16 +912,20 @@ class PokerBotViewer:
         )
 
     async def send_cards(
-            self,
-            chat_id: ChatId,
-            cards: Cards,
-            mention_markdown: Mention,
-            ready_message_id: Optional[MessageId],
+        self,
+        chat_id: ChatId,
+        cards: Cards,
+        mention_markdown: Mention,
+        ready_message_id: Optional[MessageId],
+        *,
+        user_id: Optional[int] = None,
     ) -> None:
         markup = PokerBotViewer._get_cards_markup(cards)
+        language_context = self._get_language_context_for_user(user_id=user_id)
         panel_text = self.build_hand_panel(
             hand_cards=list(cards),
             board_cards=[],
+            context=language_context,
         )
         message_text = (
             f"{mention_markdown}\n\n{panel_text}"
@@ -868,7 +943,10 @@ class PokerBotViewer:
         if ready_message_id is not None:
             send_kwargs["reply_to_message_id"] = ready_message_id
 
-        send_kwargs["text"] = self._localize_text(send_kwargs["text"])
+        send_kwargs["text"] = self._localize_text(
+            send_kwargs["text"],
+            context=language_context,
+        )
         await self._bot.send_message(**send_kwargs)
 
     async def send_or_update_private_hand(
@@ -881,13 +959,16 @@ class PokerBotViewer:
         message_id: Optional[int] = None,
         disable_notification: bool = True,
         footer: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> Optional[int]:
         """Send or edit a player's private hand panel in direct chats."""
 
+        language_context = self._get_language_context_for_user(user_id=user_id)
         panel_text = self.build_hand_panel(
             hand_cards=list(cards),
             board_cards=list(table_cards or []),
             include_table=True,
+            context=language_context,
         )
         message_text = (
             f"{mention_markdown}\n\n{panel_text}"
@@ -904,7 +985,10 @@ class PokerBotViewer:
                 await self._bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=message_id,
-                    text=self._localize_text(message_text),
+                    text=self._localize_text(
+                        message_text,
+                        context=language_context,
+                    ),
                     parse_mode=ParseMode.MARKDOWN,
                 )
                 return message_id
@@ -915,6 +999,7 @@ class PokerBotViewer:
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.MARKDOWN,
                 disable_notification=disable_notification,
+                context=language_context,
             )
             return message.message_id
         except Exception as exc:  # pragma: no cover - Telegram failures

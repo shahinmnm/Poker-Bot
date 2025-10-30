@@ -201,16 +201,12 @@ class RedisKVStore:
     ) -> str:
         """Get user's stored language or detect from Telegram."""
 
-        stored_language = self.get_user_language(user_id)
-        if stored_language:
-            return stored_language
-
         from pokerapp.i18n import translation_manager
 
-        detected_language = translation_manager.detect_language(telegram_language_code)
-        self.set_user_language(user_id, detected_language)
-
-        return detected_language
+        return translation_manager.get_user_language_or_detect(
+            user_id,
+            telegram_language_code=telegram_language_code,
+        )
 
 
 # Backwards compatibility alias for legacy imports
