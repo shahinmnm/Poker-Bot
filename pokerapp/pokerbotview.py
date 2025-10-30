@@ -177,24 +177,25 @@ class PokerBotViewer:
 
         # Row 1 – primary defensive options (Check/Call + Fold)
         row1: List[InlineKeyboardButton] = []
+
+        check_or_call_button: Optional[InlineKeyboardButton] = None
         if call_amount <= 0:
-            row1.append(
-                InlineKeyboardButton(
-                    "✅ Check",
-                    callback_data=":".join(
-                        ["action", "check", *version_segment, game_id_str]
-                    ),
-                )
+            check_or_call_button = InlineKeyboardButton(
+                "✅ Check",
+                callback_data=":".join(
+                    ["action", "check", *version_segment, game_id_str]
+                ),
             )
         elif call_amount < player_balance:
-            row1.append(
-                InlineKeyboardButton(
-                    f"💵 Call ${call_amount}",
-                    callback_data=":".join(
-                        ["action", "call", *version_segment, game_id_str]
-                    ),
-                )
+            check_or_call_button = InlineKeyboardButton(
+                f"💵 Call ${call_amount}",
+                callback_data=":".join(
+                    ["action", "call", *version_segment, game_id_str]
+                ),
             )
+
+        if check_or_call_button is not None:
+            row1.append(check_or_call_button)
 
         row1.append(
             InlineKeyboardButton(
