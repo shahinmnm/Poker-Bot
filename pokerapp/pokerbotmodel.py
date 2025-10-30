@@ -252,8 +252,8 @@ class PokerBotModel:
 
         telegram_lang = getattr(user, "language_code", None)
 
-        return self._kv.get_user_language_or_detect(
-            user_id=user.id,
+        return translation_manager.get_user_language_or_detect(
+            user.id,
             telegram_language_code=telegram_lang,
         )
 
@@ -1006,6 +1006,7 @@ class PokerBotModel:
             table_cards=game.cards_table,
             mention_markdown=current_player.mention_markdown,
             disable_notification=False,
+            user_id=current_player.user_id,
         )
 
     async def _check_access(self, chat_id: ChatId, user_id: UserId) -> bool:
@@ -1067,6 +1068,7 @@ class PokerBotModel:
                     table_cards=None,
                     message_id=message_id,
                     disable_notification=False,
+                    user_id=player.user_id,
                 )
             except Exception as exc:
                 logger.warning(
@@ -1141,6 +1143,7 @@ class PokerBotModel:
                     mention_markdown=player.mention_markdown,
                     disable_notification=False,
                     footer=f"Table stake: {game.table_stake}",
+                    user_id=player.user_id,
                 )
             except Exception as exc:
                 logger.warning(

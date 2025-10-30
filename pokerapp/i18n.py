@@ -122,13 +122,8 @@ class TranslationManager:
             if candidate in self.translations:
                 return candidate
 
-        if user_id is not None and self._kvstore is not None:
-            try:
-                stored = self._kvstore.get_user_language(user_id)
-            except AttributeError:
-                stored = None
-            if stored and stored in self.translations:
-                return stored
+        if user_id is not None:
+            return self.get_user_language_or_detect(user_id)
 
         return self.DEFAULT_LANGUAGE
 
@@ -146,6 +141,37 @@ class TranslationManager:
             font = self._DEFAULT_FONT_RTL if direction == "rtl" else self._DEFAULT_FONT_LTR
 
         return LanguageContext(code=code, direction=direction, font=font)
+
+    def get_user_language_or_detect(
+        self,
+        user_id: int,
+        *,
+        telegram_language_code: Optional[str] = None,
+    ) -> str:
+        """Return the preferred language for *user_id* with sensible fallbacks."""
+
+        stored_language: Optional[str] = None
+
+        if self._kvstore is not None:
+            try:
+                stored_language = self._kvstore.get_user_language(user_id)
+            except AttributeError:
+                stored_language = None
+
+        if stored_language:
+            normalized = stored_language.lower()
+            if normalized in self.translations:
+                return normalized
+
+        detected_language = self.detect_language(telegram_language_code)
+
+        if self._kvstore is not None:
+            try:
+                self._kvstore.set_user_language(user_id, detected_language)
+            except AttributeError:  # pragma: no cover - defensive
+                pass
+
+        return detected_language
 
     def t(
         self,

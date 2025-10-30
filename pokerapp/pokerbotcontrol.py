@@ -216,10 +216,17 @@ class PokerBotController:
                 user_id = getattr(query_user, "id", user_id)
                 language_code = getattr(query_user, "language_code", language_code)
 
+        resolved_language: Optional[str] = None
+        if user_id is not None:
+            resolved_language = translation_manager.get_user_language_or_detect(
+                user_id,
+                telegram_language_code=language_code,
+            )
+
         return translation_manager.t(
             key,
             user_id=user_id,
-            lang=language_code,
+            lang=resolved_language or language_code,
             **kwargs,
         )
 
@@ -407,6 +414,7 @@ class PokerBotController:
                     pot_size=getattr(game, "pot", 0),
                     player_invested=player.round_rate,
                     confirmation_key=confirmation_key,
+                    user_id=player.user_id,
                 )
                 if query is not None:
                     await NotificationManager.toast(
@@ -543,6 +551,12 @@ class PokerBotController:
         context: CallbackContext,
     ) -> None:
         """Handle /start command."""
+        user = update.effective_user
+        if user is not None:
+            translation_manager.get_user_language_or_detect(
+                user.id,
+                telegram_language_code=getattr(user, "language_code", None),
+            )
         await self._model.start(update, context)
 
     async def _handle_stop(
@@ -934,6 +948,13 @@ Send 💰 /money once per day for free chips!
         if not query or not query.data:
             return
 
+        query_user = getattr(query, "from_user", None)
+        if query_user is not None and getattr(query_user, "id", None) is not None:
+            translation_manager.get_user_language_or_detect(
+                query_user.id,
+                telegram_language_code=getattr(query_user, "language_code", None),
+            )
+
         await self._respond_to_query(query)
         await self._model.accept_invitation(update, context)
 
@@ -948,6 +969,12 @@ Send 💰 /money once per day for free chips!
 
         if not query or not query.data:
             return
+        query_user = getattr(query, "from_user", None)
+        if query_user is not None and getattr(query_user, "id", None) is not None:
+            translation_manager.get_user_language_or_detect(
+                query_user.id,
+                telegram_language_code=getattr(query_user, "language_code", None),
+            )
 
         await self._respond_to_query(query)
         await self._model.decline_invitation(update, context)
@@ -992,6 +1019,13 @@ Send 💰 /money once per day for free chips!
 
         if not query or not query.data:
             return
+
+        query_user = getattr(query, "from_user", None)
+        if query_user is not None and getattr(query_user, "id", None) is not None:
+            translation_manager.get_user_language_or_detect(
+                query_user.id,
+                telegram_language_code=getattr(query_user, "language_code", None),
+            )
 
         callback_data = query.data
         user_id = getattr(getattr(query, "from_user", None), "id", None)
@@ -1632,6 +1666,13 @@ Send 💰 /money once per day for free chips!
 
         if not query or not query.data:
             return
+
+        query_user = getattr(query, "from_user", None)
+        if query_user is not None and getattr(query_user, "id", None) is not None:
+            translation_manager.get_user_language_or_detect(
+                query_user.id,
+                telegram_language_code=getattr(query_user, "language_code", None),
+            )
 
         async def show_popup(
             message: str,
