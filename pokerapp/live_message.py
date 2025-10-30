@@ -761,27 +761,24 @@ class LiveMessageManager:
                 )
 
             if player.state == PlayerState.FOLD:
-                icon = "❌"
-                status = " (folded)"
+                status_symbol = "💤"
+                status_text = "Folded"
             elif player.state == PlayerState.ALL_IN:
-                icon = "🔥"
-                status = (
-                    f" (ALL-IN {bet_text})" if bet_text else " (ALL-IN)"
-                )
+                status_symbol = "🔥"
+                status_text = f"ALL-IN {bet_text}" if bet_text else "ALL-IN"
             elif bet > 0:
-                icon = "✅"
-                status = f" (bet {bet_text})"
+                status_symbol = "✓"
+                status_text = f"Bet {bet_text}"
             else:
-                icon = "✅"
-                status = ""
+                status_symbol = "—"
+                status_text = "Waiting"
 
-            prefix = ""
             if player.user_id == actor_user_id:
-                prefix = "👉 "
                 name = f"<b>{name}</b>"
+                status_text = f"⏳ {status_text.upper()}"
 
             rows.append(
-                f"{prefix}{icon} {name} — <code>{stack_text}</code>{status}"
+                f"P{idx}: {name:<12} <code>{stack_text}</code> {status_symbol} {status_text}"
             )
 
         if not rows:
