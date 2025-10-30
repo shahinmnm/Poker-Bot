@@ -1332,11 +1332,11 @@ Send 💰 /money once per day for free chips!
                     )
                     return
 
-                await NotificationManager.popup(
+                # Show instant feedback using toast system
+                await NotificationManager.toast(
                     query,
                     text=toast_message,
-                    show_alert=False,
-                    event="ActionAck",
+                    event="ActionToast",
                 )
                 return
 
@@ -1421,14 +1421,7 @@ Send 💰 /money once per day for free chips!
                     amount=legacy_amount,
                 )
 
-            if success:
-                await NotificationManager.popup(
-                    query,
-                    text="✅ Action submitted",
-                    show_alert=False,
-                    event="ActionAck",
-                )
-            else:
+            if not success:
                 await self._respond_to_query(
                     query,
                     "❌ Action failed - not your turn or invalid action",
