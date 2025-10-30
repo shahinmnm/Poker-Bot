@@ -1341,6 +1341,29 @@ Send 💰 /money once per day for free chips!
                 return
 
             if "action_type" in signature.parameters:
+                # ✅ Toast feedback: instant confirmation for user
+                action_toasts = {
+                    "fold": "🚪 Folded",
+                    "check": "✅ Checked",
+                    "call": f"💵 Called ${raise_amount or 0}",
+                    "raise": f"📈 Raised ${raise_amount or 0}",
+                    "bet": f"💰 Bet ${raise_amount or 0}",
+                    "all_in": "🚀 All-in!",
+                }
+
+                # Get toast text with safe fallback
+                toast_text = action_toasts.get(
+                    action_type,
+                    "✅ Action confirmed"
+                )
+
+                # Send toast (non-blocking, clears button spinner)
+                await NotificationManager.toast(
+                    query,
+                    text=toast_text,
+                    event="ActionToast",
+                )
+
                 success = await handle_action(
                     user_id=user_id,
                     chat_id=chat_id,
@@ -1366,6 +1389,29 @@ Send 💰 /money once per day for free chips!
                     return
 
                 legacy_amount = raise_amount if raise_amount is not None else 0
+
+                # ✅ Toast feedback: instant confirmation for user
+                action_toasts = {
+                    "fold": "🚪 Folded",
+                    "check": "✅ Checked",
+                    "call": f"💵 Called ${legacy_amount}",
+                    "raise": f"📈 Raised ${legacy_amount}",
+                    "bet": f"💰 Bet ${legacy_amount}",
+                    "all_in": "🚀 All-in!",
+                }
+
+                # Get toast text with safe fallback
+                toast_text = action_toasts.get(
+                    action_type,
+                    "✅ Action confirmed"
+                )
+
+                # Send toast (non-blocking, clears button spinner)
+                await NotificationManager.toast(
+                    query,
+                    text=toast_text,
+                    event="ActionToast",
+                )
 
                 success = await handle_action(
                     user_id=str(user_id),
