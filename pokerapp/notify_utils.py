@@ -240,6 +240,86 @@ class NotificationManager:
         return False
 
     @classmethod
+    async def toast(
+        cls,
+        query: "CallbackQuery",
+        text: str,
+        event: str = "Toast",
+    ) -> bool:
+        """
+        Send a subtle toast notification (non-blocking, no alert popup).
+
+        Args:
+            query: CallbackQuery object from button press
+            text: Toast message (keep under 200 chars for best UX)
+            event: Log event name for telemetry
+
+        Returns:
+            True if toast was shown successfully, False if skipped/failed
+
+        Example:
+            await NotificationManager.toast(
+                query,
+                text="✅ Bet placed",
+                event="BetToast"
+            )
+        """
+        should_answer, query_id, state, now = cls._should_answer(query)
+
+        if not should_answer:
+            cls._log.debug(
+                f"{event}Skip",
+                "Toast skipped (already answered or stale)",
+                query_id=query_id,
+            )
+            return False
+
+        try:
+            # Non-blocking toast (show_alert=False means it appears as subtle notification)
+            await query.answer(text=text, show_alert=False)
+
+            # Mark as answered in guard
+            if state:
+                state.answered = True
+
+            cls._log.debug(
+                event,
+                f"Toast shown: {text}",
+                query_id=query_id,
+                user_id=getattr(query.from_user, "id", None),
+            )
+
+            return True
+
+        except BadRequest as exc:
+            error_text = str(exc)
+            is_stale = cls._STALE_QUERY_MESSAGE in error_text
+
+            if is_stale:
+                cls._log.debug(
+                    f"{event}Stale",
+                    "Attempted toast on stale query (8s+ old)",
+                    query_id=query_id,
+                )
+            else:
+                cls._log.warning(
+                    f"{event}Failed",
+                    f"Toast failed: {error_text}",
+                    query_id=query_id,
+                )
+
+            return False
+
+        except Exception as exc:  # pragma: no cover - defensive logging
+            cls._log.error(
+                f"{event}Error",
+                f"Unexpected toast error: {exc}",
+                query_id=query_id,
+                exc_info=True,
+            )
+            return False
+
+    @classmethod
     async def popup_with_fallback(
         cls,
         query,
