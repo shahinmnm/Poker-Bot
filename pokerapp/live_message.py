@@ -10,7 +10,7 @@ import hashlib
 import html
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
@@ -113,6 +113,12 @@ class LiveMessageManager:
         self._chat_locks: Dict[str, asyncio.Lock] = {}
         self._last_update_at: Dict[str, float] = {}
         self._chat_states: Dict[str, ChatRenderState] = {}
+        # Track hashes of rendered content to detect redundant updates
+        self._content_hashes: Dict[int, str] = {}
+        # Track which cards have been revealed per chat for flash detection
+        self._flash_states: Dict[int, Set[str]] = {}
+        # Track cards currently highlighted with flash markers per chat
+        self._active_flash_cards: Dict[int, Set[str]] = {}
 
     # ------------------------------------------------------------------
     # Public API
@@ -201,6 +207,10 @@ class LiveMessageManager:
                 mode="raise_selection",
                 include_banner=False,
                 selected_raise=selection_key,
+                flash_cards=set(
+                    self._active_flash_cards.get(chat_id, set())
+                )
+                or None,
             )
 
             if bundle.reply_markup is None:
@@ -261,6 +271,10 @@ class LiveMessageManager:
                 version=game.get_live_message_version(),
                 mode="actions",
                 include_banner=False,
+                flash_cards=set(
+                    self._active_flash_cards.get(chat_id, set())
+                )
+                or None,
             )
 
             try:
@@ -356,6 +370,60 @@ class LiveMessageManager:
         if current_player is not None:
             next_version = game.next_live_message_version()
 
+        cards_on_table = list(getattr(game, "cards_table", []) or [])
+        new_cards = self._detect_new_cards(chat_id, cards_on_table)
+
+        if new_cards:
+            flash_state = self._flash_states.setdefault(chat_id, set())
+            flash_state.update(new_cards)
+            active_flash_cards: Set[str] = set(new_cards)
+            self._active_flash_cards[chat_id] = set(new_cards)
+        else:
+            active_flash_cards = set(
+                self._active_flash_cards.get(chat_id, set())
+            )
+
+        base_hash = self._compute_content_hash(game, current_player)
+        flash_suffix = (
+            "|flash:" + "|".join(sorted(active_flash_cards))
+            if active_flash_cards
+            else "|flash:"
+        )
+        render_token = f"{base_hash}{flash_suffix}"
+        previous_token = self._content_hashes.get(chat_id)
+
+        if previous_token == render_token and state.last_payload_hash is not None:
+            self._logger.debug(
+                "⏭️ ContentSkip - No changes detected (hash=%s)",
+                base_hash[:8],
+            )
+            return (
+                game.group_message_id if game.has_group_message() else None
+            )
+
+        self._content_hashes[chat_id] = render_token
+
+        if new_cards:
+
+            async def cleanup_flash() -> None:
+                await asyncio.sleep(2.5)
+                self._flash_states[chat_id] = {
+                    str(card)
+                    for card in (getattr(game, "cards_table", []) or [])
+                }
+                self._active_flash_cards.pop(chat_id, None)
+                self._logger.debug(
+                    "🧹 FlashCleanup - Removing flash markers for chat %s",
+                    chat_id,
+                )
+                await self.send_or_update_game_state(
+                    chat_id=chat_id,
+                    game=game,
+                    current_player=current_player,
+                )
+
+            asyncio.create_task(cleanup_flash())
+
         bundle = self._prepare_render_bundle(
             chat_key=chat_key,
             game=game,
@@ -364,6 +432,7 @@ class LiveMessageManager:
             version=next_version,
             mode="actions",
             include_banner=True,
+            flash_cards=active_flash_cards or None,
         )
 
         if bundle.payload_hash == state.last_payload_hash:
@@ -420,10 +489,15 @@ class LiveMessageManager:
         mode: str,
         include_banner: bool,
         selected_raise: Optional[str] = None,
+        flash_cards: Optional[Set[str]] = None,
     ) -> RenderBundle:
         """Build message text, markup, and hashes for a render pass."""
 
-        context = self._build_render_context(game, current_player)
+        context = self._build_render_context(
+            game,
+            current_player,
+            flash_cards=flash_cards,
+        )
         display = self._build_display_strings(context, state.last_context)
 
         preview_text: Optional[str] = None
@@ -499,14 +573,21 @@ class LiveMessageManager:
         )
 
     def _build_render_context(
-        self, game: Game, current_player: Optional[Player]
+        self,
+        game: Game,
+        current_player: Optional[Player],
+        *,
+        flash_cards: Optional[Set[str]] = None,
     ) -> Dict[str, Any]:
         players = list(getattr(game, "players", []) or [])
         active_count = sum(1 for p in players if p.state != PlayerState.FOLD)
         num_cards = len(game.cards_table or [])
         stage_name = self.STAGE_NAMES.get(num_cards, "Pre-flop")
         stage_icon = self.STAGE_ICONS.get(num_cards, "♠️")
-        board_line = self._format_board_line(game.cards_table or [])
+        board_line = self._format_board_line(
+            game.cards_table or [],
+            flash_cards=flash_cards,
+        )
 
         actor_user_id = getattr(current_player, "user_id", None)
         to_act_name = self._get_player_name(current_player) if current_player else None
@@ -683,13 +764,104 @@ class LiveMessageManager:
 
         return " | ".join(entries)
 
-    def _format_board_line(self, cards) -> str:
+    def _format_board_line(
+        self,
+        cards,
+        *,
+        flash_cards: Optional[Set[str]] = None,
+    ) -> str:
+        if not cards:
+            return "🂠 🂠 🂠"
+
+        if flash_cards:
+            return self._format_cards_with_flash(cards, flash_cards)
+
+        from pokerapp.pokerbotview import PokerBotViewer
+
+        return PokerBotViewer._format_cards_line(cards)
+
+    def _compute_content_hash(
+        self,
+        game: Game,
+        current_player: Optional[Player],
+    ) -> str:
+        """Generate a deterministic digest of the visible game state."""
+
+        cards = getattr(game, "cards_table", []) or []
+        cards_repr = (
+            "".join(sorted(str(card) for card in cards)) if cards else "NONE"
+        )
+
+        pot_value = getattr(game, "pot", 0)
+        actor_id = getattr(current_player, "user_id", "NONE")
+        state_obj = getattr(game, "state", None)
+        street_name = getattr(state_obj, "name", str(state_obj) if state_obj else "UNKNOWN")
+
+        player_states: List[str] = []
+        for player in getattr(game, "players", []) or []:
+            player_id = getattr(player, "user_id", "?")
+            status = "ACTIVE"
+            player_state = getattr(player, "state", None)
+            if player_state == PlayerState.FOLD:
+                status = "FOLDED"
+            elif player_state == PlayerState.ALL_IN:
+                status = "ALL_IN"
+            player_states.append(f"{player_id}:{status}")
+
+        components = [
+            f"cards:{cards_repr}",
+            f"pot:{pot_value}",
+            f"actor:{actor_id}",
+            f"street:{street_name}",
+            "players:" + "|".join(sorted(player_states)),
+        ]
+
+        content = "||".join(components)
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+
+    def _detect_new_cards(
+        self,
+        chat_id: int,
+        current_cards: List,
+    ) -> Set[str]:
+        """Return the set of community cards that are newly revealed."""
+
+        previous_flash = self._flash_states.get(chat_id, set())
+        current_card_strs = {str(card) for card in current_cards}
+        new_cards = current_card_strs - previous_flash
+
+        if new_cards:
+            self._logger.debug(
+                "✨ FlashDetect - New cards in chat %s: %s",
+                chat_id,
+                ", ".join(sorted(new_cards)),
+            )
+
+        return new_cards
+
+    def _format_cards_with_flash(
+        self,
+        cards: List,
+        flash_cards: Set[str],
+    ) -> str:
+        """Format board cards and wrap new entries with sparkle markers."""
+
         if not cards:
             return "🂠 🂠 🂠"
 
         from pokerapp.pokerbotview import PokerBotViewer
 
-        return PokerBotViewer._format_cards_line(cards)
+        flash_lookup = set(flash_cards)
+        formatted: List[str] = []
+        for card in cards:
+            card_display = PokerBotViewer._format_card(card)
+            card_str = str(card)
+            if card_str in flash_lookup:
+                formatted.append(f"✨ {card_display} ✨")
+            else:
+                formatted.append(card_display)
+
+        return "  ".join(formatted)
 
     def _format_board_display(self, board_text: Optional[str], icon: Optional[str]) -> str:
         text = board_text or "—"
