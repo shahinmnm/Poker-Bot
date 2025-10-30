@@ -642,7 +642,11 @@ class LiveMessageManager:
             "timer_label": timer_label,
             "stack_line": self._format_stack_line(players),
             "active_count": active_count,
-            "player_rows": self._format_players(players, actor_user_id),
+            "player_rows": self._format_players(
+                players,
+                actor_user_id,
+                timer_seconds=getattr(game, "time_remaining", None),
+            ),
             "recent_actions": self._format_recent_actions(game),
             "table_code": str(getattr(game, "id", "----"))[:4].upper(),
             "seat_label": f"{len(players)}-max",
@@ -742,7 +746,10 @@ class LiveMessageManager:
         return "<pre>" + "\n".join(hud_lines) + "</pre>"
 
     def _format_players(
-        self, players: List[Player], actor_user_id: Optional[int]
+        self,
+        players: List[Player],
+        actor_user_id: Optional[int],
+        timer_seconds: Optional[int] = None,
     ) -> List[str]:
         rows: List[str] = []
 
@@ -776,6 +783,9 @@ class LiveMessageManager:
             if player.user_id == actor_user_id:
                 name = f"<b>{name}</b>"
                 status_text = f"⏳ {status_text.upper()}"
+
+                if timer_seconds is not None and timer_seconds > 0:
+                    status_text += f" ({timer_seconds}s)"
 
             rows.append(
                 f"P{idx}: {name:<12} <code>{stack_text}</code> {status_symbol} {status_text}"
