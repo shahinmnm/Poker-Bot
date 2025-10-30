@@ -1076,7 +1076,7 @@ class LiveMessageManager:
         old_board = old_snapshot.get("board", [])
         new_board = new_snapshot.get("board", [])
         if len(new_board) > len(old_board):
-            diff["new_cards"] = new_board[len(old_board) :]
+            diff["new_cards"] = new_board[len(old_board):]
 
         player_diffs: Dict[Any, Dict[str, Any]] = {}
         for pid, new_data in new_snapshot.get("players", {}).items():
@@ -1641,22 +1641,22 @@ class LiveMessageManager:
         ):
             options.append(
                 RaiseOptionMeta(
-                    key="POT",
-                    button_label=f"Pot (${pot_amount})",
-                    preview_label=f"Pot (${pot_amount})",
-                    amount=pot_amount,
-                    kind="pot",
+                    "POT",
+                    f"Pot (${pot_amount})",
+                    f"Pot (${pot_amount})",
+                    pot_amount,
+                    "pot",
                 )
             )
 
         if total_stack > current_bet:
             options.append(
                 RaiseOptionMeta(
-                    key="ALLIN",
-                    button_label=f"All-in (${total_stack})",
-                    preview_label=f"All-in (${total_stack})",
-                    amount=total_stack,
-                    kind="all_in",
+                    "ALLIN",
+                    f"All-in (${total_stack})",
+                    f"All-in (${total_stack})",
+                    total_stack,
+                    "all_in",
                 )
             )
 
@@ -1787,7 +1787,7 @@ class LiveMessageManager:
                         presets.append(("💼", f"½STACK (${half_stack:,})", half_stack))
 
                     for i in range(0, len(presets), 2):
-                        chunk = presets[i : i + 2]
+                        chunk = presets[i: i + 2]
                         row: List[InlineKeyboardButton] = []
                         for emoji, label, amount in chunk:
                             row.append(

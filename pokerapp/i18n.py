@@ -42,7 +42,7 @@ class SupportedLanguage(Enum):
 class TranslationManager:
     """
     Manages translations and locale-specific formatting.
-    
+
     Features:
     - Auto-detects user language from Telegram
     - Loads translations from JSON files
@@ -50,27 +50,27 @@ class TranslationManager:
     - Supports RTL languages
     - Locale-aware number formatting
     """
-    
+
     # RTL (right-to-left) languages
     RTL_LANGUAGES = {"ar", "he", "fa"}
-    
+
     # Default fallback language
     DEFAULT_LANGUAGE = "en"
-    
+
     def __init__(self, translations_dir: str = "translations"):
         """
         Initialize translation manager.
-        
+
         Args:
             translations_dir: Directory containing translation JSON files
         """
         self.translations_dir = Path(translations_dir)
         self.translations: Dict[str, Dict[str, str]] = {}
         self._load_translations()
-    
+
     def _load_translations(self) -> None:
         """Load all translation files from disk."""
-        
+
         if not self.translations_dir.exists():
             logger.warning(
                 "Translations directory not found: %s. Creating with default English.",
@@ -79,7 +79,7 @@ class TranslationManager:
             self.translations_dir.mkdir(parents=True, exist_ok=True)
             self._create_default_english()
             return
-        
+
         # Load each language file
         for lang_file in self.translations_dir.glob("*.json"):
             lang_code = lang_file.stem
@@ -93,14 +93,14 @@ class TranslationManager:
                     lang_code,
                     exc,
                 )
-        
+
         # Ensure English exists as fallback
         if "en" not in self.translations:
             self._create_default_english()
-    
+
     def _create_default_english(self) -> None:
         """Create default English translation file."""
-        
+
         default_translations = {
             # === GAME STATES ===
             "game.state.initial": "Waiting for players",
@@ -109,14 +109,14 @@ class TranslationManager:
             "game.state.turn": "Turn",
             "game.state.river": "River",
             "game.state.finished": "Showdown",
-            
+
             # === ACTIONS ===
             "action.check": "Check",
             "action.call": "Call",
             "action.fold": "Fold",
             "action.raise": "Raise",
             "action.all_in": "All-In",
-            
+
             # === BUTTON LABELS ===
             "button.check": "✅ Check",
             "button.call": "💵 Call ${amount}",
@@ -127,7 +127,7 @@ class TranslationManager:
             "button.start": "🎮 Start Game",
             "button.join": "➕ Join",
             "button.leave": "➖ Leave",
-            
+
             # === MESSAGES ===
             "msg.welcome": "👋 Welcome to Texas Hold'em Poker!",
             "msg.game_started": "🎮 Game started! Good luck!",
@@ -140,7 +140,7 @@ class TranslationManager:
             "msg.winner": "🏆 {player} wins ${amount}!",
             "msg.pot": "💰 Pot: ${amount}",
             "msg.current_bet": "🎯 Current bet: ${amount}",
-            
+
             # === ERRORS ===
             "error.not_your_turn": "❌ Not your turn!",
             "error.invalid_action": "❌ Invalid action",
@@ -149,7 +149,7 @@ class TranslationManager:
             "error.game_in_progress": "❌ Game already in progress",
             "error.not_enough_players": "❌ Need at least 2 players to start",
             "error.max_players": "❌ Maximum {max} players allowed",
-            
+
             # === HELP TEXT ===
             "help.title": "🎴 How to Play Poker",
             "help.commands": "📋 Commands",
@@ -158,7 +158,7 @@ class TranslationManager:
             "help.status": "/status - Check game state",
             "help.help": "/help - Show this message",
             "help.language": "/language - Change language",
-            
+
             # === LOBBY ===
             "lobby.title": "🎮 Game Lobby",
             "lobby.players": "👥 Players ({count}/{max})",
@@ -166,7 +166,7 @@ class TranslationManager:
             "lobby.host": "👑 Host",
             "lobby.joined": "✅ {player} joined!",
             "lobby.left": "👋 {player} left",
-            
+
             # === CARDS ===
             "card.rank.A": "Ace",
             "card.rank.K": "King",
@@ -185,7 +185,7 @@ class TranslationManager:
             "card.suit.hearts": "Hearts",
             "card.suit.diamonds": "Diamonds",
             "card.suit.clubs": "Clubs",
-            
+
             # === HAND RANKINGS ===
             "hand.royal_flush": "Royal Flush",
             "hand.straight_flush": "Straight Flush",
@@ -198,46 +198,46 @@ class TranslationManager:
             "hand.pair": "Pair",
             "hand.high_card": "High Card",
         }
-        
+
         # Save to file
         en_file = self.translations_dir / "en.json"
         with open(en_file, "w", encoding="utf-8") as f:
             json.dump(default_translations, f, indent=2, ensure_ascii=False)
-        
+
         self.translations["en"] = default_translations
         logger.info("✅ Created default English translations")
-    
+
     def detect_language(self, telegram_language_code: Optional[str]) -> str:
         """
         Detect user's preferred language from Telegram settings.
-        
+
         Args:
             telegram_language_code: Language code from Telegram user object
-            
+
         Returns:
             Detected language code (defaults to 'en')
-            
+
         Example:
             >>> detect_language("es-ES")
             "es"
         """
         if not telegram_language_code:
             return self.DEFAULT_LANGUAGE
-        
+
         # Extract primary language code (e.g., "es-ES" → "es")
         primary_code = telegram_language_code.split("-")[0].lower()
-        
+
         # Check if we support this language
         if primary_code in self.translations:
             return primary_code
-        
+
         # Fallback to English
         logger.debug(
             "Unsupported language code: %s, falling back to English",
             telegram_language_code,
         )
         return self.DEFAULT_LANGUAGE
-    
+
     def translate(
         self,
         key: str,
@@ -246,15 +246,15 @@ class TranslationManager:
     ) -> str:
         """
         Get translated string for a given key.
-        
+
         Args:
             key: Translation key (e.g., "msg.welcome")
             language: Target language code
             **kwargs: Variables for string formatting
-            
+
         Returns:
             Translated and formatted string
-            
+
         Example:
             >>> translate("msg.player_called", language="es", player="Juan", amount=50)
             "💵 Juan apostó $50"
@@ -264,14 +264,14 @@ class TranslationManager:
             language,
             self.translations.get(self.DEFAULT_LANGUAGE, {}),
         )
-        
+
         # Get translation string
         translation = lang_dict.get(key)
-        
+
         # Fallback to English if not found
         if translation is None:
             translation = self.translations.get(self.DEFAULT_LANGUAGE, {}).get(key)
-        
+
         # Ultimate fallback: return key itself
         if translation is None:
             logger.warning(
@@ -280,7 +280,7 @@ class TranslationManager:
                 language,
             )
             return f"[{key}]"
-        
+
         # Format with provided variables
         try:
             return translation.format(**kwargs)
@@ -292,19 +292,19 @@ class TranslationManager:
                 language,
             )
             return translation
-    
+
     def is_rtl(self, language: str) -> bool:
         """
         Check if language uses right-to-left text direction.
-        
+
         Args:
             language: Language code
-            
+
         Returns:
             True if RTL language
         """
         return language in self.RTL_LANGUAGES
-    
+
     def format_currency(
         self,
         amount: int,
@@ -313,15 +313,15 @@ class TranslationManager:
     ) -> str:
         """
         Format currency amount with locale-aware separators.
-        
+
         Args:
             amount: Dollar amount
             language: Language code for formatting rules
             currency_symbol: Currency symbol to use
-            
+
         Returns:
             Formatted currency string
-            
+
         Example:
             >>> format_currency(1500, "en")
             "$1,500"
@@ -339,14 +339,14 @@ class TranslationManager:
             "ja": lambda a, s: f"{s}{a:,}",              # $1,500
             "ar": lambda a, s: f"{s}{a:,}",              # $1,500 (RTL handled separately)
         }
-        
+
         formatter = formatting_rules.get(language, formatting_rules["en"])
         return formatter(amount, currency_symbol)
-    
+
     def get_supported_languages(self) -> List[Dict[str, str]]:
         """
         Get list of supported languages with native names.
-        
+
         Returns:
             List of dicts with 'code' and 'name' keys
         """
@@ -372,7 +372,7 @@ class TranslationManager:
             "fa": "فارسی",
             "he": "עברית",
         }
-        
+
         return [
             {"code": code, "name": language_names.get(code, code.upper())}
             for code in sorted(self.translations.keys())
