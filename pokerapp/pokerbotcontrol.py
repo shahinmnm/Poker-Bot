@@ -16,9 +16,13 @@ from telegram.ext import (
     CommandHandler,
 )
 
-from pokerapp.entities import PlayerAction
+from pokerapp.entities import Game, Player, PlayerAction
 from pokerapp.notify_utils import LoggerHelper, NotificationManager
-from pokerapp.pokerbotmodel import PokerBotModel, PlayerActionValidation
+from pokerapp.pokerbotmodel import (
+    PokerBotModel,
+    PlayerActionValidation,
+    PreparedPlayerAction,
+)
 
 if TYPE_CHECKING:
     from pokerapp.live_message import LiveMessageManager
@@ -50,6 +54,7 @@ class PokerBotController:
         self._model = model
         self._application = application
         self._view: "PokerBotViewer" = model._view
+        self._pending_fold_confirmations: dict[int, PreparedPlayerAction] = {}
 
         application.add_handler(CommandHandler("ready", self._handle_ready))
         application.add_handler(CommandHandler("start", self._handle_start))
@@ -176,6 +181,104 @@ class PokerBotController:
                 exc_info=True,
             )
             return None
+
+    @staticmethod
+    def _find_player(game: Game, user_id: int) -> Optional[Player]:
+        """Return the player in *game* that matches *user_id*, if any."""
+
+        for player in getattr(game, "players", []):
+            if str(getattr(player, "user_id", "")) == str(user_id):
+                return player
+
+        return None
+
+    @staticmethod
+    def _should_confirm_fold(game: Game, player: Player) -> bool:
+        """Return ``True`` when folding should prompt for confirmation."""
+
+        pot_size = getattr(game, "pot", 0)
+        current_bet = getattr(game, "max_round_rate", 0)
+        player_invested = getattr(player, "round_rate", 0)
+
+        is_big_pot = pot_size > (5 * current_bet)
+        has_stake = player_invested > (0.1 * pot_size)
+
+        return is_big_pot and has_stake
+
+    async def handle_fold(
+        self,
+        user_id: int,
+        game: Game,
+        confirmed: bool = False,
+        *,
+        prepared_action: Optional[PreparedPlayerAction] = None,
+        query=None,
+    ) -> Optional[bool]:
+        """Process a fold request, optionally prompting for confirmation.
+
+        Args:
+            user_id: Telegram identifier of the acting user.
+            game: Active game context for the fold.
+            confirmed: ``True`` when the user has already confirmed.
+            prepared_action: Pre-validated action metadata, if available.
+            query: Callback query instance used for popups/toasts.
+
+        Returns:
+            ``True`` when the fold action executed successfully,
+            ``False`` on failure, and ``None`` if awaiting confirmation.
+        """
+
+        player = (
+            prepared_action.current_player
+            if prepared_action is not None
+            else self._find_player(game, user_id)
+        )
+
+        if player is None:
+            log_helper.warn(
+                "FoldPlayerMissing",
+                "Unable to locate player for fold action",
+                user_id=user_id,
+                game_id=getattr(game, "id", None),
+            )
+            return False
+
+        if not confirmed:
+            if self._should_confirm_fold(game, player):
+                if prepared_action is not None:
+                    self._pending_fold_confirmations[user_id] = prepared_action
+                await self._view.show_fold_confirmation(
+                    chat_id=player.user_id,
+                    pot_size=getattr(game, "pot", 0),
+                    player_invested=player.round_rate,
+                )
+                if query is not None:
+                    await NotificationManager.toast(
+                        query,
+                        text="⚠️ Confirm fold",
+                        event="FoldConfirmPrompt",
+                    )
+                return None
+
+            self._pending_fold_confirmations.pop(user_id, None)
+
+        action_to_execute = prepared_action
+        if action_to_execute is None:
+            action_to_execute = self._pending_fold_confirmations.get(user_id)
+
+        self._pending_fold_confirmations.pop(user_id, None)
+
+        if action_to_execute is None:
+            log_helper.warn(
+                "FoldActionMissing",
+                "No prepared fold action available",
+                user_id=user_id,
+                game_id=getattr(game, "id", None),
+            )
+            return False
+
+        success = await self._model.execute_player_action(action_to_execute)
+        return success
 
     @classmethod
     def _is_stale_callback_query_error(cls, error: BadRequest) -> bool:
@@ -629,10 +732,97 @@ Send 💰 /money once per day for free chips!
         if not query or not query.data:
             return
 
-        # Acknowledge the callback immediately
-        await self._respond_to_query(query)
-
         callback_data = query.data
+        user_id = getattr(getattr(query, "from_user", None), "id", None)
+
+        if callback_data == "confirm_fold":
+            if user_id is None:
+                await self._respond_to_query(
+                    query,
+                    "♻️ Fold action expired. Refresh buttons.",
+                    event="FoldConfirm",
+                )
+                return
+
+            pending = self._pending_fold_confirmations.get(user_id)
+
+            if pending is None:
+                await self._respond_to_query(
+                    query,
+                    "♻️ Fold action expired. Refresh buttons.",
+                    event="FoldConfirm",
+                )
+                return
+
+            result = await self.handle_fold(
+                user_id=user_id,
+                game=pending.game,
+                confirmed=True,
+                prepared_action=pending,
+            )
+
+            message = query.message
+            if message is not None:
+                try:
+                    await self._view.remove_markup(
+                        chat_id=message.chat_id,
+                        message_id=message.message_id,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    log_helper.warn(
+                        "FoldConfirmCleanupFailed",
+                        "Failed to clear confirmation keyboard",
+                        error=str(exc),
+                    )
+
+            if result:
+                await NotificationManager.toast(
+                    query,
+                    text="🚪 Folded",
+                    event="ActionToast",
+                )
+            else:
+                await self._respond_to_query(
+                    query,
+                    "❌ Unable to process fold. Please try again.",
+                    event="FoldConfirm",
+                )
+            return
+
+        if callback_data == "cancel_fold":
+            if user_id is not None:
+                self._pending_fold_confirmations.pop(user_id, None)
+
+            message = query.message
+            if message is not None:
+                try:
+                    await self._view.remove_markup(
+                        chat_id=message.chat_id,
+                        message_id=message.message_id,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    log_helper.warn(
+                        "FoldCancelCleanupFailed",
+                        "Failed to clear confirmation keyboard",
+                        error=str(exc),
+                    )
+
+            query_id = getattr(query, "id", None)
+            if query_id is not None:
+                await self._view.answer_callback_query(
+                    query_id,
+                    "Fold cancelled",
+                )
+            else:
+                await self._respond_to_query(
+                    query,
+                    "Fold cancelled",
+                    event="FoldConfirmCancel",
+                )
+            return
+
+        # Acknowledge the callback immediately for legacy handlers
+        await self._respond_to_query(query)
 
         # Legacy fallback for old button format
         player_action_callbacks = {
@@ -1310,14 +1500,29 @@ Send 💰 /money once per day for free chips!
                     )
                     return
 
+                prepared_action = validation.prepared_action
+
                 toast_message = self._build_action_toast(
                     action_type,
                     validation,
                 )
 
-                success = await self._model.execute_player_action(
-                    validation.prepared_action
-                )
+                if action_type == "fold" and prepared_action is not None:
+                    fold_result = await self.handle_fold(
+                        user_id=user_id,
+                        game=prepared_action.game,
+                        prepared_action=prepared_action,
+                        query=query,
+                    )
+
+                    if fold_result is None:
+                        return
+
+                    success = fold_result
+                else:
+                    success = await self._model.execute_player_action(
+                        prepared_action
+                    )
 
                 if not success:
                     log_helper.warn(
