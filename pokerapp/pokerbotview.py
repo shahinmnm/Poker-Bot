@@ -294,6 +294,46 @@ class PokerBotViewer:
 
         return InlineKeyboardMarkup(buttons)
 
+    async def show_fold_confirmation(
+        self,
+        chat_id: int,
+        pot_size: int,
+        player_invested: int,
+    ) -> None:
+        """Display a high-stakes fold confirmation dialog."""
+
+        investment_pct = (
+            (player_invested / pot_size) * 100 if pot_size > 0 else 0
+        )
+        message = (
+            "⚠️ <b>FOLD CONFIRMATION</b>\n\n"
+            f"💰 Pot: ${pot_size:,}\n"
+            f"💸 Your Investment: ${player_invested:,} ({investment_pct:.1f}%)\n\n"
+            "Are you sure you want to fold?"
+        )
+
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "❌ Yes, Fold", callback_data="confirm_fold"
+                    ),
+                    InlineKeyboardButton(
+                        "↩️ Cancel", callback_data="cancel_fold"
+                    ),
+                ]
+            ]
+        )
+
+        await self._bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            reply_markup=keyboard,
+            parse_mode=ParseMode.HTML,
+            disable_notification=True,
+            disable_web_page_preview=True,
+        )
+
     async def send_game_state(
         self,
         chat_id: ChatId,
@@ -426,6 +466,21 @@ class PokerBotViewer:
             reply_markup=reply_markup,
             disable_notification=True,
             disable_web_page_preview=True,
+        )
+
+    async def answer_callback_query(
+        self,
+        query_id: str,
+        text: Optional[str] = None,
+        *,
+        show_alert: bool = False,
+    ) -> None:
+        """Acknowledge a callback query by its identifier."""
+
+        await self._bot.answer_callback_query(
+            callback_query_id=query_id,
+            text=text,
+            show_alert=show_alert,
         )
 
     async def send_dice_reply(
