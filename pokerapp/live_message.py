@@ -591,7 +591,12 @@ class LiveMessageManager:
             device_profile=device_profile,
         )
 
-        content_hash = hashlib.sha256(bundle.message_text.encode()).hexdigest()
+        keyboard_component = bundle.keyboard_json or ""
+        content_hash = hashlib.sha256(
+            bundle.message_text.encode()
+            + b"\x1f"
+            + keyboard_component.encode()
+        ).hexdigest()
         if content_hash == state.last_content_hash:
             self._logger.debug(
                 "Skipping identical message update for chat %s", chat_id
