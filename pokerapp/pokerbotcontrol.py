@@ -758,42 +758,41 @@ class PokerBotController:
         try:
             current_state = await self.middleware.menu_state.get_state(chat.id)
 
-        if not current_state:
-            new_location = MenuLocation.MAIN_MENU
-        else:
-            parent = MENU_HIERARCHY.get(current_state.location)
-            new_location = parent if parent else MenuLocation.MAIN_MENU
-
-        await self._persist_menu_state(
-            user_id=user.id,
-            chat_id=chat.id,
-            location=new_location,
-            context_data={},
-        )
-
-            parent_location_value = MENU_HIERARCHY.get(current_location)
-
-            if parent_location_value is None:
-                await query.answer("Already at main menu")
-                return
-
-            if isinstance(parent_location_value, MenuLocation):
-                parent_location = parent_location_value
+            if current_state is None:
+                target_location = MenuLocation.MAIN
             else:
                 try:
-                    parent_location = MenuLocation(parent_location_value)
+                    current_location = MenuLocation(current_state.location)
                 except ValueError:
-                    self._logger.error(
-                        "Invalid parent location '%s' in hierarchy",
-                        parent_location_value,
+                    self._logger.warning(
+                        "Invalid menu location '%s' for chat %d, falling back to MAIN",
+                        current_state.location,
+                        chat.id,
                     )
-                    parent_location = MenuLocation.MAIN
+                    current_location = MenuLocation.MAIN
+
+                parent_location_value = MENU_HIERARCHY.get(current_location)
+                if parent_location_value is None:
+                    await query.answer("Already at main menu")
+                    return
+
+                if isinstance(parent_location_value, MenuLocation):
+                    target_location = parent_location_value
+                else:
+                    try:
+                        target_location = MenuLocation(parent_location_value)
+                    except ValueError:
+                        self._logger.error(
+                            "Invalid parent location '%s' in hierarchy",
+                            parent_location_value,
+                        )
+                        target_location = MenuLocation.MAIN
 
             self._middleware._metrics.record_navigation("back")
 
             await self._safe_navigation_update(
                 query,
-                parent_location,
+                target_location,
                 "back navigation",
             )
 
@@ -821,13 +820,7 @@ class PokerBotController:
         if not user or not chat:
             return
 
-        await self._persist_menu_state(
-            user_id=user.id,
-            chat_id=chat.id,
-            location=MenuLocation.MAIN_MENU,
-            context_data={},
-        )
-
+        try:
             self._middleware._metrics.record_navigation("home")
 
             await self._safe_navigation_update(
