@@ -167,6 +167,11 @@
         "left_game": "👋 עזבתם את המשחק"
       }
     },
+    "error": {
+      "navigation_failed": "⚠️ הניווט נכשל. נסו שוב.",
+      "invalid_state": "⚠️ זוהתה מצב תפריט שגוי. חוזרים לתפריט הראשי.",
+      "state_recovery": "♻️ מצב התפריט שוחזר. המשיכו."
+    },
     "lobby": {
       "active_games": "📊 משחקים פעילים: {count}",
       "game_starting": "🎮 המשחק מתחיל בעוד {seconds} ש'...",

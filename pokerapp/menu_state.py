@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import inspect
 import json
+import logging
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from .kvstore import RedisKVStore as KVStoreRedis
 
+logger = logging.getLogger(__name__)
+
 
 class MenuLocation(str, Enum):
     """Known menu locations for bot navigation."""
 
+    MAIN = "main"
     MAIN_MENU = "main"
     PRIVATE_GAME_SETUP = "private_setup"
     PRIVATE_GAME_VIEW = "private_view"
@@ -27,22 +32,26 @@ class MenuLocation(str, Enum):
 
 @dataclass
 class MenuState:
-    """Represents a user's current menu navigation state."""
+    """Represents a chat's current menu navigation state."""
 
-    location: MenuLocation
-    parent: Optional[MenuLocation]
-    context_data: Dict[str, Any]
-    timestamp: float
+    chat_id: int
+    location: str
+    context_data: Dict[str, Any] = field(default_factory=dict)
+    timestamp: float = field(default_factory=lambda: time.time())
+
+    def __post_init__(self) -> None:  # pragma: no cover - defensive normalization
+        if not isinstance(self.context_data, dict):
+            self.context_data = {}
 
 
 MENU_HIERARCHY: Dict[MenuLocation, Optional[MenuLocation]] = {
-    MenuLocation.PRIVATE_GAME_SETUP: MenuLocation.MAIN_MENU,
+    MenuLocation.PRIVATE_GAME_SETUP: MenuLocation.MAIN,
     MenuLocation.STAKE_SELECTION: MenuLocation.PRIVATE_GAME_SETUP,
     MenuLocation.PLAYER_MANAGEMENT: MenuLocation.PRIVATE_GAME_VIEW,
-    MenuLocation.GROUP_GAME_SETUP: MenuLocation.MAIN_MENU,
-    MenuLocation.SETTINGS: MenuLocation.MAIN_MENU,
+    MenuLocation.GROUP_GAME_SETUP: MenuLocation.MAIN,
+    MenuLocation.SETTINGS: MenuLocation.MAIN,
     MenuLocation.LANGUAGE_SELECT: MenuLocation.SETTINGS,
-    MenuLocation.MAIN_MENU: None,
+    MenuLocation.MAIN: None,
     MenuLocation.PRIVATE_GAME_VIEW: None,
     MenuLocation.GROUP_GAME_VIEW: None,
 }
@@ -51,79 +60,171 @@ MENU_HIERARCHY: Dict[MenuLocation, Optional[MenuLocation]] = {
 class MenuStateManager:
     """Persist and retrieve menu states for chats."""
 
+    TTL = 3600
+
     def __init__(self, store: KVStoreRedis) -> None:
         """Initialize manager with backing key-value store."""
 
         self._store = store
+        self._logger = logging.getLogger(__name__)
+        self._recovery = MenuStateRecovery(store)
 
-    def _make_key(self, user_id: int, chat_id: int) -> str:
+    async def _maybe_await(self, value: Any) -> Any:
+        if inspect.isawaitable(value):
+            return await value
+        return value
+
+    def _make_key(self, chat_id: int) -> str:
         """Build redis key for storing menu state."""
 
-        return f"menu_state:{user_id}:{chat_id}"
+        return f"menu_state:{chat_id}"
 
-    async def get_state(self, user_id: int, chat_id: int) -> Optional[MenuState]:
-        """Retrieve the current :class:`MenuState` for a user/chat."""
+    async def get_state(self, chat_id: int) -> Optional[MenuState]:
+        """Retrieve the current :class:`MenuState` for a chat with validation."""
 
-        key = self._make_key(user_id, chat_id)
-        raw = self._store.get(key)
-        if not raw:
+        key = self._make_key(chat_id)
+
+        try:
+            data = await self._maybe_await(self._store.get(key))
+            if data is None:
+                return None
+
+            if isinstance(data, bytes):
+                data = data.decode("utf-8")
+
+            state_dict = json.loads(data)
+            state_dict.setdefault("chat_id", chat_id)
+            raw_state = MenuState(**state_dict)
+
+            validated_state = await self._recovery.validate_and_repair(
+                chat_id,
+                raw_state,
+            )
+
+            if validated_state != raw_state and validated_state is not None:
+                await self.set_state(validated_state)
+
+            return validated_state
+
+        except (json.JSONDecodeError, TypeError, KeyError) as exc:
+            self._logger.error(
+                "Failed to parse menu state for chat %d: %s",
+                chat_id,
+                exc,
+            )
             return None
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8")
-        data = json.loads(raw)
-        location = MenuLocation(data["location"])
-        parent_value = data.get("parent")
-        parent: Optional[MenuLocation] = None
-        if parent_value:
-            try:
-                parent = MenuLocation(parent_value)
-            except ValueError:
-                parent = None
-        context_data = data.get("context_data", {})
-        if not isinstance(context_data, dict):
-            context_data = {}
-        timestamp = float(data.get("timestamp", time.time()))
-        return MenuState(
-            location=location,
-            parent=parent,
-            context_data=context_data,
-            timestamp=timestamp,
+
+    async def set_state(self, state: MenuState) -> None:
+        """Set menu state with detailed logging."""
+
+        key = self._make_key(state.chat_id)
+        data = json.dumps(asdict(state))
+
+        await self._maybe_await(self._store.set(key, data, ex=self.TTL))
+
+        self._logger.debug(
+            "Menu state updated: chat=%d, location=%s, context_keys=%s",
+            state.chat_id,
+            state.location,
+            list(state.context_data.keys()),
         )
 
-    async def set_state(
-        self,
-        user_id: int,
-        chat_id: int,
-        state: MenuState,
-    ) -> None:
-        """Persist the provided :class:`MenuState` for a user/chat."""
+    async def clear_state(self, chat_id: int) -> None:
+        """Clear menu state with logging."""
 
-        key = self._make_key(user_id, chat_id)
-        payload = json.dumps(
-            {
-                "location": state.location.value,
-                "parent": state.parent.value if state.parent else None,
-                "context_data": state.context_data,
-                "timestamp": state.timestamp,
-            }
+        key = self._make_key(chat_id)
+        await self._maybe_await(self._store.delete(key))
+
+        self._logger.info(
+            "Menu state cleared for chat %d",
+            chat_id,
         )
-        self._store.set(key, payload, ex=3600)
 
-    async def clear_state(self, user_id: int, chat_id: int) -> None:
-        """Remove any stored menu state for the user/chat."""
-
-        key = self._make_key(user_id, chat_id)
-        self._store.delete(key)
-
-    async def get_parent_location(
-        self,
-        user_id: int,
-        chat_id: int,
-    ) -> Optional[MenuLocation]:
+    async def get_parent_location(self, chat_id: int) -> Optional[MenuLocation]:
         """Return the parent menu location for the stored state."""
 
-        state = await self.get_state(user_id, chat_id)
-        return state.parent if state else None
+        state = await self.get_state(chat_id)
+        if not state:
+            return None
+
+        try:
+            location = MenuLocation(state.location)
+        except ValueError:
+            return None
+
+        return MENU_HIERARCHY.get(location)
+
+
+class MenuStateRecovery:
+    """Recovery utilities for corrupted or invalid menu states."""
+
+    def __init__(self, kvstore: "KVStore"):
+        self._kvstore = kvstore
+        self._logger = logging.getLogger(__name__)
+
+    async def validate_and_repair(
+        self,
+        chat_id: int,
+        current_state: Optional[MenuState],
+    ) -> Optional[MenuState]:
+        """
+        Validate menu state and repair if corrupted.
+
+        Returns:
+            Repaired state or None if unrecoverable
+        """
+        if current_state is None:
+            return None
+
+        try:
+            MenuLocation(current_state.location)
+        except ValueError:
+            self._logger.warning(
+                "Invalid menu location '%s' for chat %d, resetting to MAIN",
+                current_state.location,
+                chat_id,
+            )
+            return MenuState(
+                chat_id=chat_id,
+                location=MenuLocation.MAIN.value,
+                context_data={},
+                timestamp=time.time(),
+            )
+
+        now = time.time()
+        if current_state.timestamp > now + 60:
+            self._logger.warning(
+                "Future timestamp detected for chat %d, correcting",
+                chat_id,
+            )
+            current_state.timestamp = now
+
+        if now - current_state.timestamp > 86400:
+            self._logger.info(
+                "Stale menu state for chat %d (age: %d sec), resetting",
+                chat_id,
+                int(now - current_state.timestamp),
+            )
+            return None
+
+        if not isinstance(current_state.context_data, dict):
+            self._logger.warning(
+                "Invalid context_data type for chat %d, resetting to empty dict",
+                chat_id,
+            )
+            current_state.context_data = {}
+
+        return current_state
+
+    async def cleanup_orphaned_states(self) -> int:
+        """
+        Remove menu states for inactive chats (older than 7 days).
+
+        Returns:
+            Number of states cleaned up
+        """
+        self._logger.info("Orphaned state cleanup not yet implemented")
+        return 0
 
 
 def get_breadcrumb_path(location: MenuLocation) -> List[MenuLocation]:
