@@ -22,12 +22,19 @@ class MenuLocation(str, Enum):
     MAIN_MENU = "main"
     PRIVATE_GAME_SETUP = "private_setup"
     PRIVATE_GAME_VIEW = "private_view"
+    PRIVATE_GAME_MANAGEMENT = "private_manage"
+    PRIVATE_GAME_CREATION = "private_create"
+    INVITATIONS = "invitations"
     STAKE_SELECTION = "stake_select"
     PLAYER_MANAGEMENT = "player_mgmt"
     GROUP_GAME_SETUP = "group_setup"
     GROUP_GAME_VIEW = "group_view"
+    GROUP_LOBBY = "group_lobby"
+    ACTIVE_GAME = "active_game"
+    ADMIN_PANEL = "admin_panel"
     SETTINGS = "settings"
     LANGUAGE_SELECT = "lang_select"
+    HELP = "help"
 
 
 @dataclass
@@ -46,14 +53,21 @@ class MenuState:
 
 MENU_HIERARCHY: Dict[MenuLocation, Optional[MenuLocation]] = {
     MenuLocation.PRIVATE_GAME_SETUP: MenuLocation.MAIN,
-    MenuLocation.STAKE_SELECTION: MenuLocation.PRIVATE_GAME_SETUP,
-    MenuLocation.PLAYER_MANAGEMENT: MenuLocation.PRIVATE_GAME_VIEW,
-    MenuLocation.GROUP_GAME_SETUP: MenuLocation.MAIN,
+    MenuLocation.PRIVATE_GAME_VIEW: MenuLocation.MAIN,
+    MenuLocation.PRIVATE_GAME_MANAGEMENT: MenuLocation.MAIN,
+    MenuLocation.PRIVATE_GAME_CREATION: MenuLocation.PRIVATE_GAME_MANAGEMENT,
+    MenuLocation.STAKE_SELECTION: MenuLocation.PRIVATE_GAME_CREATION,
+    MenuLocation.PLAYER_MANAGEMENT: MenuLocation.PRIVATE_GAME_MANAGEMENT,
+    MenuLocation.INVITATIONS: MenuLocation.MAIN,
+    MenuLocation.GROUP_GAME_SETUP: MenuLocation.GROUP_LOBBY,
+    MenuLocation.GROUP_GAME_VIEW: MenuLocation.GROUP_LOBBY,
+    MenuLocation.GROUP_LOBBY: MenuLocation.MAIN,
+    MenuLocation.ACTIVE_GAME: MenuLocation.GROUP_LOBBY,
+    MenuLocation.ADMIN_PANEL: MenuLocation.GROUP_LOBBY,
     MenuLocation.SETTINGS: MenuLocation.MAIN,
     MenuLocation.LANGUAGE_SELECT: MenuLocation.SETTINGS,
+    MenuLocation.HELP: MenuLocation.MAIN,
     MenuLocation.MAIN: None,
-    MenuLocation.PRIVATE_GAME_VIEW: None,
-    MenuLocation.GROUP_GAME_VIEW: None,
 }
 
 
