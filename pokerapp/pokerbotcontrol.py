@@ -2,12 +2,10 @@
 
 import inspect
 import logging
-from typing import Any, Iterable, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Optional, Tuple, TYPE_CHECKING
 
 from telegram import (
     BotCommand,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
     Update,
 )
 from telegram.error import BadRequest
@@ -616,7 +614,10 @@ class PokerBotController:
         """Handle /language command - show language selection menu."""
 
         user = update.effective_user
-        if not user:
+        message = update.effective_message
+        chat = update.effective_chat
+
+        if not user or not message or not chat:
             return
 
         current_lang = self._kv.get_user_language(user.id) or translation_manager.DEFAULT_LANGUAGE
@@ -626,17 +627,10 @@ class PokerBotController:
         # callback selection is made.
         self._kv.set_user_language(user.id, current_lang)
 
-        markup = self._build_language_keyboard(current_lang)
-
-        header = translation_manager.t(
-            "settings.choose_language",
-            user_id=user.id,
-            lang=current_lang,
-        )
-
-        await update.effective_message.reply_text(
-            text=header,
-            reply_markup=markup,
+        await self._view.send_language_menu(
+            chat_id=chat.id,
+            language_code=current_lang,
+            reply_to_message_id=message.message_id,
         )
 
     async def _handle_language_selection(
@@ -669,49 +663,26 @@ class PokerBotController:
             lang=lang_code,
         )
 
-        await query.answer(confirmation, show_alert=True)
+        await self._view.answer_callback_query(
+            query_id=query.id,
+            text=confirmation,
+            show_alert=True,
+        )
 
         # Re-render any active UI (live games, menus, etc.) that depend on the
         # translation context before showing the refreshed language picker.
         if hasattr(self, "_model") and hasattr(self._model, "refresh_language_for_user"):
             await self._model.refresh_language_for_user(user.id)
 
-        await self._handle_language(update, context)
+        message = query.message
+        chat = message.chat if message else None
 
-    def _build_language_keyboard(self, current_lang: str) -> InlineKeyboardMarkup:
-        """Construct a two-column language selector with flags and labels."""
-
-        languages = translation_manager.get_supported_languages()
-
-        def batched(iterable: Iterable[Any], size: int) -> Iterable[List[Any]]:
-            chunk: List[Any] = []
-            for item in iterable:
-                chunk.append(item)
-                if len(chunk) == size:
-                    yield chunk
-                    chunk = []
-            if chunk:
-                yield chunk
-
-        rows: List[List[InlineKeyboardButton]] = []
-        for pair in batched(languages, 2):
-            row: List[InlineKeyboardButton] = []
-            for lang_info in pair:
-                code = lang_info["code"]
-                name = lang_info.get("name", code.upper())
-                flag = lang_info.get("flag", "🏳️")
-                label = f"{flag} {name}"
-                if code == current_lang:
-                    label = f"✅ {label}"
-                row.append(
-                    InlineKeyboardButton(
-                        text=label,
-                        callback_data=f"lang:{code}",
-                    )
-                )
-            rows.append(row)
-
-        return InlineKeyboardMarkup(rows)
+        if chat and message:
+            await self._view.send_language_menu(
+                chat_id=chat.id,
+                language_code=lang_code,
+                message_id=message.message_id,
+            )
 
     async def _handle_button_clicked(
         self,
