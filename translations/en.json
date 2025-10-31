@@ -103,6 +103,36 @@
       "already_claimed": "🎁 Daily bonus already claimed!\nYour chips: *{amount}$*",
       "already_claimed_plain": "You have already received the bonus today.\nYour chips: {amount}$",
       "result": "Bonus: *{bonus}$* {icon}\nYour chips: *{total}$*"
+    },
+    "private": {
+      "stake_menu": {
+        "body": "{title}\n\n{subtitle}\n\n{options}\n\n{footer}",
+        "title": "🔒 CREATE PRIVATE GAME",
+        "subtitle": "Choose your stake level:",
+        "footer": "⚠️ All players need minimum buy-in to join!",
+        "option_micro": "💎 Micro - Small stakes, great for practice",
+        "option_low": "🎯 Low - Casual games with friends",
+        "option_medium": "🎲 Medium - Standard poker action",
+        "option_high": "💰 High - Serious players only",
+        "option_premium": "👑 Premium - High rollers table",
+        "cancelled": "🚫 Private game creation cancelled."
+      },
+      "invite": {
+        "body": "🎰 PRIVATE GAME INVITATION\n\n{inviter} invited you to a private poker game!\n\n🎲 Stakes: {stake}\n🔑 Game Code: {code}\n\nWill you join?"
+      },
+      "lobby": {
+        "title": "🔒 PRIVATE GAME LOBBY",
+        "player_status": "{status_icon} Players: {current}/{max} {min_indicator}",
+        "min_indicator": "(min {min_players})",
+        "ready": "✅ Ready to start!",
+        "waiting": "⏳ Waiting for more players…",
+        "body": "{title}\n\n🎯 Host: {host}\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\n{player_status}\n\n{players}\n\n{readiness}"
+      },
+      "error": {
+        "already_active": "❌ You already have an active private game!\nUse /leave to exit your current game first.",
+        "invalid_stake": "❌ Invalid stake level: {level}"
+      },
+      "created": "✅ Private game created!\n\n🎯 **Game Code**: {code}\n💰 **Stakes**: {stake}\n💵 **Buy-in**: {min_buyin} - {max_buyin}\n\n📨 Share this code with friends:\n/join {code}\n\n👥 **Players**: 1/{max_players}\n• {host} (Host)\n\n⏳ Waiting for players to join..."
     }
   },
   "popup": {
@@ -135,6 +165,31 @@
       "sit": "🪑 Sit Down",
       "stand": "🚶 Stand Up",
       "start": "🎮 Start Game"
+    },
+    "language": {
+      "back": "⬅️ Back"
+    },
+    "private": {
+      "stake_menu": {
+        "button": {
+          "micro": "💎 Micro (5/10) - 200 min",
+          "low": "🎯 Low (10/20) - 400 min",
+          "medium": "🎲 Medium (25/50) - 1K min",
+          "high": "💰 High (50/100) - 2K min",
+          "premium": "👑 Premium (100/200) - 4K min",
+          "language": "🌐 Language",
+          "cancel": "❌ Cancel"
+        }
+      },
+      "invite": {
+        "accept": "✅ Accept Invitation",
+        "decline": "❌ Decline"
+      },
+      "lobby": {
+        "start": "🎰 START GAME",
+        "invite": "📨 Invite Player",
+        "leave": "🚪 Leave Lobby"
+      }
     },
     "controller": {
       "commands": {
@@ -189,8 +244,12 @@
     },
     "lobby": {
       "host": "👑 Host",
+      "game_in_progress": "🎮 Game in progress! Please wait for the next round.",
       "joined": "✅ {player} joined!",
       "left": "👋 {player} left",
+      "room_full": "🚫 The table is full (max {max_players} players).",
+      "already_ready": "✅ You’re already marked as ready!",
+      "insufficient_funds": "💸 You don’t have enough chips for this table.",
       "players": "👥 Players ({count}/{max})",
       "ready_to_start": "✅ Ready to start! Press the button below.",
       "title": "🎮 Game Lobby",

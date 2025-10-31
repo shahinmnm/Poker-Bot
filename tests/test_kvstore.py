@@ -46,3 +46,19 @@ def test_set_get_network_error_uses_fallback_memory_store():
     assert store.set("foo", "bar") is True
     assert store._backend is None
     assert store.get("foo") == b"bar"
+
+
+def test_chat_language_round_trip():
+    store = ResilientKV(None)
+
+    store.set_chat_language(12345, "es")
+
+    assert store.get_chat_language(12345) == "es"
+
+
+def test_user_language_round_trip():
+    store = ResilientKV(None)
+
+    store.set_user_language(42, "de")
+
+    assert store.get_user_language(42) == "de"

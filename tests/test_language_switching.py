@@ -90,3 +90,40 @@ def test_refresh_language_handles_missing_games_gracefully() -> None:
 
     send_mock = model._coordinator._send_or_update_game_state  # type: ignore[attr-defined]
     assert send_mock.await_count == 0
+
+
+def test_apply_user_language_prefers_chat_setting() -> None:
+    """Group chats should use the stored chat language over user defaults."""
+
+    model = _build_model({})
+
+    model._kv.set_chat_language(-123, "ru")
+
+    update = SimpleNamespace(
+        effective_chat=SimpleNamespace(id=-123, type="group"),
+        effective_user=SimpleNamespace(id=7, language_code="es"),
+        effective_message=SimpleNamespace(message_id=1),
+    )
+
+    resolved = model._apply_user_language(update)
+
+    assert resolved == "ru"
+    model._view.set_language_context.assert_called_with("ru", user_id=7)
+
+
+def test_apply_user_language_stores_chat_default_when_missing() -> None:
+    """When a group has no stored language, use the user's choice and persist it."""
+
+    model = _build_model({})
+
+    update = SimpleNamespace(
+        effective_chat=SimpleNamespace(id=-555, type="group"),
+        effective_user=SimpleNamespace(id=9, language_code="es"),
+        effective_message=SimpleNamespace(message_id=2),
+    )
+
+    resolved = model._apply_user_language(update)
+
+    assert resolved == "es"
+    assert model._kv.get_chat_language(-555) == "es"
+    model._view.set_language_context.assert_called_with("es", user_id=9)

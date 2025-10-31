@@ -103,6 +103,36 @@
       "already_claimed": "🎁 הבונוס היומי כבר נגבה!\nהז׳יטונים שלך: *{amount}$*",
       "already_claimed_plain": "כבר קיבלת את הבונוס היום.\nהז׳יטונים שלך: {amount}$",
       "result": "בונוס: *{bonus}$* {icon}\nהז׳יטונים שלך: *{total}$*"
+    },
+    "private": {
+      "stake_menu": {
+        "body": "{title}\n\n{subtitle}\n\n{options}\n\n{footer}",
+        "title": "🔒 יצירת משחק פרטי",
+        "subtitle": "בחר רמת הימור:",
+        "footer": "⚠️ כל השחקנים חייבים לעמוד בביי-אין המינימלי כדי להצטרף!",
+        "option_micro": "💎 מיקרו – הימורים נמוכים לתרגול",
+        "option_low": "🎯 נמוך – משחקים חבריים עם חברים",
+        "option_medium": "🎲 בינוני – אקשן פוקר סטנדרטי",
+        "option_high": "💰 גבוה – רק לשחקנים רציניים",
+        "option_premium": "👑 פרימיום – שולחן היי רולרים",
+        "cancelled": "🚫 יצירת המשחק הפרטי בוטלה."
+      },
+      "invite": {
+        "body": "🎰 הזמנה למשחק פרטי\n\n{inviter} הזמין אותך למשחק פוקר פרטי!\n\n🎲 הימורים: {stake}\n🔑 קוד משחק: {code}\n\nמצטרף?"
+      },
+      "lobby": {
+        "title": "🔒 לובי משחק פרטי",
+        "player_status": "{status_icon} שחקנים: {current}/{max} {min_indicator}",
+        "min_indicator": "(מינימום {min_players})",
+        "ready": "✅ מוכנים להתחיל!",
+        "waiting": "⏳ ממתינים לעוד שחקנים…",
+        "body": "{title}\n\n🎯 מארח: {host}\n🎲 הימורים: {stake}\n🔑 קוד: {code}\n\n{player_status}\n\n{players}\n\n{readiness}"
+      },
+      "error": {
+        "already_active": "❌ כבר יש לך משחק פרטי פעיל!\nהשתמש/י ב-‎/leave כדי לצאת מהמשחק הנוכחי.",
+        "invalid_stake": "❌ רמת הימור לא חוקית: {level}"
+      },
+      "created": "✅ משחק פרטי נוצר!\n\n🎯 **קוד משחק**: {code}\n💰 **הימורים**: {stake}\n💵 **ביי-אין**: {min_buyin} - {max_buyin}\n\n📨 שתף/י את הקוד עם חברים:\n/join {code}\n\n👥 **שחקנים**: 1/{max_players}\n• {host} (מארח)\n\n⏳ ממתינים להצטרפות שחקנים..."
     }
   },
   "popup": {
@@ -135,6 +165,31 @@
       "sit": "🪑 התיישבות",
       "stand": "🚶 קום",
       "start": "🎮 התחלת משחק"
+    },
+    "language": {
+      "back": "⬅️ חזרה"
+    },
+    "private": {
+      "stake_menu": {
+        "button": {
+          "micro": "💎 מיקרו (5/10) - מינ' 200",
+          "low": "🎯 נמוך (10/20) - מינ' 400",
+          "medium": "🎲 בינוני (25/50) - מינ' 1K",
+          "high": "💰 גבוה (50/100) - מינ' 2K",
+          "premium": "👑 פרימיום (100/200) - מינ' 4K",
+          "language": "🌐 שפה",
+          "cancel": "❌ ביטול"
+        }
+      },
+      "invite": {
+        "accept": "✅ קבל הזמנה",
+        "decline": "❌ דחה"
+      },
+      "lobby": {
+        "start": "🎰 התחל משחק",
+        "invite": "📨 הזמן שחקן",
+        "leave": "🚪 עזוב לובי"
+      }
     },
     "controller": {
       "commands": {
@@ -189,8 +244,12 @@
     },
     "lobby": {
       "host": "👑 מארח",
+      "game_in_progress": "🎮 המשחק כבר מתנהל! אנא המתן לסבב הבא.",
       "joined": "✅ {player} הצטרף!",
       "left": "👋 {player} עזב",
+      "room_full": "🚫 השולחן מלא (מקסימום {max_players} שחקנים).",
+      "already_ready": "✅ כבר סימנת שאתה מוכן.",
+      "insufficient_funds": "💸 אין לך מספיק ז׳יטונים לשולחן הזה.",
       "players": "👥 שחקנים ({count}/{max})",
       "ready_to_start": "✅ מוכנים להתחיל! לחצו על הכפתור למטה.",
       "title": "🎮 לובי המשחק",
