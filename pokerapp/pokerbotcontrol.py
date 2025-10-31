@@ -637,7 +637,13 @@ class PokerBotController:
             location=MenuLocation.MAIN_MENU,
         )
 
-        menu_context = await self.middleware.build_menu_context(update, context)
+        menu_context = await self.middleware.build_menu_context(
+            chat_id=chat.id,
+            chat_type=chat.type,
+            user_id=user.id,
+            language_code=getattr(user, "language_code", None),
+            chat=chat,
+        )
 
         welcome_text = translation_manager.t(
             "msg.welcome",
@@ -665,7 +671,13 @@ class PokerBotController:
             location=MenuLocation.MAIN_MENU,
         )
 
-        menu_context = await self.middleware.build_menu_context(update, context)
+        menu_context = await self.middleware.build_menu_context(
+            chat_id=chat.id,
+            chat_type=chat.type,
+            user_id=user.id,
+            language_code=getattr(user, "language_code", None),
+            chat=chat,
+        )
         await self.view._send_menu(chat.id, menu_context)
 
     async def _safe_navigation_update(
@@ -1035,7 +1047,13 @@ class PokerBotController:
                 context_data={},
             )
 
-            menu_context = await self.middleware.build_menu_context(update, context)
+            menu_context = await self.middleware.build_menu_context(
+                chat_id=chat.id,
+                chat_type=chat.type,
+                user_id=user.id,
+                language_code=getattr(user, "language_code", None),
+                chat=chat,
+            )
             await self.view._send_menu(chat.id, menu_context)
 
     async def _handle_button_clicked(
