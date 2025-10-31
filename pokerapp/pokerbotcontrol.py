@@ -3,7 +3,7 @@
 import inspect
 import logging
 import time
-from typing import Any, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 from telegram import (
     BotCommand,
@@ -575,6 +575,32 @@ class PokerBotController:
         """Handle /ready command."""
         await self._model.ready(update, context)
 
+    async def _persist_menu_state(
+        self,
+        *,
+        user_id: Optional[int],
+        chat_id: Optional[int],
+        location: MenuLocation,
+        context_data: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Persist the active menu location for navigation features."""
+
+        if user_id is None or chat_id is None:
+            return
+
+        state = MenuState(
+            location=location,
+            parent=MENU_HIERARCHY.get(location),
+            context_data=context_data or {},
+            timestamp=time.time(),
+        )
+
+        await self.middleware.menu_state.set_state(
+            user_id=user_id,
+            chat_id=chat_id,
+            state=state,
+        )
+
     async def _handle_start(
         self,
         update: Update,
@@ -593,6 +619,12 @@ class PokerBotController:
         message = update.effective_message
         if user is None or chat is None or message is None:
             return
+
+        await self._persist_menu_state(
+            user_id=user.id,
+            chat_id=chat.id,
+            location=MenuLocation.MAIN_MENU,
+        )
 
         menu_context = await self.middleware.build_menu_context(update, context)
 
@@ -615,6 +647,12 @@ class PokerBotController:
         chat = update.effective_chat
         if user is None or chat is None:
             return
+
+        await self._persist_menu_state(
+            user_id=user.id,
+            chat_id=chat.id,
+            location=MenuLocation.MAIN_MENU,
+        )
 
         menu_context = await self.middleware.build_menu_context(update, context)
         await self.view._send_menu(chat.id, menu_context)
@@ -648,17 +686,11 @@ class PokerBotController:
             parent = MENU_HIERARCHY.get(current_state.location)
             new_location = parent if parent else MenuLocation.MAIN_MENU
 
-        new_state = MenuState(
-            location=new_location,
-            parent=MENU_HIERARCHY.get(new_location),
-            context_data={},
-            timestamp=time.time(),
-        )
-
-        await self.middleware.menu_state.set_state(
+        await self._persist_menu_state(
             user_id=user.id,
             chat_id=chat.id,
-            state=new_state,
+            location=new_location,
+            context_data={},
         )
 
         menu_context = await self.middleware.build_menu_context(update, context)
@@ -682,9 +714,11 @@ class PokerBotController:
         if not user or not chat:
             return
 
-        await self.middleware.menu_state.clear_state(
+        await self._persist_menu_state(
             user_id=user.id,
             chat_id=chat.id,
+            location=MenuLocation.MAIN_MENU,
+            context_data={},
         )
 
         menu_context = await self.middleware.build_menu_context(update, context)
