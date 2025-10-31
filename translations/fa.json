@@ -36,7 +36,12 @@
       "game_starting": "🎮 بازی در {seconds} ثانیه آغاز می‌شود...",
       "new_game": "🆕 بازی جدید",
       "active_games": "📊 بازی‌های فعال: {count}",
-      "no_active_games": "بازی فعالی وجود ندارد. یکی بسازید!"
+      "no_active_games": "بازی فعالی وجود ندارد. یکی بسازید!",
+      "players": "👥 Players ({count}/{max})",
+      "waiting": "⏳ Waiting for host to start...",
+      "ready_to_start": "✅ Ready to start!",
+      "player_entry": "• {player}",
+      "host_entry": "👑 {player}"
     },
     "menu": {
       "main": "📋 منوی اصلی",
@@ -65,10 +70,12 @@
       "error": {
         "invalid_action": "❌ اقدام نامعتبر",
         "not_your_turn": "⏸️ نوبت شما نیست",
-        "insufficient_chips": "❌ تراشه کافی ندارید",
-        "game_full": "🚫 میز پر است",
+        "insufficient_chips": "❌ Insufficient chips\nRequired: {required}\nAvailable: {balance}",
+        "game_full": "🚫 Game is full (max {max} players).",
         "already_in_game": "⚠️ شما هم‌اکنون در بازی هستید",
-        "min_raise": "⚠️ حداقل ریز ${amount} است"
+        "min_raise": "⚠️ حداقل ریز ${amount} است",
+        "already_in_game_other": "⚠️ {player} is already in a game.",
+        "not_your_turn_with_player": "It's {player}'s move."
       }
     },
     "controller": {
@@ -171,6 +178,13 @@
       "two_pair": "دو جفت",
       "pair": "یک جفت",
       "high_card": "کارت بالا"
+    },
+    "round": {
+      "pre_flop": "🎴 Pre-flop - Blinds posted",
+      "flop": "🃏 Flop - Three cards revealed",
+      "turn": "🎯 Turn - Fourth card revealed",
+      "river": "🌊 River - Fifth card revealed",
+      "showdown": "🏆 Showdown - Determining winner"
     }
   },
   "popup": {

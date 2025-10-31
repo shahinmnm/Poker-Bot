@@ -36,7 +36,12 @@
       "game_starting": "🎮 El juego comienza en {seconds}s...",
       "new_game": "🆕 Nuevo juego",
       "active_games": "📊 Juegos activos: {count}",
-      "no_active_games": "No hay juegos activos. ¡Crea uno!"
+      "no_active_games": "No hay juegos activos. ¡Crea uno!",
+      "players": "👥 Players ({count}/{max})",
+      "waiting": "⏳ Waiting for host to start...",
+      "ready_to_start": "✅ Ready to start!",
+      "player_entry": "• {player}",
+      "host_entry": "👑 {player}"
     },
     "menu": {
       "main": "📋 Menú principal",
@@ -65,10 +70,12 @@
       "error": {
         "invalid_action": "❌ Acción inválida",
         "not_your_turn": "⏸️ No es tu turno",
-        "insufficient_chips": "❌ Fichas insuficientes",
-        "game_full": "🚫 La mesa está llena",
+        "insufficient_chips": "❌ Insufficient chips\nRequired: {required}\nAvailable: {balance}",
+        "game_full": "🚫 Game is full (max {max} players).",
         "already_in_game": "⚠️ Ya estás en una partida",
-        "min_raise": "⚠️ La subida mínima es ${amount}"
+        "min_raise": "⚠️ La subida mínima es ${amount}",
+        "already_in_game_other": "⚠️ {player} is already in a game.",
+        "not_your_turn_with_player": "It's {player}'s move."
       }
     },
     "controller": {
@@ -171,6 +178,13 @@
       "two_pair": "Doble pareja",
       "pair": "Pareja",
       "high_card": "Carta alta"
+    },
+    "round": {
+      "pre_flop": "🎴 Pre-flop - Blinds posted",
+      "flop": "🃏 Flop - Three cards revealed",
+      "turn": "🎯 Turn - Fourth card revealed",
+      "river": "🌊 River - Fifth card revealed",
+      "showdown": "🏆 Showdown - Determining winner"
     }
   },
   "popup": {

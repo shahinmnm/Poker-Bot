@@ -2238,7 +2238,11 @@ class PokerBotModel:
         if self._kv.get(target_game_key):
             await self._send_response(
                 update,
-                f"❌ @{target_username} is already in a game.",
+                self._translate(
+                    "ui.model.error.already_in_game_other",
+                    user_id=user.id if user else None,
+                    player=f"@{target_username}",
+                ),
             )
             return
 
@@ -3162,9 +3166,12 @@ class PokerBotModel:
             required_chips = format(min_buyin, ",")
             balance_chips = format(wallet.value(), ",")
             await query.edit_message_text(
-                "❌ Insufficient balance!\n\n",
-                f"Required: {required_chips} chips\n",
-                f"Your balance: {balance_chips} chips",
+                self._translate(
+                    "ui.model.error.insufficient_chips",
+                    user_id=user.id,
+                    required=required_chips,
+                    balance=balance_chips,
+                )
             )
             return
 
@@ -3187,7 +3194,11 @@ class PokerBotModel:
         max_players = getattr(self._cfg, "PRIVATE_MAX_PLAYERS", 6)
         if len(game.players) >= max_players:
             await query.edit_message_text(
-                f"❌ Game is full (max {max_players} players).",
+                self._translate(
+                    "ui.model.error.game_full",
+                    user_id=user.id,
+                    max=max_players,
+                )
             )
             return
 
@@ -3606,15 +3617,27 @@ class PokerBotModel:
                 current_player_id_str,
             )
 
-            error_message = "⏳ Not your turn!"
+            try:
+                error_user_id = int(user_id_str)
+            except (TypeError, ValueError):
+                error_user_id = None
+
+            error_message = self._translate(
+                "ui.model.error.not_your_turn",
+                user_id=error_user_id,
+            )
 
             if current_player:
                 player_name = self._get_player_name(current_player)
                 if not player_name:
                     player_name = f"Player {current_player.user_id}"
-                error_message = (
-                    f"⏳ Not your turn! It's {player_name}'s move."
+                detail_message = self._translate(
+                    "ui.model.error.not_your_turn_with_player",
+                    user_id=error_user_id,
+                    player=player_name,
                 )
+                if detail_message:
+                    error_message = "\n".join([error_message, detail_message])
 
             return PlayerActionValidation(
                 success=False,

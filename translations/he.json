@@ -36,7 +36,12 @@
       "game_starting": "🎮 המשחק מתחיל בעוד {seconds} ש'...",
       "new_game": "🆕 משחק חדש",
       "active_games": "📊 משחקים פעילים: {count}",
-      "no_active_games": "אין משחקים פעילים. פתחו אחד!"
+      "no_active_games": "אין משחקים פעילים. פתחו אחד!",
+      "players": "👥 Players ({count}/{max})",
+      "waiting": "⏳ Waiting for host to start...",
+      "ready_to_start": "✅ Ready to start!",
+      "player_entry": "• {player}",
+      "host_entry": "👑 {player}"
     },
     "menu": {
       "main": "📋 תפריט ראשי",
@@ -65,10 +70,12 @@
       "error": {
         "invalid_action": "❌ פעולה לא חוקית",
         "not_your_turn": "⏸️ זה לא התור שלך",
-        "insufficient_chips": "❌ אין מספיק ז'יטונים",
-        "game_full": "🚫 השולחן מלא",
+        "insufficient_chips": "❌ Insufficient chips\nRequired: {required}\nAvailable: {balance}",
+        "game_full": "🚫 Game is full (max {max} players).",
         "already_in_game": "⚠️ אתם כבר במשחק",
-        "min_raise": "⚠️ ההעלאה המינימלית היא ${amount}"
+        "min_raise": "⚠️ ההעלאה המינימלית היא ${amount}",
+        "already_in_game_other": "⚠️ {player} is already in a game.",
+        "not_your_turn_with_player": "It's {player}'s move."
       }
     },
     "controller": {
@@ -171,6 +178,13 @@
       "two_pair": "שני זוגות",
       "pair": "זוג",
       "high_card": "קלף גבוה"
+    },
+    "round": {
+      "pre_flop": "🎴 Pre-flop - Blinds posted",
+      "flop": "🃏 Flop - Three cards revealed",
+      "turn": "🎯 Turn - Fourth card revealed",
+      "river": "🌊 River - Fifth card revealed",
+      "showdown": "🏆 Showdown - Determining winner"
     }
   },
   "popup": {

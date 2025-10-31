@@ -36,7 +36,12 @@
       "game_starting": "🎮 ستبدأ الجولة خلال {seconds} ث...",
       "new_game": "🆕 جولة جديدة",
       "active_games": "📊 جولات نشطة: {count}",
-      "no_active_games": "لا توجد جولات نشطة. ابدأ واحدة!"
+      "no_active_games": "لا توجد جولات نشطة. ابدأ واحدة!",
+      "players": "👥 Players ({count}/{max})",
+      "waiting": "⏳ Waiting for host to start...",
+      "ready_to_start": "✅ Ready to start!",
+      "player_entry": "• {player}",
+      "host_entry": "👑 {player}"
     },
     "menu": {
       "main": "📋 القائمة الرئيسية",
@@ -65,10 +70,12 @@
       "error": {
         "invalid_action": "❌ إجراء غير صالح",
         "not_your_turn": "⏸️ ليس دورك",
-        "insufficient_chips": "❌ رقائق غير كافية",
-        "game_full": "🚫 الطاولة ممتلئة",
+        "insufficient_chips": "❌ Insufficient chips\nRequired: {required}\nAvailable: {balance}",
+        "game_full": "🚫 Game is full (max {max} players).",
         "already_in_game": "⚠️ أنت مشارك بالفعل",
-        "min_raise": "⚠️ الحد الأدنى للزيادة ${amount}"
+        "min_raise": "⚠️ الحد الأدنى للزيادة ${amount}",
+        "already_in_game_other": "⚠️ {player} is already in a game.",
+        "not_your_turn_with_player": "It's {player}'s move."
       }
     },
     "controller": {
@@ -171,6 +178,13 @@
       "two_pair": "زوجان",
       "pair": "زوج",
       "high_card": "أعلى ورقة"
+    },
+    "round": {
+      "pre_flop": "🎴 Pre-flop - Blinds posted",
+      "flop": "🃏 Flop - Three cards revealed",
+      "turn": "🎯 Turn - Fourth card revealed",
+      "river": "🌊 River - Fifth card revealed",
+      "showdown": "🏆 Showdown - Determining winner"
     }
   },
   "popup": {
