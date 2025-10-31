@@ -20,6 +20,7 @@ from pokerapp.entities import (
     MessageId,
     ChatId,
     Mention,
+    MenuContext,
 )
 from pokerapp.device_detector import DeviceProfile, DeviceType
 from pokerapp.i18n import LanguageContext, translation_manager
@@ -856,6 +857,216 @@ class PokerBotViewer:
             chat_id=chat_id,
             parse_mode=ParseMode.MARKDOWN,
             text=text,
+            reply_markup=reply_markup,
+            disable_notification=True,
+            disable_web_page_preview=True,
+        )
+
+    async def send_menu(
+        self,
+        chat_id: int,
+        menu_context: MenuContext,
+    ) -> None:
+        """Public entry point for sending a context-aware menu."""
+
+        await self._send_menu(chat_id, menu_context)
+
+    async def _send_menu(
+        self,
+        chat_id: int,
+        menu_context: MenuContext,
+    ) -> None:
+        """Send appropriate menu based on chat type and user state."""
+
+        language_context = translation_manager.get_language_context(
+            menu_context.language_code
+        )
+
+        if menu_context.is_private_chat():
+            await self._send_private_menu(chat_id, menu_context, language_context)
+        else:
+            await self._send_group_menu(chat_id, menu_context, language_context)
+
+    async def _send_private_menu(
+        self,
+        chat_id: int,
+        context: MenuContext,
+        language_context: LanguageContext,
+    ) -> None:
+        """Build and send menu for private (1-on-1) chats."""
+
+        title = self._t("ui.menu.private.main_title", context=language_context)
+
+        keyboard: List[List[InlineKeyboardButton]] = []
+
+        if context.active_private_game_code:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "ui.menu.private.view_game",
+                            context=language_context,
+                        ),
+                        callback_data="private_view_game",
+                    )
+                ]
+            )
+
+            if context.is_game_host:
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            self._t(
+                                "ui.menu.private.manage_game",
+                                context=language_context,
+                            ),
+                            callback_data="private_manage",
+                        )
+                    ]
+                )
+        else:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "ui.menu.private.create_game",
+                            context=language_context,
+                        ),
+                        callback_data="private_create",
+                    )
+                ]
+            )
+
+        if context.has_pending_invite:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "ui.menu.private.view_invites",
+                            context=language_context,
+                        ),
+                        callback_data="view_invites",
+                    )
+                ]
+            )
+
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    self._t("ui.menu.common.settings", context=language_context),
+                    callback_data="settings",
+                )
+            ]
+        )
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    self._t("ui.menu.common.help", context=language_context),
+                    callback_data="help",
+                )
+            ]
+        )
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await self._send_localized_message(
+            chat_id=chat_id,
+            text=title,
+            context=language_context,
+            reply_markup=reply_markup,
+            disable_notification=True,
+            disable_web_page_preview=True,
+        )
+
+    async def _send_group_menu(
+        self,
+        chat_id: int,
+        context: MenuContext,
+        language_context: LanguageContext,
+    ) -> None:
+        """Build and send menu for group chats."""
+
+        title = self._t("ui.menu.group.main_title", context=language_context)
+
+        keyboard: List[List[InlineKeyboardButton]] = []
+
+        if context.group_has_active_game:
+            if context.in_active_game:
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            self._t(
+                                "ui.menu.group.view_game",
+                                context=language_context,
+                            ),
+                            callback_data="group_view_game",
+                        )
+                    ]
+                )
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            self._t(
+                                "ui.menu.group.leave_game",
+                                context=language_context,
+                            ),
+                            callback_data="group_leave",
+                        )
+                    ]
+                )
+            else:
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            self._t(
+                                "ui.menu.group.join_game",
+                                context=language_context,
+                            ),
+                            callback_data="group_join",
+                        )
+                    ]
+                )
+        else:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "ui.menu.group.start_game",
+                            context=language_context,
+                        ),
+                        callback_data="group_start",
+                    )
+                ]
+            )
+
+        if context.user_is_group_admin:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "ui.menu.group.admin_panel",
+                            context=language_context,
+                        ),
+                        callback_data="group_admin",
+                    )
+                ]
+            )
+
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    self._t("ui.menu.common.help", context=language_context),
+                    callback_data="help",
+                )
+            ]
+        )
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await self._send_localized_message(
+            chat_id=chat_id,
+            text=title,
+            context=language_context,
             reply_markup=reply_markup,
             disable_notification=True,
             disable_web_page_preview=True,

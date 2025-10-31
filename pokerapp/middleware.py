@@ -13,6 +13,8 @@ from telegram import Update
 from telegram.ext import CallbackContext
 
 from pokerapp.notify_utils import LoggerHelper
+from pokerapp.entities import MenuContext
+from pokerapp.i18n import translation_manager
 
 logger = logging.getLogger(__name__)
 log_helper = LoggerHelper.for_logger(logger)
@@ -126,3 +128,83 @@ class UserRateLimiter:
 
         user_queue.append(now)
         return None
+
+
+class PokerMenuMiddleware:
+    """Resolve per-chat menu context for rendering dynamic menus."""
+
+    def __init__(self, model) -> None:
+        self._model = model
+
+    async def get_user_language(self, user_id: int) -> str:
+        """Return the preferred language code for ``user_id``."""
+
+        return translation_manager.get_user_language_or_detect(user_id)
+
+    async def build_menu_context(
+        self,
+        update: Update,
+        user_id: int,
+    ) -> MenuContext:
+        """Build a :class:`MenuContext` describing the active chat state."""
+
+        # Extract chat info
+        chat = update.effective_chat
+        if chat is None:
+            raise ValueError("Cannot build menu context without chat")
+
+        chat_id = chat.id
+        chat_type = chat.type  # "private", "group", or "supergroup"
+
+        # Get language preference
+        language_code = await self.get_user_language(user_id)
+
+        # Query game state from model
+        model = self._model
+
+        # Check if user is in any active game
+        in_active_game = False
+        is_game_host = False
+        active_private_game_code: Optional[str] = None
+        group_game = None
+
+        if chat_type == "private":
+            private_game = await model.get_user_private_game(user_id)
+            if private_game:
+                in_active_game = True
+                is_game_host = private_game.get("host_id") == user_id
+                active_private_game_code = private_game.get("code")
+        else:
+            group_game = await model.get_active_group_game(chat_id)
+            if group_game:
+                players = group_game.get("players", [])
+                in_active_game = user_id in players
+                is_game_host = group_game.get("host_id") == user_id
+
+        # Check pending invites
+        has_pending_invite = await model.has_pending_invite(user_id)
+
+        # Group admin check
+        user_is_group_admin = False
+        if chat_type in ("group", "supergroup"):
+            try:
+                member = await chat.get_member(user_id)
+                user_is_group_admin = member.status in ("administrator", "creator")
+            except Exception:
+                pass
+
+        if chat_type != "private" and group_game is None:
+            group_game = await model.get_active_group_game(chat_id)
+
+        return MenuContext(
+            chat_id=chat_id,
+            chat_type=chat_type,
+            user_id=user_id,
+            language_code=language_code,
+            in_active_game=in_active_game,
+            is_game_host=is_game_host,
+            has_pending_invite=has_pending_invite,
+            group_has_active_game=bool(group_game) if chat_type != "private" else False,
+            user_is_group_admin=user_is_group_admin,
+            active_private_game_code=active_private_game_code,
+        )

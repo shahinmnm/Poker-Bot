@@ -3,7 +3,7 @@
 from abc import abstractmethod
 import enum
 import datetime
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Literal
 from dataclasses import dataclass, field
 from enum import Enum
 from uuid import uuid4
@@ -230,6 +230,48 @@ class BalanceValidator:
     def can_afford_bet(balance: int, bet_amount: int) -> bool:
         """Check if player can afford specific bet"""
         return balance >= bet_amount
+
+
+@dataclass
+class MenuContext:
+    """Context information for building chat-appropriate menus."""
+
+    chat_id: int
+    chat_type: Literal["private", "group", "supergroup"]
+    user_id: int
+    language_code: str = "en"
+
+    # User state
+    in_active_game: bool = False
+    is_game_host: bool = False
+    has_pending_invite: bool = False
+
+    # Group-specific
+    group_has_active_game: bool = False
+    user_is_group_admin: bool = False
+
+    # Private-specific
+    active_private_game_code: Optional[str] = None
+
+    def is_private_chat(self) -> bool:
+        """Check if this is a private (1-on-1) conversation."""
+
+        return self.chat_type == "private"
+
+    def is_group_chat(self) -> bool:
+        """Check if this is a group or supergroup."""
+
+        return self.chat_type in ("group", "supergroup")
+
+    def can_access_group_commands(self) -> bool:
+        """Determine if group-specific commands should be visible."""
+
+        return self.is_group_chat()
+
+    def can_access_private_commands(self) -> bool:
+        """Determine if private game commands should be visible."""
+
+        return self.is_private_chat()
 
 
 # Q9: Predefined stake levels for private games
