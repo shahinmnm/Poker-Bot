@@ -18,24 +18,11 @@ logger = logging.getLogger(__name__)
 
 class SupportedLanguage(Enum):
     """Supported language codes (ISO 639-1)."""
+
     ENGLISH = "en"
     SPANISH = "es"
-    FRENCH = "fr"
-    GERMAN = "de"
-    PORTUGUESE = "pt"
     RUSSIAN = "ru"
-    CHINESE = "zh"
-    JAPANESE = "ja"
-    KOREAN = "ko"
     ARABIC = "ar"
-    HINDI = "hi"
-    ITALIAN = "it"
-    DUTCH = "nl"
-    POLISH = "pl"
-    TURKISH = "tr"
-    VIETNAMESE = "vi"
-    THAI = "th"
-    INDONESIAN = "id"
     PERSIAN = "fa"
     HEBREW = "he"
 

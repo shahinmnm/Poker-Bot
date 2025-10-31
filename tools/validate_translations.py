@@ -21,6 +21,12 @@ REQUIRED_SECTIONS = {"ui", "msg", "help", "game", "popup"}
 RTL_LANGS = {"ar", "fa", "he"}
 
 
+def _has_letters(value: str) -> bool:
+    """Return True if *value* includes any alphabetic character."""
+
+    return any(char.isalpha() for char in value)
+
+
 def _validate_directory(translations_dir: Path) -> List[str]:
     try:
         manager = TranslationManager(translations_dir=str(translations_dir))
@@ -88,6 +94,19 @@ def _validate_directory(translations_dir: Path) -> List[str]:
             font = meta.get("font")
             if not isinstance(font, str) or font.strip() == "" or font == "system":
                 errors.append(f"{code}: rtl languages require explicit font metadata")
+
+        if code != "en":
+            identical = [
+                key
+                for key, value in strings.items()
+                if english_strings.get(key) == value and _has_letters(value)
+            ]
+
+            ratio = len(identical) / len(english_strings) if english_strings else 0.0
+            if ratio > 0.2 or len(identical) > 8:
+                errors.append(
+                    f"{code}: potential untranslated strings ({len(identical)} match English)"
+                )
 
     return errors
 
