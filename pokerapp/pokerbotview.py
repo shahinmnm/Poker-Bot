@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+from functools import lru_cache
 
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -57,6 +58,7 @@ class PokerBotViewer:
         if logger is None:
             logger = logging.getLogger(__name__)
         self._logger = logger
+        self._translation_manager = translation_manager
         self._kv = ensure_kv(kv)
         if user_language is None:
             user_language = translation_manager.DEFAULT_LANGUAGE
@@ -929,32 +931,61 @@ class PokerBotViewer:
 
         return buttons
 
+    @lru_cache(maxsize=128)
+    def _get_location_label_cached(
+        self,
+        location_key: str,
+        language_code: str,
+    ) -> str:
+        """Cache frequently accessed location labels."""
+
+        translator = self._translation_manager.get_translator(language_code)
+        return translator(f"ui.menu.location.{location_key}")
+
     def _render_breadcrumb(
         self,
         context: MenuContext,
         language_context: Any,
-    ) -> str:
-        """Render breadcrumb navigation path."""
+    ) -> Optional[str]:
+        """Render breadcrumb trail with caching optimization."""
 
         if not context.current_menu_location:
-            return ""
+            return None
 
         try:
-            location = MenuLocation(context.current_menu_location)
+            current_location = MenuLocation(context.current_menu_location)
         except ValueError:
-            return ""
+            return None
 
-        path = get_breadcrumb_path(location)
-        if len(path) <= 1:
-            return ""
+        path = get_breadcrumb_path(current_location)
+
+        if not path or len(path) <= 1:
+            return None
 
         labels: List[str] = []
-        for loc in path:
-            key = f"ui.menu.location.{loc.value}"
-            label = self._t(key, context=language_context)
-            labels.append(label)
+        for location in path:
+            try:
+                label = self._get_location_label_cached(
+                    location.value,
+                    context.language_code,
+                )
+                labels.append(label)
+            except KeyError:
+                self._logger.warning(
+                    "Missing translation for location: %s",
+                    location.value,
+                )
+                labels.append(location.value.upper())
 
-        return " › ".join(labels)
+        separator = " → " if context.language_code != "fa" else " ← "
+        breadcrumb = separator.join(labels)
+
+        return f"📍 {breadcrumb}\n"
+
+    def clear_location_cache(self):
+        """Clear cached location labels (call when translations update)."""
+
+        self._get_location_label_cached.cache_clear()
 
     async def _send_private_menu(
         self,
@@ -1575,7 +1606,7 @@ class PokerBotViewer:
             keyboard.append([
                 InlineKeyboardButton(
                     self._t(
-                        "ui.private.lobby.start",
+                        "private.lobby.start",
                         context=language_context,
                     ),
                     callback_data=f"private_start:{game_code}",
@@ -1585,7 +1616,7 @@ class PokerBotViewer:
         keyboard.append([
             InlineKeyboardButton(
                 self._t(
-                    "ui.private.lobby.invite",
+                    "private.lobby.invite",
                     context=language_context,
                 ),
                 callback_data=f"private_invite:{game_code}",
@@ -1594,7 +1625,7 @@ class PokerBotViewer:
         keyboard.append([
             InlineKeyboardButton(
                 self._t(
-                    "ui.private.lobby.leave",
+                    "private.lobby.leave",
                     context=language_context,
                 ),
                 callback_data=f"private_leave:{game_code}",
@@ -1680,9 +1711,9 @@ class PokerBotViewer:
     ) -> Message:
         """Send localized lobby status message."""
 
-        title = self._t("ui.lobby.title")
+        title = self._t("lobby.title")
         player_text = self._t(
-            "ui.lobby.players",
+            "lobby.players",
             count=player_count,
             max=max_players,
         )
@@ -1691,15 +1722,15 @@ class PokerBotViewer:
         for index, player_name in enumerate(players):
             if index == 0 and is_host:
                 player_entries.append(
-                    self._t("ui.lobby.host_entry", player=player_name)
+                    self._t("lobby.host_entry", player=player_name)
                 )
             else:
                 player_entries.append(
-                    self._t("ui.lobby.player_entry", player=player_name)
+                    self._t("lobby.player_entry", player=player_name)
                 )
 
         player_list = "\n".join(player_entries)
-        status_key = "ui.lobby.ready_to_start" if player_count >= 2 else "ui.lobby.waiting"
+        status_key = "lobby.ready_to_start" if player_count >= 2 else "lobby.waiting"
         status_text = self._t(status_key)
 
         segments = [title, "", player_text]

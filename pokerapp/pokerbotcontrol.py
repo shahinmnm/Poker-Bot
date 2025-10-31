@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 from telegram import (
     BotCommand,
+    CallbackQuery,
     Update,
 )
 from telegram.error import BadRequest
@@ -67,19 +68,19 @@ class ControllerTextKeys:
 
 
 class ControllerCommandKeys:
-    START = "controller.commands.start"
-    READY = "controller.commands.ready"
-    PRIVATE = "controller.commands.private"
-    JOIN = "controller.commands.join"
-    INVITE = "controller.commands.invite"
-    ACCEPT = "controller.commands.accept"
-    DECLINE = "controller.commands.decline"
-    LEAVE = "controller.commands.leave"
-    MONEY = "controller.commands.money"
-    CARDS = "controller.commands.cards"
-    BAN = "controller.commands.ban"
-    STOP = "controller.commands.stop"
-    HELP = "controller.commands.help"
+    START = "ui.controller.commands.start"
+    READY = "ui.controller.commands.ready"
+    PRIVATE = "ui.controller.commands.private"
+    JOIN = "ui.controller.commands.join"
+    INVITE = "ui.controller.commands.invite"
+    ACCEPT = "ui.controller.commands.accept"
+    DECLINE = "ui.controller.commands.decline"
+    LEAVE = "ui.controller.commands.leave"
+    MONEY = "ui.controller.commands.money"
+    CARDS = "ui.controller.commands.cards"
+    BAN = "ui.controller.commands.ban"
+    STOP = "ui.controller.commands.stop"
+    HELP = "ui.controller.commands.help"
 
 
 class PokerBotController:
@@ -181,6 +182,18 @@ class PokerBotController:
             CallbackQueryHandler(
                 self._handle_action_button,
                 pattern=r"^action:",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_menu_callback,
+                pattern=(
+                    r"^(?:"
+                    r"private_(?:view_game|manage|create)"
+                    r"|group_(?:view_game|join|leave|start|admin)"
+                    r"|view_invites|settings|help)"
+                    r"$"
+                ),
             )
         )
         application.add_handler(
@@ -657,6 +670,77 @@ class PokerBotController:
         menu_context = await self.middleware.build_menu_context(update, context)
         await self.view._send_menu(chat.id, menu_context)
 
+    async def _safe_navigation_update(
+        self,
+        query: CallbackQuery,
+        target_location: MenuLocation,
+        error_context: str,
+    ) -> bool:
+        """Safely update menu state with comprehensive error handling."""
+
+        message = query.message
+        if message is None:
+            return False
+
+        chat = message.chat
+        chat_id = chat.id
+
+        try:
+            new_state = MenuState(
+                chat_id=chat_id,
+                location=target_location.value,
+                context_data={},
+                timestamp=time.time(),
+            )
+
+            await self._middleware.menu_state.set_state(new_state)
+
+            user = query.from_user
+            if user is None:
+                raise ValueError("CallbackQuery missing from_user")
+
+            menu_context = await self._middleware.build_menu_context(
+                chat_id=chat_id,
+                chat_type=chat.type,
+                user_id=user.id,
+                language_code=(user.language_code or "en"),
+                chat=chat,
+            )
+
+            if menu_context.is_private_chat():
+                await self.view._send_private_menu(
+                    chat_id=chat_id,
+                    context=menu_context,
+                )
+            else:
+                await self.view._send_group_menu(
+                    chat_id=chat_id,
+                    context=menu_context,
+                )
+
+            await query.answer()
+            return True
+
+        except Exception as exc:  # pragma: no cover - defensive
+            self._logger.error(
+                "Navigation error during %s for chat %d: %s",
+                error_context,
+                chat_id,
+                exc,
+                exc_info=True,
+            )
+
+            try:
+                user = query.from_user
+                language = user.language_code if user else None
+                translator = translation_manager.get_translator(language)
+                error_msg = translator("ui.error.navigation_failed")
+                await query.answer(error_msg, show_alert=True)
+            except Exception:
+                await query.answer("⚠️ Navigation error", show_alert=True)
+
+            return False
+
     async def _handle_nav_back(
         self,
         update: Update,
@@ -668,17 +752,13 @@ class PokerBotController:
         if not query:
             return
 
-        await query.answer()
-
         user = update.effective_user
         chat = update.effective_chat
         if not user or not chat:
             return
 
-        current_state = await self.middleware.menu_state.get_state(
-            user_id=user.id,
-            chat_id=chat.id,
-        )
+        try:
+            current_state = await self.middleware.menu_state.get_state(chat.id)
 
         if not current_state:
             new_location = MenuLocation.MAIN_MENU
@@ -693,8 +773,39 @@ class PokerBotController:
             context_data={},
         )
 
-        menu_context = await self.middleware.build_menu_context(update, context)
-        await self.view._send_menu(chat.id, menu_context)
+            parent_location_value = MENU_HIERARCHY.get(current_location)
+
+            if parent_location_value is None:
+                await query.answer("Already at main menu")
+                return
+
+            if isinstance(parent_location_value, MenuLocation):
+                parent_location = parent_location_value
+            else:
+                try:
+                    parent_location = MenuLocation(parent_location_value)
+                except ValueError:
+                    self._logger.error(
+                        "Invalid parent location '%s' in hierarchy",
+                        parent_location_value,
+                    )
+                    parent_location = MenuLocation.MAIN
+
+            self._middleware._metrics.record_navigation("back")
+
+            await self._safe_navigation_update(
+                query,
+                parent_location,
+                "back navigation",
+            )
+
+        except Exception as exc:  # pragma: no cover - defensive
+            self._logger.error(
+                "Unexpected error in _handle_nav_back: %s",
+                exc,
+                exc_info=True,
+            )
+            await query.answer("⚠️ Navigation error", show_alert=True)
 
     async def _handle_nav_home(
         self,
@@ -706,8 +817,6 @@ class PokerBotController:
         query = update.callback_query
         if not query:
             return
-
-        await query.answer()
 
         user = update.effective_user
         chat = update.effective_chat
@@ -721,8 +830,21 @@ class PokerBotController:
             context_data={},
         )
 
-        menu_context = await self.middleware.build_menu_context(update, context)
-        await self.view._send_menu(chat.id, menu_context)
+            self._middleware._metrics.record_navigation("home")
+
+            await self._safe_navigation_update(
+                query,
+                MenuLocation.MAIN,
+                "home navigation",
+            )
+
+        except Exception as exc:  # pragma: no cover - defensive
+            self._logger.error(
+                "Unexpected error in _handle_nav_home: %s",
+                exc,
+                exc_info=True,
+            )
+            await query.answer("⚠️ Navigation error", show_alert=True)
 
     async def _handle_stop(
         self,
@@ -850,8 +972,14 @@ class PokerBotController:
                     user_id=user.id,
                     lang=lang_for_menu,
                 )
+                user_name = (
+                    getattr(user, "full_name", None)
+                    or getattr(user, "first_name", None)
+                    or getattr(user, "username", "")
+                )
                 await self._view.send_stake_selection(
                     chat_id=chat.id,
+                    user_name=user_name,
                     message_id=message.message_id,
                     language_code=lang_for_menu,
                 )
@@ -1120,6 +1248,217 @@ class PokerBotController:
 
         await self._respond_to_query(query)
         await self._model.leave_private_game(update, context)
+
+    async def _handle_menu_callback(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Dispatch context-aware menu button callbacks to handlers."""
+
+        query = update.callback_query
+
+        if query is None or not query.data:
+            return
+
+        action = query.data
+
+        handlers = {
+            "private_view_game": self._handle_menu_private_view_game,
+            "private_manage": self._handle_menu_private_manage,
+            "private_create": self._handle_menu_private_create,
+            "view_invites": self._handle_menu_view_invites,
+            "settings": self._handle_menu_settings,
+            "help": self._handle_menu_help,
+            "group_view_game": self._handle_menu_group_view_game,
+            "group_join": self._handle_menu_group_join,
+            "group_leave": self._handle_menu_group_leave,
+            "group_start": self._handle_menu_group_start,
+            "group_admin": self._handle_menu_group_admin,
+        }
+
+        handler = handlers.get(action)
+
+        if handler is None:
+            await self._respond_to_query(query)
+            log_helper.warn("MenuCallbackUnknown", callback_data=action)
+            return
+
+        await handler(update, context)
+
+    async def _handle_menu_private_view_game(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._model.show_private_game_status(update, context)
+
+    async def _handle_menu_private_manage(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._model.show_private_game_status(update, context)
+
+    async def _handle_menu_private_create(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._handle_private(update, context)
+
+    async def _handle_menu_view_invites(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._model.send_pending_invites_summary(update, context)
+
+    async def _handle_menu_settings(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._handle_language(update, context)
+
+    async def _handle_menu_help(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._handle_help(update, context)
+
+    async def _handle_menu_group_join(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        await self._handle_lobby_sit(update, context)
+
+    async def _handle_menu_group_leave(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        await self._handle_lobby_leave(update, context)
+
+    async def _handle_menu_group_start(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        await self._handle_lobby_start(update, context)
+
+    async def _handle_menu_group_view_game(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is None:
+            return
+
+        chat = update.effective_chat
+
+        if chat is None:
+            await self._respond_to_query(query)
+            return
+
+        try:
+            game = self._model._game(chat.id)
+        except Exception as exc:  # pragma: no cover - defensive
+            log_helper.warn("MenuGroupViewGameLookupFailed", error=str(exc))
+            await self._respond_to_query(
+                query,
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_NO_GAME,
+                    query=query,
+                ),
+            )
+            return
+
+        players = getattr(game, "players", []) or []
+        if not players:
+            await self._respond_to_query(
+                query,
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_NO_GAME,
+                    query=query,
+                ),
+            )
+            return
+
+        current_player = None
+        index = getattr(game, "current_player_index", -1)
+        if 0 <= index < len(players):
+            current_player = players[index]
+
+        try:
+            await self._model._coordinator._send_or_update_game_state(
+                game=game,
+                current_player=current_player,
+                chat_id=chat.id,
+            )
+            await self._respond_to_query(query)
+        except Exception as exc:  # pragma: no cover - network side-effects
+            log_helper.warn("MenuGroupViewGameFailed", error=str(exc))
+            await self._respond_to_query(
+                query,
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_NO_GAME,
+                    query=query,
+                ),
+            )
+
+    async def _handle_menu_group_admin(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is None:
+            return
+
+        await self._respond_to_query(query)
+
+        title = self._translate("ui.menu.group.admin_panel", query=query)
+        help_lines = [
+            title,
+            "",
+            "/ban <user> - Remove a disruptive player",
+            "/stop - End the current game",
+            "/language - Change table language",
+        ]
+
+        target_chat = update.effective_chat
+        message = query.message
+
+        chat_id = None
+        if message and message.chat:
+            chat_id = message.chat.id
+        elif target_chat:
+            chat_id = target_chat.id
+
+        if chat_id is not None:
+            await self._view.send_message(chat_id=chat_id, text="\n".join(help_lines))
 
     async def _handle_callback_query(
         self,

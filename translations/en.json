@@ -167,6 +167,11 @@
         "left_game": "👋 Left game"
       }
     },
+    "error": {
+      "navigation_failed": "⚠️ Navigation failed. Please try again.",
+      "invalid_state": "⚠️ Invalid menu state detected. Returning to main menu.",
+      "state_recovery": "♻️ Menu state recovered. Please continue."
+    },
     "lobby": {
       "active_games": "📊 Active Games: {count}",
       "game_starting": "🎮 Game starting in {seconds}s...",
@@ -226,6 +231,37 @@
         "view_invites": "📨 View Invites",
         "wallet": "💰 Wallet"
       }
+    },
+    "language": {
+      "back": "⬅️ Back"
+    },
+    "private": {
+      "stake_menu": {
+        "button": {
+          "micro": "💎 Micro (5/10) - 200 min",
+          "low": "🎯 Low (10/20) - 400 min",
+          "medium": "🎲 Medium (25/50) - 1K min",
+          "high": "💰 High (50/100) - 2K min",
+          "premium": "👑 Premium (100/200) - 4K min",
+          "language": "🌐 Language",
+          "cancel": "❌ Cancel"
+        }
+      },
+      "invite": {
+        "accept": "✅ Accept Invitation",
+        "decline": "❌ Decline"
+      },
+      "lobby": {
+        "start": "🎰 START GAME",
+        "invite": "📨 Invite Player",
+        "leave": "🚪 Leave Lobby"
+      }
+    },
+    "settings": {
+      "language_select": "🌐 Select your language:",
+      "language_changed": "✅ Language changed to English",
+      "wallet_balance": "💰 Balance: ${amount}",
+      "wallet_empty": "Your wallet is empty. Contact admin to add chips."
     },
     "model": {
       "error": {

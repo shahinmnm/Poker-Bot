@@ -167,6 +167,11 @@
         "left_game": "👋 Saliste de la partida"
       }
     },
+    "error": {
+      "navigation_failed": "⚠️ Error de navegación. Por favor, inténtalo de nuevo.",
+      "invalid_state": "⚠️ Estado de menú inválido detectado. Volviendo al menú principal.",
+      "state_recovery": "♻️ Estado del menú recuperado. Por favor continúa."
+    },
     "lobby": {
       "active_games": "📊 Juegos activos: {count}",
       "game_starting": "🎮 El juego comienza en {seconds}s...",
@@ -226,6 +231,37 @@
         "view_invites": "📨 Ver invitaciones",
         "wallet": "💰 Cartera"
       }
+    },
+    "language": {
+      "back": "⬅️ Atrás"
+    },
+    "private": {
+      "stake_menu": {
+        "button": {
+          "micro": "💎 Micro (5/10) - 200 mín",
+          "low": "🎯 Baja (10/20) - 400 mín",
+          "medium": "🎲 Media (25/50) - 1K mín",
+          "high": "💰 Alta (50/100) - 2K mín",
+          "premium": "👑 Premium (100/200) - 4K mín",
+          "language": "🌐 Idioma",
+          "cancel": "❌ Cancelar"
+        }
+      },
+      "invite": {
+        "accept": "✅ Aceptar invitación",
+        "decline": "❌ Rechazar"
+      },
+      "lobby": {
+        "start": "🎰 INICIAR PARTIDA",
+        "invite": "📨 Invitar jugador",
+        "leave": "🚪 Salir del lobby"
+      }
+    },
+    "settings": {
+      "language_select": "🌐 Selecciona tu idioma:",
+      "language_changed": "✅ Idioma cambiado a español",
+      "wallet_balance": "💰 Saldo: ${amount}",
+      "wallet_empty": "Tu cartera está vacía. Contacta al administrador."
     },
     "model": {
       "error": {
