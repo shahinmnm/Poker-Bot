@@ -160,6 +160,21 @@
       "start": "🎮 Start Game"
     },
     "controller": {
+      "commands": {
+        "start": "Start Poker Bot and show the menu",
+        "ready": "Mark yourself ready in the current game",
+        "private": "Manage or create private games",
+        "join": "Join an existing private game",
+        "invite": "Invite a player to your private game",
+        "accept": "Accept a pending private game invite",
+        "decline": "Decline a pending private game invite",
+        "leave": "Leave the current private game or lobby",
+        "money": "Check your chip balance",
+        "cards": "Show your current hand",
+        "ban": "Ban a disruptive player from the game",
+        "stop": "Stop the Poker Bot",
+        "help": "Show help information"
+      },
       "toast": {
         "action_recorded": "✅ Action recorded",
         "fold_cancelled": "↩️ Fold cancelled",
