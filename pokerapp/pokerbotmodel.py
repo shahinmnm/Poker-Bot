@@ -417,12 +417,121 @@ class PokerBotModel:
             chat_data = self._application.chat_data.get(int(chat_id))
             if chat_data is None:
                 self._application.chat_data[int(chat_id)] = {}
-                chat_data = self._application.chat_data[int(chat_id)]
+            chat_data = self._application.chat_data[int(chat_id)]
             chat_data[KEY_CHAT_DATA_GAME] = game
             logger.debug("Saved game %s to chat %s", game.id, chat_id)
             return
 
         raise ValueError("Invalid _save_game arguments")
+
+    async def get_user_private_game(
+        self,
+        user_id: int,
+    ) -> Optional[Dict[str, object]]:
+        """Return lightweight info about a user's private game."""
+
+        user_game_key = ":".join(["user", str(user_id), "private_game"])
+        raw_value = self._kv.get(user_game_key)
+
+        if isinstance(raw_value, bytes):
+            raw_value = raw_value.decode("utf-8")
+
+        if not raw_value:
+            return None
+
+        value_str = str(raw_value)
+        game_code: Optional[str] = None
+        chat_id: Optional[int] = None
+        host_id: Optional[int] = None
+        players: List[int] = []
+
+        if value_str.isdigit():
+            try:
+                chat_id = int(value_str)
+                game = self._game(chat_id)
+                players = [int(p.user_id) for p in getattr(game, "players", [])]
+                if players:
+                    host_id = players[0]
+            except Exception:
+                chat_id = None
+        else:
+            game_code = value_str
+            game_key = ":".join(["private_game", game_code])
+            game_json = self._kv.get(game_key)
+
+            if isinstance(game_json, bytes):
+                game_json = game_json.decode("utf-8")
+
+            if game_json:
+                try:
+                    from pokerapp.private_game import PrivateGame
+
+                    private_game = PrivateGame.from_json(game_json)
+                    host_id = int(private_game.host_user_id)
+                    players = [int(pid) for pid in private_game.players]
+                except Exception:
+                    pass
+
+        if game_code is None and chat_id is None:
+            return None
+
+        return {
+            "code": game_code,
+            "chat_id": chat_id,
+            "host_id": host_id,
+            "players": players,
+        }
+
+    async def get_active_group_game(
+        self,
+        chat_id: int,
+    ) -> Optional[Dict[str, object]]:
+        """Return active group game details for ``chat_id`` if available."""
+
+        try:
+            game = self._game(chat_id)
+        except Exception:
+            return None
+
+        if game is None:
+            return None
+
+        if getattr(game, "state", GameState.INITIAL) == GameState.INITIAL and not getattr(
+            game, "players", None
+        ):
+            return None
+
+        players = [int(player.user_id) for player in getattr(game, "players", [])]
+        host_id = players[0] if players else None
+
+        return {
+            "chat_id": chat_id,
+            "host_id": host_id,
+            "players": players,
+            "state": getattr(game, "state", GameState.INITIAL),
+        }
+
+    async def has_pending_invite(self, user_id: int) -> bool:
+        """Return ``True`` if the user has pending private game invites."""
+
+        pending_key = "user:" + str(user_id) + ":pending_invites"
+
+        try:
+            if hasattr(self._kv, "scard"):
+                count = self._kv.scard(pending_key)
+                if count:
+                    return True
+            if hasattr(self._kv, "smembers"):
+                members = self._kv.smembers(pending_key)
+                if members:
+                    return True
+        except Exception:
+            pass
+
+        try:
+            return bool(self._kv.exists(pending_key))
+        except Exception:
+            return False
 
     async def _show_game_results(
         self,

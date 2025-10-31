@@ -26,6 +26,7 @@ from pokerapp.pokerbotmodel import (
     PreparedPlayerAction,
 )
 from pokerapp.request_cache import RequestCache
+from pokerapp.middleware import PokerMenuMiddleware
 
 if TYPE_CHECKING:
     from pokerapp.live_message import LiveMessageManager
@@ -106,9 +107,11 @@ class PokerBotController:
         self._kv = ensure_kv(kv if kv is not None else getattr(model, "_kv", None))
         translation_manager.attach_kvstore(self._kv)
         self._pending_fold_confirmations: dict[Tuple[int, str], PreparedPlayerAction] = {}
+        self._middleware = PokerMenuMiddleware(self._model)
 
         application.add_handler(CommandHandler("ready", self._handle_ready))
         application.add_handler(CommandHandler("start", self._handle_start))
+        application.add_handler(CommandHandler("menu", self._handle_menu))
         application.add_handler(CommandHandler("stop", self._handle_stop))
         application.add_handler(CommandHandler("money", self._handle_money))
         application.add_handler(CommandHandler("ban", self._handle_ban))
@@ -559,6 +562,36 @@ class PokerBotController:
                 telegram_language_code=getattr(user, "language_code", None),
             )
         await self._model.start(update, context)
+
+        chat = update.effective_chat
+        if user is None or chat is None:
+            return
+
+        menu_context = await self._middleware.build_menu_context(
+            update=update,
+            user_id=user.id,
+        )
+        await self._view.send_menu(chat.id, menu_context)
+
+    async def _handle_menu(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Display context-aware menu for /menu command."""
+
+        del context  # Unused PTB parameter
+
+        user = update.effective_user
+        chat = update.effective_chat
+        if user is None or chat is None:
+            return
+
+        menu_context = await self._middleware.build_menu_context(
+            update=update,
+            user_id=user.id,
+        )
+        await self._view.send_menu(chat.id, menu_context)
 
     async def _handle_stop(
         self,
