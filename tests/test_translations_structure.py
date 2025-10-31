@@ -15,6 +15,12 @@ REQUIRED_SECTIONS = {"ui", "msg", "help", "game", "popup"}
 RTL_LANGS = {"ar", "fa", "he"}
 
 
+def _has_letters(value: str) -> bool:
+    """Return True if *value* contains any alphabetic character."""
+
+    return any(char.isalpha() for char in value)
+
+
 def _load_payload(manager: TranslationManager, code: str) -> tuple[dict, dict[str, str], dict[str, object]]:
     path = TRANSLATIONS_DIR / f"{code}.json"
     with path.open("r", encoding="utf-8") as fh:
@@ -70,6 +76,32 @@ def test_translation_files_have_required_sections(translation_manager_instance: 
         assert runtime_meta is not None, f"{code}: metadata missing after load"
         assert runtime_meta["rtl"] == meta["rtl"]
         assert runtime_meta.get("font") == meta.get("font")
+
+
+def test_translations_are_localized(translation_manager_instance: TranslationManager) -> None:
+    """Non-English translations should not be direct copies of English."""
+
+    manager = translation_manager_instance
+    english_strings = manager.translations["en"]
+    total_keys = len(english_strings)
+
+    for code, mapping in manager.translations.items():
+        if code == "en":
+            continue
+
+        identical = [
+            key
+            for key, value in mapping.items()
+            if value == english_strings.get(key) and _has_letters(value)
+        ]
+
+        overlap_ratio = len(identical) / total_keys if total_keys else 0
+
+        assert (
+            overlap_ratio <= 0.2
+        ), f"{code}: {len(identical)} keys still match English ({overlap_ratio:.1%})"
+
+        assert len(identical) <= 8, f"{code}: too many untranslated strings: {sorted(identical)}"
 
 
 def test_language_context_uses_metadata(translation_manager_instance: TranslationManager) -> None:

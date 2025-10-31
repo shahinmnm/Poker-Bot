@@ -2,68 +2,68 @@
   "game": {
     "card": {
       "rank": {
-        "10": "Ten",
-        "2": "Two",
-        "3": "Three",
-        "4": "Four",
-        "5": "Five",
-        "6": "Six",
-        "7": "Seven",
-        "8": "Eight",
-        "9": "Nine",
-        "A": "Ace",
-        "J": "Jack",
-        "K": "King",
-        "Q": "Queen"
+        "10": "عشرة",
+        "2": "اثنان",
+        "3": "ثلاثة",
+        "4": "أربعة",
+        "5": "خمسة",
+        "6": "ستة",
+        "7": "سبعة",
+        "8": "ثمانية",
+        "9": "تسعة",
+        "A": "آس",
+        "J": "جاك",
+        "K": "ملك",
+        "Q": "ملكة"
       },
       "suit": {
-        "clubs": "Clubs",
-        "diamonds": "Diamonds",
-        "hearts": "Hearts",
-        "spades": "Spades"
+        "clubs": "نوادي",
+        "diamonds": "ألماس",
+        "hearts": "قلوب",
+        "spades": "بستوني"
       }
     },
     "hand": {
-      "flush": "Flush",
-      "four_of_kind": "Four of a Kind",
-      "full_house": "Full House",
-      "high_card": "High Card",
-      "pair": "Pair",
-      "royal_flush": "Royal Flush",
-      "straight": "Straight",
-      "straight_flush": "Straight Flush",
-      "three_of_kind": "Three of a Kind",
-      "two_pair": "Two Pair"
+      "flush": "فلاش",
+      "four_of_kind": "أربع أوراق متشابهة",
+      "full_house": "فُل هاوس",
+      "high_card": "أعلى ورقة",
+      "pair": "زوج",
+      "royal_flush": "رويال فلاش",
+      "straight": "ستريت",
+      "straight_flush": "ستريت فلاش",
+      "three_of_kind": "ثلاث أوراق متشابهة",
+      "two_pair": "زوجان"
     },
     "round": {
-      "flop": "🃏 Flop - 3 cards revealed",
-      "pre_flop": "🎴 Pre-flop - Blinds posted",
-      "river": "🌊 River - 5th card revealed",
-      "showdown": "🏆 Showdown - Revealing hands",
-      "turn": "🎯 Turn - 4th card revealed"
+      "flop": "🃏 الفلوب - كشف ٣ أوراق",
+      "pre_flop": "🎴 قبل الفلوب - وضع الرهانات العمياء",
+      "river": "🌊 الريفر - كشف الورقة الخامسة",
+      "showdown": "🏆 المواجهة - كشف الأيدي",
+      "turn": "🎯 التيرن - كشف الورقة الرابعة"
     },
     "state": {
-      "finished": "Showdown",
-      "flop": "Flop",
-      "initial": "Waiting for players",
-      "pre_flop": "Pre-flop",
-      "river": "River",
-      "turn": "Turn"
+      "finished": "المواجهة",
+      "flop": "الفلوب",
+      "initial": "بانتظار اللاعبين",
+      "pre_flop": "قبل الفلوب",
+      "river": "الريفر",
+      "turn": "التيرن"
     }
   },
   "help": {
-    "commands": "📋 Commands",
-    "help": "/help - Show this message",
-    "language": "/language - Change language",
-    "ready": "/ready - Join the game",
-    "start": "/start - Begin playing",
-    "status": "/status - Check game state",
-    "title": "🎴 How to Play Poker",
+    "commands": "📋 الأوامر",
+    "help": "/help - عرض هذه الرسالة",
+    "language": "/language - تغيير اللغة",
+    "ready": "/ready - الانضمام إلى اللعبة",
+    "start": "/start - بدء اللعب",
+    "status": "/status - حالة اللعبة",
+    "title": "🎴 كيفية لعب البوكر",
     "controller": {
-      "full_text": "🎰 TEXAS HOLD’EM POKER BOT 🎰\n\n🎮 GAME MODES:\n\n🏛️ Group Games - Play in group chats with friends\n🔒 Private Games - Exclusive invite-only tables (Coming Soon!)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🏛️ GROUP GAME COMMANDS:\n\n✋ /ready - Join lobby (sit at table)\n🎰 /start - Start game (or use lobby button)\n🛑 /stop - Leave current game\n\n🎲 LOBBY SYSTEM:\n\nUse /ready to join the lobby\nInteractive buttons to sit/leave/start\nLobby shows all seated players\nMinimum 2 players to start game\n\n🔒 PRIVATE GAME COMMANDS (Coming Soon):\n\n🔒 /private - Create private game lobby\n🚪 /join <code> - Join game by secret code\n📨 /invite @username - Invite specific user\n✅ /accept - Accept invitation\n❌ /decline - Decline invitation\n🚶 /leave - Leave private game\n\n💎 GENERAL COMMANDS:\n\n💰 /money - Get daily bonus chips\n🃏 /cards - Show your cards again\n⛔ /ban - Force AFK player out (admin only)\n🌐 /language - Change bot language\n❓ /help - Show this help message\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🎯 HOW TO PLAY:\n\n🏛️ Group Mode:\n\n1️⃣ Add bot to your group chat\n2️⃣ Everyone sends ✋ /ready\n3️⃣ Host sends 🎰 /start when ready\n4️⃣ Game begins automatically!\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🃏 POKER BASICS:\n\n🎴 Each player gets 2 private cards\n🃏 5 community cards revealed in stages\n💰 Best 5-card hand wins the pot!\n\n🎲 BETTING ROUNDS:\n\n🌅 Pre-flop - Only your 2 cards\n🌄 Flop - 3 community cards revealed\n🌇 Turn - 4th community card\n🌃 River - Final 5th card\n\n🎯 ACTIONS:\n\n✅ Check - Pass (no bet required)\n💵 Call - Match current bet\n📈 Raise - Increase the bet\n🚀 All-in - Bet everything!\n❌ Fold - Give up this hand\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🎁 DAILY BONUS:\n\nSend 💰 /money once per day for free chips!\n\n🎲 Bonus amounts:\n\n⚀ = 5 chips   ⚁ = 20 chips   ⚂ = 40 chips\n⚃ = 80 chips  ⚄ = 160 chips  ⚅ = 320 chips\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🍀 Good luck at the tables! 🍀"
+      "full_text": "🎰 روبوت بوكر تكساس هولدم 🎰\n\n🏛️ أوامر اللعب الجماعي:\n✋ /ready – اجلس على الطاولة\n🎰 /start – ابدأ الجولة\n🛑 /stop – غادر اللعبة\n\n💡 اختصارات مفيدة:\n💰 /money – رمية يومية للحصول على الرقائق\n🃏 /cards – عرض بطاقاتك مرة أخرى\n🌐 /language – تغيير اللغة\n❓ /help – عرض هذه الرسالة\n\n📚 أساسيات البوكر:\n• لكل لاعب بطاقتان خاصتان\n• خمس بطاقات مشتركة تكشف على مراحل\n• أفضل يد من خمس بطاقات تربح الرهان\n\n🍀 حظًا موفقًا واستمتع باللعب!"
     },
     "model": {
-      "fallback": "Welcome to Poker Bot!\nUse /ready to join the next game and /money to claim your daily bonus."
+      "fallback": "مرحبًا بك في روبوت البوكر!\nاستخدم /ready للانضمام إلى اللعبة التالية و /money للحصول على مكافأتك اليومية."
     }
   },
   "meta": {
@@ -71,157 +71,157 @@
     "rtl": true
   },
   "msg": {
-    "current_bet": "🎯 Current bet: ${amount}",
+    "current_bet": "🎯 الرهان الحالي: ${amount}",
     "error": {
-      "game_in_progress": "❌ Game already in progress",
-      "insufficient_funds": "❌ Insufficient funds",
-      "insufficient_funds_detail": "❌ Insufficient funds!\n\nYour balance: {balance}\nRequired: {required}",
-      "invalid_action": "❌ Invalid action",
-      "max_players": "❌ Maximum {max} players allowed",
-      "no_game": "❌ No active game",
-      "not_enough_players": "❌ Need at least 2 players to start",
-      "not_your_turn": "❌ Not your turn!",
-      "not_enough_players_ready": "❌ Not enough players!\n\nAt least 2 players must /ready first.",
-      "players_insufficient_funds": "❌ The following players don't have enough chips for this table: {players}",
-      "wallet_not_enough": "❌ Not enough chips"
+      "game_in_progress": "❌ توجد لعبة جارية بالفعل",
+      "insufficient_funds": "❌ رصيد غير كافٍ",
+      "insufficient_funds_detail": "❌ رصيد غير كافٍ!\n\nرصيدك: {balance}\nالمطلوب: {required}",
+      "invalid_action": "❌ إجراء غير صالح",
+      "max_players": "❌ الحد الأقصى {max} لاعبين",
+      "no_game": "❌ لا توجد لعبة نشطة",
+      "not_enough_players": "❌ نحتاج إلى لاعبين اثنين على الأقل للبدء",
+      "not_enough_players_ready": "❌ عدد غير كافٍ من اللاعبين الجاهزين!\n\nيجب أن يستخدم لاعبان على الأقل /ready أولاً.",
+      "not_your_turn": "❌ ليس دورك!",
+      "players_insufficient_funds": "❌ اللاعبون التاليون لا يملكون رصيدًا كافيًا لهذه الطاولة: {players}",
+      "wallet_not_enough": "❌ رقائق غير كافية"
     },
-    "game_started": "🎮 Game started! Good luck!",
-    "player_all_in": "🔥 {player} went all-in with ${amount}",
-    "player_called": "💵 {player} called ${amount}",
-    "player_checked": "✅ {player} checked",
-    "player_folded": "❌ {player} folded",
-    "player_raised": "⬆️ {player} raised to ${amount}",
-    "player_wins": "🏆 {player} wins the pot!",
-    "pot": "💰 Pot: ${amount}",
-    "split_pot": "🤝 Pot split between {count} players",
-    "turn_timeout": "⏱️ {player} timed out and folded",
-    "welcome": "👋 Welcome to Texas Hold'em Poker!",
-    "winner": "🏆 {player} wins ${amount}!",
-    "your_turn": "🎯 It's your turn!",
-    "game_in_progress": "🎮 Game in progress! Please wait for the next round.",
+    "game_in_progress": "🎮 اللعبة قيد التنفيذ! يرجى انتظار الجولة التالية.",
+    "game_started": "🎮 بدأت اللعبة! حظًا موفقًا!",
+    "player_all_in": "🔥 {player} راهن بكل رصيده بمقدار ${amount}",
+    "player_called": "💵 {player} ساوى الرهان ${amount}",
+    "player_checked": "✅ {player} انتظر",
+    "player_folded": "❌ {player} انسحب",
+    "player_raised": "⬆️ {player} رفع إلى ${amount}",
+    "player_wins": "🏆 {player} فاز بالرهان!",
+    "pot": "💰 الرهان الكلي: ${amount}",
+    "split_pot": "🤝 تم تقسيم الرهان بين {count} لاعبين",
+    "turn_timeout": "⏱️ انتهى وقت {player} وتم اعتباره منسحبًا",
+    "welcome": "👋 مرحبًا بك في تكساس هولدم!",
+    "winner": "🏆 {player} يفوز بـ ${amount}!",
+    "your_turn": "🎯 دورك الآن!",
     "bonus": {
-      "already_claimed": "🎁 Daily bonus already claimed!\nYour chips: *{amount}$*",
-      "already_claimed_plain": "You have already received the bonus today.\nYour chips: {amount}$",
-      "result": "Bonus: *{bonus}$* {icon}\nYour chips: *{total}$*"
+      "already_claimed": "🎁 تم استلام المكافأة اليومية بالفعل!\nرصيدك: *{amount}$*",
+      "already_claimed_plain": "لقد حصلت على المكافأة اليوم بالفعل.\nرصيدك: {amount}$",
+      "result": "المكافأة: *{bonus}$* {icon}\nرصيدك: *{total}$*"
     }
   },
   "popup": {
     "fold_confirmation": {
-      "body": "⚠️ <b>FOLD CONFIRMATION</b>\n\n💰 Pot: {pot}\n💸 Your Investment: {investment} ({percentage}%)\n\nAre you sure you want to fold?",
-      "cancel_button": "↩️ Cancel",
-      "confirm_button": "❌ Yes, Fold"
+      "body": "⚠️ <b>تأكيد الانسحاب</b>\n\n💰 الرهان الكلي: {pot}\n💸 استثمارك: {investment} ({percentage}%)\n\nهل أنت متأكد أنك تريد الانسحاب؟",
+      "cancel_button": "↩️ إلغاء",
+      "confirm_button": "❌ نعم، انسحاب"
     },
     "toast": {
-      "fold_prompt": "⚠️ Confirm fold"
+      "fold_prompt": "⚠️ أكد الانسحاب"
     }
   },
   "ui": {
     "action": {
-      "all_in": "All-In",
-      "call": "Call",
-      "check": "Check",
-      "fold": "Fold",
-      "raise": "Raise"
+      "all_in": "كل الرصيد",
+      "call": "مطابقة",
+      "check": "انتظار",
+      "fold": "انسحاب",
+      "raise": "زيادة"
     },
     "button": {
-      "all_in": "🔥 All-In",
-      "call": "💵 Call ${amount}",
-      "check": "✅ Check",
-      "fold": "❌ Fold",
-      "join": "➕ Join",
-      "leave": "➖ Leave",
-      "raise": "⬆️ Raise",
-      "ready": "✋ Ready",
-      "sit": "🪑 Sit Down",
-      "stand": "🚶 Stand Up",
-      "start": "🎮 Start Game"
+      "all_in": "🔥 كل الرصيد",
+      "call": "💵 مطابقة ${amount}",
+      "check": "✅ انتظار",
+      "fold": "❌ انسحاب",
+      "join": "➕ انضمام",
+      "leave": "➖ مغادرة",
+      "raise": "⬆️ زيادة",
+      "ready": "✋ جاهز",
+      "sit": "🪑 اجلس",
+      "stand": "🚶 قف",
+      "start": "🎮 ابدأ اللعبة"
     },
     "controller": {
+      "commands": {
+        "start": "🎰 بدء لعبة بوكر جديدة",
+        "ready": "✋ الانضمام إلى اللوبي / الجلوس على الطاولة",
+        "private": "🔒 إنشاء لعبة خاصة (قريبًا)",
+        "join": "🚪 الانضمام إلى لعبة خاصة برمز (قريبًا)",
+        "invite": "📨 دعوة لاعب إلى لعبة خاصة (قريبًا)",
+        "accept": "✅ قبول دعوة لعبة خاصة (قريبًا)",
+        "decline": "❌ رفض دعوة لعبة خاصة (قريبًا)",
+        "leave": "🚶 مغادرة اللعبة الخاصة (قريبًا)",
+        "money": "💰 المطالبة بالمكافأة اليومية (رمي النرد)",
+        "cards": "🃏 إظهار بطاقاتك مرة أخرى",
+        "ban": "⛔ إخراج لاعب غير نشط (أكثر من دقيقتين)",
+        "stop": "🛑 مغادرة اللعبة الحالية",
+        "help": "❓ عرض القواعد والأوامر"
+      },
       "action": {
-        "all_in": "🔥 All-in submitted",
-        "call": "✅ Call {amount}",
-        "call_check": "✅ Check",
-        "check": "✅ Check",
-        "fold": "✅ Folded",
-        "raise": "✅ Raise submitted",
-        "raise_to": "✅ Raise to {amount}",
-        "submitted": "✅ Action submitted"
+        "all_in": "🔥 تم إرسال كل الرصيد",
+        "call": "✅ مطابقة {amount}",
+        "call_check": "✅ انتظار",
+        "check": "✅ انتظار",
+        "fold": "✅ تم الانسحاب",
+        "raise": "✅ تم إرسال الزيادة",
+        "raise_to": "✅ زيادة إلى {amount}",
+        "submitted": "✅ تم إرسال الإجراء"
       },
       "fold": {
-        "cancelled": "Fold cancelled",
-        "expired": "♻️ Fold action expired. Refresh buttons.",
-        "failure": "❌ Unable to process fold. Please try again.",
-        "success": "🚪 Folded"
+        "cancelled": "تم إلغاء الانسحاب",
+        "expired": "♻️ انتهى وقت الانسحاب. حدّث الأزرار.",
+        "failure": "❌ تعذر تنفيذ الانسحاب. حاول مرة أخرى.",
+        "success": "🚪 تم الانسحاب"
       },
       "invite": {
-        "accept_help": "ℹ️ To accept an invitation, use the buttons in the invitation message.\n\nIf you lost the message, ask the host to re-invite you!",
-        "decline_help": "ℹ️ To decline an invitation, use the buttons in the invitation message.\n\nIf you lost the message, you can ignore it (invitations expire in 1 hour)."
+        "accept_help": "ℹ️ لقبول الدعوة، استخدم الأزرار في رسالة الدعوة.\n\nإذا فقدت الرسالة، اطلب من المضيف أن يعيد إرسال الدعوة!",
+        "decline_help": "ℹ️ لرفض الدعوة، استخدم الأزرار في رسالة الدعوة.\n\nإذا فقدت الرسالة يمكنك تجاهلها (الدعوات تنتهي خلال ساعة)."
       },
       "lobby": {
-        "left": "🚶 You left the table. Use /ready to rejoin!"
+        "left": "🚶 غادرت الطاولة. استخدم /ready للعودة!"
       },
       "raise": {
-        "error_choose_amount": "Choose an amount first",
-        "error_context": "❌ Cannot resolve message context",
-        "error_expired": "♻️ Action expired. Refresh buttons.",
-        "error_invalid": "❌ Invalid raise action",
-        "error_no_game": "❌ No active game",
-        "error_selection": "❌ Invalid raise selection",
-        "error_unavailable": "❌ Raise picker unavailable",
-        "error_unknown": "❌ Unknown raise action",
-        "error_user": "❌ Cannot resolve user"
-      },
-      "commands": {
-        "start": "🎰 Start a new poker game",
-        "ready": "✋ Join lobby / Sit at table",
-        "private": "🔒 Create private game (Coming Soon)",
-        "join": "🚪 Join private game by code (Coming Soon)",
-        "invite": "📨 Invite user to private game (Coming Soon)",
-        "accept": "✅ Accept private game invitation (Coming Soon)",
-        "decline": "❌ Decline private game invitation (Coming Soon)",
-        "leave": "🚶 Leave private game (Coming Soon)",
-        "money": "💰 Claim daily bonus (dice roll)",
-        "cards": "🃏 Show your cards again",
-        "ban": "⛔ Force AFK player to fold (2min+)",
-        "stop": "🛑 Leave current game",
-        "help": "❓ Show game rules and commands"
+        "error_choose_amount": "اختر المبلغ أولاً",
+        "error_context": "❌ تعذر تحديد سياق الرسالة",
+        "error_expired": "♻️ انتهى الإجراء. حدّث الأزرار.",
+        "error_invalid": "❌ إجراء زيادة غير صالح",
+        "error_no_game": "❌ لا توجد لعبة نشطة",
+        "error_selection": "❌ اختيار زيادة غير صالح",
+        "error_unavailable": "❌ خيار الزيادة غير متاح",
+        "error_unknown": "❌ إجراء زيادة غير معروف",
+        "error_user": "❌ تعذر تحديد اللاعب"
       }
     },
     "lobby": {
-      "host": "👑 Host",
-      "joined": "✅ {player} joined!",
-      "left": "👋 {player} left",
-      "players": "👥 Players ({count}/{max})",
-      "ready_to_start": "✅ Ready to start! Press the button below.",
-      "title": "🎮 Game Lobby",
-      "waiting": "⏳ Waiting for host to start..."
+      "host": "👑 المضيف",
+      "joined": "✅ {player} انضم!",
+      "left": "👋 {player} غادر",
+      "players": "👥 اللاعبون ({count}/{max})",
+      "ready_to_start": "✅ جاهزون للبدء! اضغط على الزر أدناه.",
+      "title": "🎮 لوبي اللعبة",
+      "waiting": "⏳ بانتظار أن يبدأ المضيف..."
     },
     "model": {
       "join": {
-        "already_in_game": "✅ You’re already in game ‘{code}’!",
-        "code_invalid": "❌ Invalid code format: '{code}'\n\nGame codes must be exactly 6 alphanumeric characters.",
-        "code_required": "❌ Please provide a game code: /join <code>",
-        "game_full": "❌ Game ‘{code}’ is full\n\nMaximum {max_players} players allowed",
-        "game_not_found": "❌ Game ‘{code}’ not found\n\nThe game may have ended or the code is incorrect",
-        "game_started": "❌ Game ‘{code}’ has already started\n\nYou cannot join a game in progress",
-        "not_accepting": "❌ Game ‘{code}’ is not accepting players right now",
-        "success": "✅ Successfully joined game ‘{code}’!\n\n🎰 Stake: {stake}\n👥 Players: {players}/{max_players}\n\nWaiting for host to start the game…",
-        "usage": "❌ Invalid command format\n\nUsage: /join <code>\nExample: /join ABC123"
+        "already_in_game": "✅ أنت بالفعل في اللعبة '{code}'.",
+        "code_invalid": "❌ تنسيق الرمز غير صالح: '{code}'\n\nيجب أن تتكون رموز اللعبة من 6 أحرف أو أرقام بالضبط.",
+        "code_required": "❌ يرجى إدخال رمز اللعبة: /join <code>",
+        "game_full": "❌ اللعبة '{code}' ممتلئة\n\nالحد الأقصى {max_players} لاعبين",
+        "game_not_found": "❌ لم يتم العثور على اللعبة '{code}'\n\nقد تكون انتهت اللعبة أو أن الرمز غير صحيح",
+        "game_started": "❌ اللعبة '{code}' بدأت بالفعل\n\nلا يمكنك الانضمام إلى لعبة جارية",
+        "not_accepting": "❌ اللعبة '{code}' لا تقبل لاعبين حاليًا",
+        "success": "✅ انضممت بنجاح إلى اللعبة '{code}'!\n\n🎰 الرهان: {stake}\n👥 اللاعبون: {players}/{max_players}\n\nبانتظار أن يبدأ المضيف اللعبة…",
+        "usage": "❌ تنسيق أمر غير صحيح\n\nالاستخدام: /join <code>\nمثال: /join ABC123"
       }
     },
     "settings": {
-      "choose_language": "🌐 Choose Your Language\n\nSelect your preferred language for the bot:",
-      "language_changed": "✅ Language changed successfully!"
+      "choose_language": "🌐 اختر لغتك\n\nحدد اللغة المفضلة للروبوت:",
+      "language_changed": "✅ تم تغيير اللغة بنجاح!"
     },
     "viewer": {
       "hand": {
         "empty": "—",
-        "header": "🃏 Your hand:",
-        "pot": "💰 Pot: {amount}"
+        "header": "🃏 يدك:",
+        "pot": "💰 الرهان: {amount}"
       },
       "table": {
-        "header": "🧩 Table:",
-        "waiting": "Waiting for flop…"
+        "header": "🧩 الطاولة:",
+        "waiting": "بانتظار الفلوب…"
       }
     }
   }
