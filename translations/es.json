@@ -167,6 +167,11 @@
         "left_game": "👋 Saliste de la partida"
       }
     },
+    "error": {
+      "navigation_failed": "⚠️ Error de navegación. Por favor, inténtalo de nuevo.",
+      "invalid_state": "⚠️ Estado de menú inválido detectado. Volviendo al menú principal.",
+      "state_recovery": "♻️ Estado del menú recuperado. Por favor continúa."
+    },
     "lobby": {
       "active_games": "📊 Juegos activos: {count}",
       "game_starting": "🎮 El juego comienza en {seconds}s...",
