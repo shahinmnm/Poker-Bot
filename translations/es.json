@@ -55,6 +55,31 @@
         "rules": "📖 Reglas"
       }
     },
+    "language": {
+      "back": "⬅️ Atrás"
+    },
+    "private": {
+      "stake_menu": {
+        "button": {
+          "micro": "💎 Micro (5/10) - 200 mín",
+          "low": "🎯 Baja (10/20) - 400 mín",
+          "medium": "🎲 Media (25/50) - 1K mín",
+          "high": "💰 Alta (50/100) - 2K mín",
+          "premium": "👑 Premium (100/200) - 4K mín",
+          "language": "🌐 Idioma",
+          "cancel": "❌ Cancelar"
+        }
+      },
+      "invite": {
+        "accept": "✅ Aceptar invitación",
+        "decline": "❌ Rechazar"
+      },
+      "lobby": {
+        "start": "🎰 INICIAR PARTIDA",
+        "invite": "📨 Invitar jugador",
+        "leave": "🚪 Salir del lobby"
+      }
+    },
     "settings": {
       "language_select": "🌐 Selecciona tu idioma:",
       "language_changed": "✅ Idioma cambiado a español",
