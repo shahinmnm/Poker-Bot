@@ -153,6 +153,12 @@ class PokerBotViewer:
 
         return self._language_context
 
+    @property
+    def i18n(self):
+        """Provide access to the translation manager (backwards compatibility)."""
+
+        return translation_manager
+
     def _apply_direction(
         self,
         text: str,
@@ -878,22 +884,21 @@ class PokerBotViewer:
     ) -> None:
         """Send appropriate menu based on chat type and user state."""
 
-        language_context = translation_manager.get_language_context(
-            menu_context.language_code
-        )
-
-        if menu_context.is_private_chat():
-            await self._send_private_menu(chat_id, menu_context, language_context)
+        if menu_context.chat_type == "private":
+            await self._send_private_menu(chat_id, menu_context)
         else:
-            await self._send_group_menu(chat_id, menu_context, language_context)
+            await self._send_group_menu(chat_id, menu_context)
 
     async def _send_private_menu(
         self,
         chat_id: int,
         context: MenuContext,
-        language_context: LanguageContext,
     ) -> None:
         """Build and send menu for private (1-on-1) chats."""
+
+        language_context = translation_manager.get_language_context(
+            context.language_code
+        )
 
         title = self._t("ui.menu.private.main_title", context=language_context)
 
@@ -982,9 +987,12 @@ class PokerBotViewer:
         self,
         chat_id: int,
         context: MenuContext,
-        language_context: LanguageContext,
     ) -> None:
         """Build and send menu for group chats."""
+
+        language_context = translation_manager.get_language_context(
+            context.language_code
+        )
 
         title = self._t("ui.menu.group.main_title", context=language_context)
 

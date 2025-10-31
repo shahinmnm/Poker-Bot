@@ -26,7 +26,7 @@ from pokerapp.pokerbotmodel import (
     PreparedPlayerAction,
 )
 from pokerapp.request_cache import RequestCache
-from pokerapp.middleware import PokerMenuMiddleware
+from pokerapp.middleware import PokerBotMiddleware
 
 if TYPE_CHECKING:
     from pokerapp.live_message import LiveMessageManager
@@ -107,7 +107,7 @@ class PokerBotController:
         self._kv = ensure_kv(kv if kv is not None else getattr(model, "_kv", None))
         translation_manager.attach_kvstore(self._kv)
         self._pending_fold_confirmations: dict[Tuple[int, str], PreparedPlayerAction] = {}
-        self._middleware = PokerMenuMiddleware(self._model)
+        self._middleware = PokerBotMiddleware(self._model)
 
         application.add_handler(CommandHandler("ready", self._handle_ready))
         application.add_handler(CommandHandler("start", self._handle_start))
@@ -206,6 +206,18 @@ class PokerBotController:
         application.post_init = self._post_init
 
         log_helper.info("ControllerInit", "Handlers registered")
+
+    @property
+    def middleware(self) -> PokerBotMiddleware:
+        """Expose middleware helpers for composing menu context."""
+
+        return self._middleware
+
+    @property
+    def view(self) -> "PokerBotViewer":
+        """Return the associated view implementation."""
+
+        return self._view
 
     def _translate(
         self,
@@ -564,14 +576,19 @@ class PokerBotController:
         await self._model.start(update, context)
 
         chat = update.effective_chat
-        if user is None or chat is None:
+        message = update.effective_message
+        if user is None or chat is None or message is None:
             return
 
-        menu_context = await self._middleware.build_menu_context(
-            update=update,
-            user_id=user.id,
+        menu_context = await self.middleware.build_menu_context(update, context)
+
+        welcome_text = translation_manager.t(
+            "msg.welcome",
+            lang=menu_context.language_code,
         )
-        await self._view.send_menu(chat.id, menu_context)
+        await message.reply_text(welcome_text)
+
+        await self.view._send_menu(chat.id, menu_context)
 
     async def _handle_menu(
         self,
@@ -580,18 +597,13 @@ class PokerBotController:
     ) -> None:
         """Display context-aware menu for /menu command."""
 
-        del context  # Unused PTB parameter
-
         user = update.effective_user
         chat = update.effective_chat
         if user is None or chat is None:
             return
 
-        menu_context = await self._middleware.build_menu_context(
-            update=update,
-            user_id=user.id,
-        )
-        await self._view.send_menu(chat.id, menu_context)
+        menu_context = await self.middleware.build_menu_context(update, context)
+        await self.view._send_menu(chat.id, menu_context)
 
     async def _handle_stop(
         self,

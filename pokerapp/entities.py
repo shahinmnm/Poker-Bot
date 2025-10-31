@@ -122,6 +122,31 @@ class Game:
         # Version number used to invalidate stale inline keyboard callbacks.
         self.live_message_version = 0
 
+    def set_mode_from_chat(self, chat_type: str) -> None:
+        """Configure game mode using the provided Telegram ``chat_type``.
+
+        Args:
+            chat_type: Telegram chat type string (``"private"``, ``"group"``,
+                or ``"supergroup"``).
+
+        Raises:
+            TypeError: If *chat_type* is not a string.
+            ValueError: If *chat_type* is not a supported Telegram chat type.
+        """
+
+        if not isinstance(chat_type, str):
+            raise TypeError("chat_type must be a string")
+
+        normalized = chat_type.strip().lower()
+        if normalized in ("group", "supergroup"):
+            self.mode = GameMode.GROUP
+            # Stakes only apply to private games – clear any previous config.
+            self.stake_config = None
+        elif normalized == "private":
+            self.mode = GameMode.PRIVATE
+        else:
+            raise ValueError(f"Unsupported chat type: {chat_type!r}")
+
     def players_by(self, states: Tuple[PlayerState]) -> List[Player]:
         return list(filter(lambda p: p.state in states, self.players))
 
