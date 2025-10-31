@@ -912,7 +912,7 @@ class PokerBotViewer:
                 parent_location = None
 
         if parent_location is not None:
-            back_label = self._t("ui.nav.back", context=language_context)
+            back_label = self._t("nav.back", context=language_context)
             buttons.append(
                 InlineKeyboardButton(
                     f"⬅️ {back_label}",
@@ -921,7 +921,7 @@ class PokerBotViewer:
             )
 
         if location_enum and location_enum != MenuLocation.MAIN_MENU:
-            home_label = self._t("ui.nav.home", context=language_context)
+            home_label = self._t("nav.home", context=language_context)
             buttons.append(
                 InlineKeyboardButton(
                     f"🏠 {home_label}",
@@ -940,7 +940,7 @@ class PokerBotViewer:
         """Cache frequently accessed location labels."""
 
         translator = self._translation_manager.get_translator(language_code)
-        return translator(f"ui.menu.location.{location_key}")
+        return translator(f"menu.location.{location_key}")
 
     def _render_breadcrumb(
         self,
@@ -1056,7 +1056,7 @@ class PokerBotViewer:
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    self._t("ui.menu.common.settings", context=language_context),
+                    self._t("menu.common.settings", context=language_context),
                     callback_data="settings",
                 )
             ]
@@ -1064,7 +1064,7 @@ class PokerBotViewer:
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    self._t("ui.menu.common.help", context=language_context),
+                    self._t("menu.common.help", context=language_context),
                     callback_data="help",
                 )
             ]
@@ -1100,7 +1100,7 @@ class PokerBotViewer:
             context.language_code
         )
 
-        title = self._t("ui.menu.group.main_title", context=language_context)
+        title = self._t("menu.group.main_title", context=language_context)
 
         keyboard: List[List[InlineKeyboardButton]] = []
 
@@ -1110,7 +1110,7 @@ class PokerBotViewer:
                     [
                         InlineKeyboardButton(
                             self._t(
-                                "ui.menu.group.view_game",
+                                "menu.group.view_game",
                                 context=language_context,
                             ),
                             callback_data="group_view_game",
@@ -1121,7 +1121,7 @@ class PokerBotViewer:
                     [
                         InlineKeyboardButton(
                             self._t(
-                                "ui.menu.group.leave_game",
+                                "menu.group.leave_game",
                                 context=language_context,
                             ),
                             callback_data="group_leave",
@@ -1133,7 +1133,7 @@ class PokerBotViewer:
                     [
                         InlineKeyboardButton(
                             self._t(
-                                "ui.menu.group.join_game",
+                                "menu.group.join_game",
                                 context=language_context,
                             ),
                             callback_data="group_join",
@@ -1145,7 +1145,7 @@ class PokerBotViewer:
                 [
                     InlineKeyboardButton(
                         self._t(
-                            "ui.menu.group.start_game",
+                            "menu.group.start_game",
                             context=language_context,
                         ),
                         callback_data="group_start",
@@ -1158,7 +1158,7 @@ class PokerBotViewer:
                 [
                     InlineKeyboardButton(
                         self._t(
-                            "ui.menu.group.admin_panel",
+                            "menu.group.admin_panel",
                             context=language_context,
                         ),
                         callback_data="group_admin",
@@ -1169,7 +1169,7 @@ class PokerBotViewer:
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    self._t("ui.menu.common.help", context=language_context),
+                    self._t("menu.common.help", context=language_context),
                     callback_data="help",
                 )
             ]
@@ -1239,7 +1239,7 @@ class PokerBotViewer:
                 [
                     InlineKeyboardButton(
                         text=self._t(
-                            "ui.language.back",
+                            "language.back",
                             context=language_context,
                         ),
                         callback_data=f"lang:back:{origin}",
@@ -1457,7 +1457,7 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     text=self._t(
-                        f"ui.private.stake_menu.button.{option}",
+                        f"private.stake_menu.button.{option}",
                         context=language_context,
                     ),
                     callback_data=f"stake:{option}",
@@ -1470,7 +1470,7 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     text=self._t(
-                        "ui.private.stake_menu.button.language",
+                        "private.stake_menu.button.language",
                         context=language_context,
                     ),
                     callback_data="stake:language",
@@ -1481,7 +1481,7 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     text=self._t(
-                        "ui.private.stake_menu.button.cancel",
+                        "private.stake_menu.button.cancel",
                         context=language_context,
                     ),
                     callback_data="stake:cancel",
@@ -1549,7 +1549,7 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     self._t(
-                        "ui.private.invite.accept",
+                        "private.invite.accept",
                         context=language_context,
                     ),
                     callback_data=f"invite_accept:{game_code}",
@@ -1558,7 +1558,7 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     self._t(
-                        "ui.private.invite.decline",
+                        "private.invite.decline",
                         context=language_context,
                     ),
                     callback_data=f"invite_decline:{game_code}",
@@ -1606,7 +1606,7 @@ class PokerBotViewer:
             keyboard.append([
                 InlineKeyboardButton(
                     self._t(
-                        "ui.private.lobby.start",
+                        "private.lobby.start",
                         context=language_context,
                     ),
                     callback_data=f"private_start:{game_code}",
@@ -1616,7 +1616,7 @@ class PokerBotViewer:
         keyboard.append([
             InlineKeyboardButton(
                 self._t(
-                    "ui.private.lobby.invite",
+                    "private.lobby.invite",
                     context=language_context,
                 ),
                 callback_data=f"private_invite:{game_code}",
@@ -1625,7 +1625,7 @@ class PokerBotViewer:
         keyboard.append([
             InlineKeyboardButton(
                 self._t(
-                    "ui.private.lobby.leave",
+                    "private.lobby.leave",
                     context=language_context,
                 ),
                 callback_data=f"private_leave:{game_code}",
@@ -1830,11 +1830,11 @@ class PokerBotViewer:
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
-                    self._t("ui.private.invite.accept"),
+                    self._t("private.invite.accept"),
                     callback_data=f"invite_accept:{game_code}",
                 ),
                 InlineKeyboardButton(
-                    self._t("ui.private.invite.decline"),
+                    self._t("private.invite.decline"),
                     callback_data=f"invite_decline:{game_code}",
                 ),
             ]
