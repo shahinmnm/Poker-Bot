@@ -160,6 +160,21 @@
       "start": "🎮 Comenzar juego"
     },
     "controller": {
+      "commands": {
+        "start": "Inicia Poker Bot y muestra el menú",
+        "ready": "Marcarte como listo en la partida actual",
+        "private": "Administrar o crear partidas privadas",
+        "join": "Unirte a una partida privada existente",
+        "invite": "Invitar a un jugador a tu partida privada",
+        "accept": "Aceptar una invitación privada pendiente",
+        "decline": "Rechazar una invitación privada pendiente",
+        "leave": "Salir de la partida o sala privada actual",
+        "money": "Consultar tu saldo de fichas",
+        "cards": "Mostrar tu mano actual",
+        "ban": "Bloquear a un jugador problemático de la partida",
+        "stop": "Detener Poker Bot",
+        "help": "Mostrar información de ayuda"
+      },
       "toast": {
         "action_recorded": "✅ Acción registrada",
         "fold_cancelled": "↩️ Retiro cancelado",
