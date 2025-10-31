@@ -1,287 +1,189 @@
 {
-  "game": {
-    "card": {
-      "rank": {
-        "10": "Diez",
-        "2": "Dos",
-        "3": "Tres",
-        "4": "Cuatro",
-        "5": "Cinco",
-        "6": "Seis",
-        "7": "Siete",
-        "8": "Ocho",
-        "9": "Nueve",
-        "A": "As",
-        "J": "Jota",
-        "K": "Rey",
-        "Q": "Reina"
+  "meta": {
+    "version": "1.0.0",
+    "language": "es",
+    "rtl": false,
+    "font": "system"
+  },
+  "ui": {
+    "action": {
+      "check": "Pasar",
+      "call": "Igualar",
+      "fold": "Retirarse",
+      "raise": "Subir",
+      "all_in": "All-in"
+    },
+    "button": {
+      "check": "✅ Pasar",
+      "call": "💵 Igualar ${amount}",
+      "fold": "❌ Retirarse",
+      "raise": "⬆️ Subir",
+      "all_in": "🔥 All-in",
+      "ready": "✋ Listo",
+      "start": "🎮 Comenzar juego",
+      "join": "➕ Unirse",
+      "leave": "➖ Salir",
+      "sit": "🪑 Sentarse",
+      "stand": "🚶 Levantarse",
+      "confirm_fold": "✅ Sí, retirarse",
+      "cancel_fold": "❌ Cancelar"
+    },
+    "lobby": {
+      "title": "🎰 Lobby de póker",
+      "waiting_players": "⏳ Esperando jugadores...",
+      "min_players": "Se necesitan al menos {min} jugadores",
+      "players_ready": "{ready}/{total} jugadores listos",
+      "game_starting": "🎮 El juego comienza en {seconds}s...",
+      "new_game": "🆕 Nuevo juego",
+      "active_games": "📊 Juegos activos: {count}",
+      "no_active_games": "No hay juegos activos. ¡Crea uno!"
+    },
+    "menu": {
+      "main": "📋 Menú principal",
+      "private": {
+        "title": "⚙️ Configuración y perfil",
+        "wallet": "💰 Cartera",
+        "language": "🌐 Idioma",
+        "statistics": "📊 Estadísticas",
+        "help": "❓ Ayuda"
       },
-      "suit": {
-        "clubs": "Tréboles",
-        "diamonds": "Diamantes",
-        "hearts": "Corazones",
-        "spades": "Picas"
+      "group": {
+        "title": "🎮 Controles de la partida",
+        "new_game": "🆕 Nuevo juego",
+        "join_game": "➕ Unirse a la partida",
+        "leave_game": "➖ Salir de la partida",
+        "rules": "📖 Reglas"
       }
     },
-    "hand": {
-      "flush": "Color",
-      "four_of_kind": "Póker",
-      "full_house": "Full",
-      "high_card": "Carta Alta",
-      "pair": "Pareja",
-      "royal_flush": "Escalera Real",
-      "straight": "Escalera",
-      "straight_flush": "Escalera de Color",
-      "three_of_kind": "Trío",
-      "two_pair": "Doble Pareja"
+    "settings": {
+      "language_select": "🌐 Selecciona tu idioma:",
+      "language_changed": "✅ Idioma cambiado a español",
+      "wallet_balance": "💰 Saldo: ${amount}",
+      "wallet_empty": "Tu cartera está vacía. Contacta al administrador."
     },
-    "round": {
-      "flop": "🃏 Flop - 3 cartas reveladas",
-      "pre_flop": "🎴 Pre-flop - Ciegas pagadas",
-      "river": "🌊 River - 5.ª carta revelada",
-      "showdown": "🏆 Showdown - Revelando manos",
-      "turn": "🎯 Turn - 4.ª carta revelada"
+    "model": {
+      "error": {
+        "invalid_action": "❌ Acción inválida",
+        "not_your_turn": "⏸️ No es tu turno",
+        "insufficient_chips": "❌ Fichas insuficientes",
+        "game_full": "🚫 La mesa está llena",
+        "already_in_game": "⚠️ Ya estás en una partida",
+        "min_raise": "⚠️ La subida mínima es ${amount}"
+      }
     },
-    "state": {
-      "finished": "Desenlace",
-      "flop": "Flop (tres cartas)",
-      "initial": "Esperando jugadores",
-      "pre_flop": "Pre-flop (ciegas)",
-      "river": "River (quinta carta)",
-      "turn": "Turn (cuarta carta)"
+    "controller": {
+      "toast": {
+        "action_recorded": "✅ Acción registrada",
+        "fold_cancelled": "↩️ Retiro cancelado",
+        "joined_game": "✅ Te uniste a la partida",
+        "left_game": "👋 Saliste de la partida"
+      }
+    },
+    "viewer": {
+      "fold_confirmation": {
+        "title": "⚠️ Confirmar retiro",
+        "message": "¿Seguro que quieres retirarte?\nTienes: {cards}",
+        "pot_amount": "Bote actual: ${amount}"
+      }
+    }
+  },
+  "msg": {
+    "welcome": "👋 ¡Bienvenido a Texas Hold'em!",
+    "game_started": "🎮 ¡La partida ha comenzado! ¡Buena suerte!",
+    "your_turn": "🎯 ¡Es tu turno, {player}!",
+    "player_folded": "❌ {player} se retiró",
+    "player_called": "💵 {player} igualó ${amount}",
+    "player_raised": "⬆️ {player} subió a ${amount}",
+    "player_checked": "✅ {player} pasó",
+    "player_all_in": "🔥 ¡{player} fue all-in con ${amount}!",
+    "player_joined": "➕ {player} se unió a la partida",
+    "player_left": "➖ {player} salió de la partida",
+    "player_ready": "✋ {player} está listo",
+    "winner": "🏆 {player} gana ${amount}!",
+    "pot": "💰 Bote: ${amount}",
+    "current_bet": "🎯 Apuesta actual: ${amount}",
+    "new_round": "🔄 Nueva ronda en marcha...",
+    "dealing_cards": "🃏 Repartiendo cartas...",
+    "showdown": "🎭 ¡Showdown!",
+    "tie": "🤝 ¡Empate! El bote se reparte entre: {players}",
+    "error": {
+      "generic": "❌ Ocurrió un error. Inténtalo de nuevo.",
+      "network": "🌐 Error de red. Revisa tu conexión.",
+      "timeout": "⏱️ Se agotó el tiempo de acción"
     }
   },
   "help": {
-    "commands": "📋 Comandos",
-    "help": "/help - Mostrar este mensaje",
-    "language": "/language - Cambiar idioma",
-    "ready": "/ready - Unirse al juego",
-    "start": "/start - Comenzar a jugar",
-    "status": "/status - Ver estado del juego",
-    "title": "🎴 Cómo Jugar Póker",
-    "controller": {
-      "full_text": "🎰 BOT DE PÓKER TEXAS HOLD’EM 🎰\n\n🏛️ Comandos para juegos en grupo:\n✋ /ready – Siéntate en la mesa\n🎰 /start – Comienza la ronda\n🛑 /stop – Sal de la partida\n\n💡 Atajos útiles:\n💰 /money – Tira los dados para el bono diario\n🃏 /cards – Muestra tus cartas otra vez\n🌐 /language – Cambia el idioma\n❓ /help – Muestra este mensaje\n\n📚 Conceptos básicos:\n• Dos cartas privadas por jugador\n• Cinco cartas comunitarias en etapas\n• La mejor mano de cinco cartas gana el bote\n\n🍀 ¡Buena suerte y diviértete!"
+    "rules": {
+      "title": "📖 Reglas de Texas Hold'em",
+      "objective": "**Objetivo:** Forma la mejor mano de 5 cartas con tus 2 cartas y las 5 comunitarias.",
+      "betting_rounds": "**Rondas de apuesta:**\n1️⃣ Pre-flop (se reparten 2 cartas)\n2️⃣ Flop (3 cartas comunitarias)\n3️⃣ Turn (1 carta comunitaria)\n4️⃣ River (1 carta comunitaria)",
+      "actions": "**Acciones:**\n• Pasar: Ceder la acción\n• Igualar: Empatar la apuesta actual\n• Subir: Aumentar la apuesta\n• Retirarse: Abandonar la mano\n• All-In: Apostar todas las fichas"
     },
-    "model": {
-      "fallback": "¡Bienvenido al Bot de Póker!\nUsa /ready para unirte a la siguiente partida y /money para reclamar tu bono diario."
+    "commands": {
+      "title": "🤖 Comandos del bot",
+      "list": "/start - Iniciar el bot\n/menu - Menú principal\n/newgame - Crear nueva partida\n/join - Unirse\n/leave - Salir\n/wallet - Ver saldo\n/help - Mostrar ayuda\n/language - Cambiar idioma"
+    },
+    "hand_rankings": {
+      "title": "🏆 Ranking de manos (de mejor a peor)",
+      "list": "1. Escalera real\n2. Escalera de color\n3. Póker\n4. Full house\n5. Color\n6. Escalera\n7. Trío\n8. Doble pareja\n9. Pareja\n10. Carta alta"
     }
   },
-  "meta": {
-    "font": "system",
-    "rtl": false
-  },
-  "msg": {
-    "current_bet": "🎯 Apuesta actual: ${amount}",
-    "error": {
-      "game_in_progress": "❌ Juego ya en progreso",
-      "insufficient_funds": "❌ Fondos insuficientes",
-      "insufficient_funds_detail": "❌ ¡Fondos insuficientes!\n\nTu saldo: {balance}\nRequerido: {required}",
-      "invalid_action": "❌ Acción inválida",
-      "max_players": "❌ Máximo {max} jugadores permitidos",
-      "no_game": "❌ No hay juego activo",
-      "not_enough_players": "❌ Se necesitan al menos 2 jugadores para iniciar",
-      "not_your_turn": "❌ ¡No es tu turno!",
-      "not_enough_players_ready": "❌ ¡No hay suficientes jugadores listos!\n\nAl menos 2 jugadores deben usar /ready primero.",
-      "players_insufficient_funds": "❌ Los siguientes jugadores no tienen fichas suficientes: {players}",
-      "wallet_not_enough": "❌ Fichas insuficientes"
+  "game": {
+    "state": {
+      "initial": "Esperando jugadores",
+      "pre_flop": "Preflop",
+      "flop": "Fase flop",
+      "turn": "Turno",
+      "river": "Río",
+      "finished": "Revelación"
     },
-    "game_started": "🎮 ¡Juego iniciado! ¡Buena suerte!",
-    "player_all_in": "🔥 {player} fue all-in con ${amount}",
-    "player_called": "💵 {player} igualó ${amount}",
-    "player_checked": "✅ {player} pasó",
-    "player_folded": "❌ {player} se retiró",
-    "player_raised": "⬆️ {player} subió a ${amount}",
-    "player_wins": "🏆 ¡{player} gana el bote!",
-    "pot": "💰 Bote: ${amount}",
-    "split_pot": "🤝 Bote dividido entre {count} jugadores",
-    "turn_timeout": "⏱️ {player} se quedó sin tiempo y se retiró",
-    "welcome": "👋 ¡Bienvenido al Póker Texas Hold'em!",
-    "winner": "🏆 ¡{player} gana ${amount}!",
-    "your_turn": "🎯 ¡Es tu turno!",
-    "game_in_progress": "🎮 ¡Partida en curso! Espera a la siguiente ronda.",
-    "bonus": {
-      "already_claimed": "🎁 ¡Bono diario ya reclamado!\nTus fichas: *{amount}$*",
-      "already_claimed_plain": "Ya recibiste el bono de hoy.\nTus fichas: {amount}$",
-      "result": "Bono: *{bonus}$* {icon}\nTus fichas: *{total}$*"
+    "card": {
+      "rank": {
+        "A": "As",
+        "K": "Rey",
+        "Q": "Reina",
+        "J": "Jota",
+        "10": "Diez",
+        "9": "Nueve",
+        "8": "Ocho",
+        "7": "Siete",
+        "6": "Seis",
+        "5": "Cinco",
+        "4": "Cuatro",
+        "3": "Tres",
+        "2": "Dos"
+      },
+      "suit": {
+        "spades": "Picas",
+        "hearts": "Corazones",
+        "diamonds": "Diamantes",
+        "clubs": "Tréboles"
+      }
     },
-    "private": {
-      "stake_menu": {
-        "body": "{title}\n\n{subtitle}\n\n{options}\n\n{footer}",
-        "title": "🔒 CREAR PARTIDA PRIVADA",
-        "subtitle": "Elige tu nivel de apuestas:",
-        "footer": "⚠️ ¡Todos los jugadores necesitan el buy-in mínimo para unirse!",
-        "option_micro": "💎 Micro - Apuestas pequeñas, ideal para practicar",
-        "option_low": "🎯 Baja - Partidas casuales con amigos",
-        "option_medium": "🎲 Media - Acción estándar de póker",
-        "option_high": "💰 Alta - Solo para jugadores serios",
-        "option_premium": "👑 Premium - Mesa de altos apostadores",
-        "cancelled": "🚫 Creación de partida privada cancelada."
-      },
-      "invite": {
-        "body": "🎰 INVITACIÓN A PARTIDA PRIVADA\n\n{inviter} te invitó a una partida de póker privada.\n\n🎲 Apuestas: {stake}\n🔑 Código de juego: {code}\n\n¿Te unes?"
-      },
-      "lobby": {
-        "title": "🔒 SALA DE PARTIDA PRIVADA",
-        "player_status": "{status_icon} Jugadores: {current}/{max} {min_indicator}",
-        "min_indicator": "(mín {min_players})",
-        "ready": "✅ ¡Listo para comenzar!",
-        "waiting": "⏳ Esperando más jugadores…",
-        "body": "{title}\n\n🎯 Anfitrión: {host}\n🎲 Apuestas: {stake}\n🔑 Código: {code}\n\n{player_status}\n\n{players}\n\n{readiness}"
-      },
-      "error": {
-        "already_active": "❌ ¡Ya tienes una partida privada activa!\nUsa /leave para salir de tu partida actual primero.",
-        "invalid_stake": "❌ Nivel de apuesta inválido: {level}"
-      },
-      "created": "✅ ¡Partida privada creada!\n\n🎯 **Código de juego**: {code}\n💰 **Apuestas**: {stake}\n💵 **Buy-in**: {min_buyin} - {max_buyin}\n\n📨 Comparte este código con tus amigos:\n/join {code}\n\n👥 **Jugadores**: 1/{max_players}\n• {host} (Anfitrión)\n\n⏳ Esperando a que se unan jugadores..."
+    "hand": {
+      "royal_flush": "Escalera real",
+      "straight_flush": "Escalera de color",
+      "four_of_kind": "Póker",
+      "full_house": "Full house",
+      "flush": "Color",
+      "straight": "Escalera",
+      "three_of_kind": "Trío",
+      "two_pair": "Doble pareja",
+      "pair": "Pareja",
+      "high_card": "Carta alta"
     }
   },
   "popup": {
     "fold_confirmation": {
-      "body": "⚠️ <b>CONFIRMAR RETIRADA</b>\n\n💰 Bote: {pot}\n💸 Tu inversión: {investment} ({percentage}%)\n\n¿Seguro que quieres retirarte?",
-      "cancel_button": "↩️ Cancelar",
-      "confirm_button": "❌ Sí, retirarme"
+      "title": "⚠️ Confirmar retiro",
+      "message": "¿Seguro que quieres retirarte?",
+      "your_cards": "Tus cartas: {cards}",
+      "pot": "Bote: ${amount}"
     },
     "toast": {
-      "fold_prompt": "⚠️ Confirma la retirada"
-    }
-  },
-  "ui": {
-    "action": {
-      "all_in": "All-in",
-      "call": "Igualar",
-      "check": "Pasar",
-      "fold": "Retirarse",
-      "raise": "Subir"
-    },
-    "button": {
-      "all_in": "🔥 All-in",
-      "call": "💵 Igualar ${amount}",
-      "check": "✅ Pasar",
-      "fold": "❌ Retirarse",
-      "join": "➕ Unirse",
-      "leave": "➖ Salir",
-      "raise": "⬆️ Subir",
-      "ready": "✋ Listo",
-      "sit": "🪑 Tomar asiento",
-      "stand": "🚶 Levantarse",
-      "start": "🎮 Iniciar Juego"
-    },
-    "language": {
-      "back": "⬅️ Atrás"
-    },
-    "private": {
-      "stake_menu": {
-        "button": {
-          "micro": "💎 Micro (5/10) - 200 mín",
-          "low": "🎯 Baja (10/20) - 400 mín",
-          "medium": "🎲 Media (25/50) - 1K mín",
-          "high": "💰 Alta (50/100) - 2K mín",
-          "premium": "👑 Premium (100/200) - 4K mín",
-          "language": "🌐 Idioma",
-          "cancel": "❌ Cancelar"
-        }
-      },
-      "invite": {
-        "accept": "✅ Aceptar invitación",
-        "decline": "❌ Rechazar"
-      },
-      "lobby": {
-        "start": "🎰 INICIAR PARTIDA",
-        "invite": "📨 Invitar jugador",
-        "leave": "🚪 Salir del lobby"
-      }
-    },
-    "controller": {
-      "action": {
-        "all_in": "🔥 All-in enviado",
-        "call": "✅ Igualar {amount}",
-        "call_check": "✅ Pasar",
-        "check": "✅ Pasar",
-        "fold": "✅ Retirado",
-        "raise": "✅ Subida enviada",
-        "raise_to": "✅ Subir a {amount}",
-        "submitted": "✅ Acción enviada"
-      },
-      "fold": {
-        "cancelled": "Retirada cancelada",
-        "expired": "♻️ La acción de retirada caducó. Actualiza los botones.",
-        "failure": "❌ No se pudo procesar la retirada. Intenta de nuevo.",
-        "success": "🚪 Retirado"
-      },
-      "invite": {
-        "accept_help": "ℹ️ Para aceptar una invitación, usa los botones del mensaje de invitación.\n\nSi perdiste el mensaje, pide al anfitrión que te invite de nuevo.",
-        "decline_help": "ℹ️ Para rechazar una invitación, usa los botones del mensaje de invitación.\n\nSi perdiste el mensaje, simplemente ignóralo (las invitaciones caducan en 1 hora)."
-      },
-      "lobby": {
-        "left": "🚶 Saliste de la mesa. Usa /ready para volver."
-      },
-      "raise": {
-        "error_choose_amount": "Elige un monto primero",
-        "error_context": "❌ No se pudo resolver el mensaje",
-        "error_expired": "♻️ La acción caducó. Actualiza los botones.",
-        "error_invalid": "❌ Acción de subida no válida",
-        "error_no_game": "❌ No hay una partida activa",
-        "error_selection": "❌ Selección de subida no válida",
-        "error_unavailable": "❌ Selector de subida no disponible",
-        "error_unknown": "❌ Acción de subida desconocida",
-        "error_user": "❌ No se pudo identificar al usuario"
-      },
-      "commands": {
-        "start": "🎰 Iniciar nueva partida de póker",
-        "ready": "✋ Entrar al lobby / Sentarse",
-        "private": "🔒 Crear partida privada (Próximamente)",
-        "join": "🚪 Unirse a partida privada con código (Próximamente)",
-        "invite": "📨 Invitar a usuario a partida privada (Próximamente)",
-        "accept": "✅ Aceptar invitación (Próximamente)",
-        "decline": "❌ Rechazar invitación (Próximamente)",
-        "leave": "🚶 Salir de partida privada (Próximamente)",
-        "money": "💰 Reclamar bono diario (tirada de dado)",
-        "cards": "🃏 Mostrar tus cartas de nuevo",
-        "ban": "⛔ Expulsar jugador inactivo (solo admin)",
-        "stop": "🛑 Salir de la partida",
-        "help": "❓ Mostrar reglas y comandos"
-      }
-    },
-    "lobby": {
-      "host": "👑 Anfitrión",
-      "game_in_progress": "🎮 ¡La partida ya está en marcha! Espera a la siguiente ronda.",
-      "joined": "✅ ¡{player} se unió!",
-      "left": "👋 {player} salió",
-      "room_full": "🚫 La mesa está completa (máx. {max_players} jugadores).",
-      "already_ready": "✅ Ya estás marcado como listo.",
-      "insufficient_funds": "💸 No tienes fichas suficientes para esta mesa.",
-      "players": "👥 Jugadores ({count}/{max})",
-      "ready_to_start": "✅ ¡Listo para comenzar! Pulsa el botón abajo.",
-      "title": "🎮 Sala de Juego",
-      "waiting": "⏳ Esperando que el anfitrión inicie..."
-    },
-    "model": {
-      "join": {
-        "already_in_game": "✅ Ya estás en la partida ‘{code}’.",
-        "code_invalid": "❌ Formato de código no válido: '{code}'\n\nLos códigos deben tener exactamente 6 caracteres alfanuméricos.",
-        "code_required": "❌ Proporciona un código de partida: /join <code>",
-        "game_full": "❌ La partida ‘{code}’ está llena\n\nMáximo {max_players} jugadores permitidos",
-        "game_not_found": "❌ Partida ‘{code}’ no encontrada\n\nLa partida puede haber terminado o el código es incorrecto",
-        "game_started": "❌ La partida ‘{code}’ ya ha empezado\n\nNo puedes unirte a una partida en curso",
-        "not_accepting": "❌ La partida ‘{code}’ no acepta jugadores en este momento",
-        "success": "✅ Te uniste correctamente a la partida ‘{code}’.\n\n🎰 Apuesta: {stake}\n👥 Jugadores: {players}/{max_players}\n\nEsperando a que el anfitrión inicie la partida…",
-        "usage": "❌ Formato de comando no válido\n\nUso: /join <code>\nEjemplo: /join ABC123"
-      }
-    },
-    "settings": {
-      "choose_language": "🌐 Elige tu idioma\n\nSelecciona tu idioma preferido para el bot:",
-      "language_changed": "✅ ¡Idioma cambiado exitosamente!"
-    },
-    "viewer": {
-      "hand": {
-        "empty": "—",
-        "header": "🃏 Tu mano:",
-        "pot": "💰 Bote: {amount}"
-      },
-      "table": {
-        "header": "🧩 Mesa:",
-        "waiting": "Esperando al flop…"
-      }
+      "success": "✅ {message}",
+      "error": "❌ {message}",
+      "info": "ℹ️ {message}"
     }
   }
 }
