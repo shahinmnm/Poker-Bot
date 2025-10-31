@@ -3630,16 +3630,218 @@ class PokerBotModel:
 
         self._apply_user_language(update)
 
+        chat = update.effective_chat
+        message = update.effective_message
+        user = update.effective_user
+
+        if chat is None or message is None or user is None:
+            return
+
+        user_id = user.id
+        reply_to_id = message.message_id
+
+        user_game_key = ":".join(["user", str(user_id), "private_game"])
+        game_code = self._kv.get(user_game_key)
+
+        if isinstance(game_code, bytes):
+            game_code = game_code.decode("utf-8")
+
+        if not game_code:
+            await self._view.send_message_reply(
+                chat_id=chat.id,
+                message_id=reply_to_id,
+                text="⚠️ You do not have an active private game.",
+            )
+            return
+
+        game_key = ":".join(["private_game", str(game_code)])
+        game_json = self._kv.get(game_key)
+
+        if isinstance(game_json, bytes):
+            game_json = game_json.decode("utf-8")
+
+        if not game_json:
+            await self._view.send_message_reply(
+                chat_id=chat.id,
+                message_id=reply_to_id,
+                text="⚠️ This private game is no longer available.",
+            )
+            return
+
+        from pokerapp.private_game import PrivateGame
+
+        try:
+            private_game = PrivateGame.from_json(game_json)
+        except Exception as exc:  # pragma: no cover - defensive parsing
+            logger.warning(
+                "Failed to parse private game %s: %s",
+                game_code,
+                exc,
+            )
+            await self._view.send_message_reply(
+                chat_id=chat.id,
+                message_id=reply_to_id,
+                text="⚠️ Unable to load private game details.",
+            )
+            return
+
+        stake_config = self._cfg.PRIVATE_STAKES.get(private_game.stake_level, {})
+        stake_name = stake_config.get("name") or private_game.stake_level.title()
+        max_players = getattr(self._cfg, "PRIVATE_MAX_PLAYERS", 6)
+        min_players = getattr(self._cfg, "PRIVATE_MIN_PLAYERS", 2)
+
+        async def resolve_name(player_id: int) -> str:
+            if player_id == user_id:
+                return (
+                    getattr(user, "full_name", None)
+                    or getattr(user, "username", None)
+                    or str(player_id)
+                )
+
+            cached_name = self._username_cache.get(player_id)
+            if cached_name:
+                return cached_name
+
+            try:
+                member = await self._bot.get_chat(player_id)
+                name = (
+                    getattr(member, "full_name", None)
+                    or getattr(member, "first_name", None)
+                    or getattr(member, "username", None)
+                    or str(player_id)
+                )
+            except Exception:
+                name = str(player_id)
+
+            if name:
+                self._username_cache[player_id] = name
+
+            return name
+
+        player_ids = private_game.players or []
+        player_names: List[str] = []
+
+        for player_id in player_ids:
+            player_names.append(await resolve_name(player_id))
+
+        if private_game.host_user_id == user_id:
+            host_name = (
+                getattr(user, "full_name", None)
+                or getattr(user, "username", None)
+                or str(user_id)
+            )
+        else:
+            host_name = self._username_cache.get(private_game.host_user_id)
+            if not host_name:
+                host_name = await resolve_name(private_game.host_user_id)
+
+        host_name = host_name or str(private_game.host_user_id)
+
+        if not player_names:
+            player_names.append(host_name)
+
+        can_start = len(player_ids) >= min_players
+
         await self._view.send_private_game_status(
-            chat_id=update.effective_chat.id,
-            host_name="You",
-            stake_name="Medium (25/50)",
-            game_code="CODE123",
-            current_players=3,
-            max_players=6,
-            min_players=2,
-            player_names=["Alice", "Bob", "You"],
-            can_start=False,
+            chat_id=chat.id,
+            host_name=host_name,
+            stake_name=stake_name,
+            game_code=str(game_code),
+            current_players=len(player_ids),
+            max_players=max_players,
+            min_players=min_players,
+            player_names=player_names,
+            can_start=can_start,
+        )
+
+    async def send_pending_invites_summary(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+    ) -> None:
+        """Send a summary of pending private game invitations to the caller."""
+
+        self._apply_user_language(update)
+
+        chat = update.effective_chat
+        message = update.effective_message
+        user = update.effective_user
+
+        if chat is None or message is None or user is None:
+            return
+
+        user_id = user.id
+        reply_to_id = message.message_id
+        pending_key = ":".join(["user", str(user_id), "pending_invites"])
+
+        codes: set[str] = set()
+
+        try:
+            if hasattr(self._kv, "smembers"):
+                raw_codes = self._kv.smembers(pending_key) or []
+                for raw_code in raw_codes:
+                    if isinstance(raw_code, bytes):
+                        raw_code = raw_code.decode("utf-8")
+                    if raw_code:
+                        codes.add(str(raw_code))
+        except Exception:
+            pass
+
+        if not codes:
+            fallback_code = self._kv.get(pending_key)
+            if isinstance(fallback_code, bytes):
+                fallback_code = fallback_code.decode("utf-8")
+            if fallback_code:
+                codes.add(str(fallback_code))
+
+        if not codes:
+            await self._view.send_message_reply(
+                chat_id=chat.id,
+                message_id=reply_to_id,
+                text="📭 You have no pending invitations.",
+            )
+            return
+
+        lines = ["📨 Pending invitations:"]
+
+        for code in sorted(codes):
+            invite_key = ":".join(["invite", str(code), str(user_id)])
+            invite_data = self._kv.get(invite_key)
+
+            if isinstance(invite_data, bytes):
+                invite_data = invite_data.decode("utf-8")
+
+            host_name = ""
+            stake_label = ""
+
+            if invite_data:
+                try:
+                    parsed = json.loads(invite_data)
+                    host_name = str(parsed.get("host_name", "")).strip()
+                    stake_level = parsed.get("stake_level")
+                    stake_config = self._cfg.PRIVATE_STAKES.get(stake_level, {})
+                    stake_label = stake_config.get("name") or str(stake_level).title()
+                except Exception:
+                    host_name = ""
+                    stake_label = ""
+
+            details: List[str] = []
+            if stake_label:
+                details.append(escape_markdown(stake_label, version=1))
+            if host_name:
+                details.append(escape_markdown(host_name, version=1))
+
+            if details:
+                lines.append(f"• {code} — {' · '.join(details)}")
+            else:
+                lines.append(f"• {code}")
+
+        lines.append("Use /accept CODE to join or /decline CODE to refuse.")
+
+        await self._view.send_message_reply(
+            chat_id=chat.id,
+            message_id=reply_to_id,
+            text="\n".join(lines),
         )
 
     async def prepare_player_action(
