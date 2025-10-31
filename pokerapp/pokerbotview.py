@@ -1606,7 +1606,7 @@ class PokerBotViewer:
             keyboard.append([
                 InlineKeyboardButton(
                     self._t(
-                        "ui.private.lobby.start",
+                        "private.lobby.start",
                         context=language_context,
                     ),
                     callback_data=f"private_start:{game_code}",
@@ -1616,7 +1616,7 @@ class PokerBotViewer:
         keyboard.append([
             InlineKeyboardButton(
                 self._t(
-                    "ui.private.lobby.invite",
+                    "private.lobby.invite",
                     context=language_context,
                 ),
                 callback_data=f"private_invite:{game_code}",
@@ -1625,7 +1625,7 @@ class PokerBotViewer:
         keyboard.append([
             InlineKeyboardButton(
                 self._t(
-                    "ui.private.lobby.leave",
+                    "private.lobby.leave",
                     context=language_context,
                 ),
                 callback_data=f"private_leave:{game_code}",
