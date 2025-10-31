@@ -102,6 +102,17 @@
         "start": "🎰 START GAME",
         "invite": "📨 Invite Player",
         "leave": "🚪 Leave Lobby"
+      },
+      "stake_menu": {
+        "button": {
+          "micro": "💵 Micro",
+          "low": "💰 Low",
+          "medium": "🎯 Medium",
+          "high": "💎 High",
+          "premium": "🏆 Premium",
+          "language": "🌐 Change Language",
+          "cancel": "❌ Cancel"
+        }
       }
     }
   },
@@ -140,6 +151,17 @@
         "min_indicator": "(min {min_players})",
         "ready": "✅ Ready to start!",
         "waiting": "⏳ Waiting for more players (min {min_players})..."
+      },
+      "stake_menu": {
+        "title": "🎲 Select Stakes",
+        "subtitle": "Choose your preferred blind levels:",
+        "option_micro": "💵 Micro ($50/$100)",
+        "option_low": "💰 Low ($250/$500)",
+        "option_medium": "🎯 Medium ($1K/$2K)",
+        "option_high": "💎 High ($5K/$10K)",
+        "option_premium": "🏆 Premium ($10K/$20K)",
+        "footer": "ℹ️ Minimum buy-in varies by stakes",
+        "body": "{title}\n\n{subtitle}\n\n{options}\n\n{footer}"
       }
     }
   },
