@@ -8,7 +8,7 @@ formatting for multi-language user experiences.
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from pathlib import Path
 from enum import Enum
 
@@ -128,6 +128,16 @@ class TranslationManager:
             font = self._DEFAULT_FONT_RTL if direction == "rtl" else self._DEFAULT_FONT_LTR
 
         return LanguageContext(code=code, direction=direction, font=font)
+
+    def get_translator(self, language: Optional[str] = None) -> Callable[[str], str]:
+        """Return a callable that translates keys for *language*."""
+
+        resolved = self.resolve_language(lang=language)
+
+        def _translator(key: str, **kwargs: Any) -> str:
+            return self.translate(key, language=resolved, **kwargs)
+
+        return _translator
 
     def get_user_language_or_detect(
         self,

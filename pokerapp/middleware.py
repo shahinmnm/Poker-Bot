@@ -10,7 +10,7 @@ from collections import defaultdict, deque
 from typing import Dict, Deque, Optional
 
 from telegram import Update
-from telegram.ext import CallbackContext
+from telegram.ext import CallbackContext, ContextTypes
 
 from pokerapp.notify_utils import LoggerHelper
 from pokerapp.entities import MenuContext
@@ -130,7 +130,7 @@ class UserRateLimiter:
         return None
 
 
-class PokerMenuMiddleware:
+class PokerBotMiddleware:
     """Resolve per-chat menu context for rendering dynamic menus."""
 
     def __init__(self, model) -> None:
@@ -144,17 +144,20 @@ class PokerMenuMiddleware:
     async def build_menu_context(
         self,
         update: Update,
-        user_id: int,
+        context: ContextTypes.DEFAULT_TYPE,
     ) -> MenuContext:
         """Build a :class:`MenuContext` describing the active chat state."""
 
-        # Extract chat info
+        del context  # Unused PTB parameter
+
         chat = update.effective_chat
-        if chat is None:
-            raise ValueError("Cannot build menu context without chat")
+        user = update.effective_user
+        if chat is None or user is None:
+            raise ValueError("Cannot build menu context without user/chat")
 
         chat_id = chat.id
         chat_type = chat.type  # "private", "group", or "supergroup"
+        user_id = user.id
 
         # Get language preference
         language_code = await self.get_user_language(user_id)
