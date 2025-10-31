@@ -270,8 +270,8 @@ class TranslationManager:
                     )
                 flattened[prefix] = value
 
-        # Flatten UI without prefix, keep nested namespaces
-        _flatten("", payload["ui"])
+        # Flatten UI namespace with explicit "ui" prefix to match lookup keys
+        _flatten("ui", payload["ui"])
         # Flatten other sections with their namespace prefixes
         for section in ("game", "help", "msg"):
             _flatten(section, payload[section])
