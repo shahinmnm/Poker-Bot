@@ -2348,7 +2348,7 @@ class PokerBotModel:
             await self._send_response(
                 update,
                 self._translate(
-                    "ui.model.error.already_in_game_other",
+                    "model.error.already_in_game_other",
                     user_id=user.id if user else None,
                     player=f"@{target_username}",
                 ),
@@ -3276,7 +3276,7 @@ class PokerBotModel:
             balance_chips = format(wallet.value(), ",")
             await query.edit_message_text(
                 self._translate(
-                    "ui.model.error.insufficient_chips",
+                    "model.error.insufficient_chips",
                     user_id=user.id,
                     required=required_chips,
                     balance=balance_chips,
@@ -3304,7 +3304,7 @@ class PokerBotModel:
         if len(game.players) >= max_players:
             await query.edit_message_text(
                 self._translate(
-                    "ui.model.error.game_full",
+                    "model.error.game_full",
                     user_id=user.id,
                     max=max_players,
                 )
@@ -3732,7 +3732,7 @@ class PokerBotModel:
                 error_user_id = None
 
             error_message = self._translate(
-                "ui.model.error.not_your_turn",
+                "model.error.not_your_turn",
                 user_id=error_user_id,
             )
 
@@ -3741,7 +3741,7 @@ class PokerBotModel:
                 if not player_name:
                     player_name = f"Player {current_player.user_id}"
                 detail_message = self._translate(
-                    "ui.model.error.not_your_turn_with_player",
+                    "model.error.not_your_turn_with_player",
                     user_id=error_user_id,
                     player=player_name,
                 )

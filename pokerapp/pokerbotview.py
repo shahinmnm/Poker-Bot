@@ -1711,9 +1711,9 @@ class PokerBotViewer:
     ) -> Message:
         """Send localized lobby status message."""
 
-        title = self._t("ui.lobby.title")
+        title = self._t("lobby.title")
         player_text = self._t(
-            "ui.lobby.players",
+            "lobby.players",
             count=player_count,
             max=max_players,
         )
@@ -1722,15 +1722,15 @@ class PokerBotViewer:
         for index, player_name in enumerate(players):
             if index == 0 and is_host:
                 player_entries.append(
-                    self._t("ui.lobby.host_entry", player=player_name)
+                    self._t("lobby.host_entry", player=player_name)
                 )
             else:
                 player_entries.append(
-                    self._t("ui.lobby.player_entry", player=player_name)
+                    self._t("lobby.player_entry", player=player_name)
                 )
 
         player_list = "\n".join(player_entries)
-        status_key = "ui.lobby.ready_to_start" if player_count >= 2 else "ui.lobby.waiting"
+        status_key = "lobby.ready_to_start" if player_count >= 2 else "lobby.waiting"
         status_text = self._t(status_key)
 
         segments = [title, "", player_text]
