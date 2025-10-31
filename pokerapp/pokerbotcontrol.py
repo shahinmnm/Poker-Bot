@@ -2,6 +2,7 @@
 
 import inspect
 import logging
+import time
 from typing import Any, Optional, Tuple, TYPE_CHECKING
 
 from telegram import (
@@ -27,6 +28,7 @@ from pokerapp.pokerbotmodel import (
 )
 from pokerapp.request_cache import RequestCache
 from pokerapp.middleware import PokerBotMiddleware
+from pokerapp.menu_state import MenuLocation, MenuState, MENU_HIERARCHY
 
 if TYPE_CHECKING:
     from pokerapp.live_message import LiveMessageManager
@@ -107,7 +109,7 @@ class PokerBotController:
         self._kv = ensure_kv(kv if kv is not None else getattr(model, "_kv", None))
         translation_manager.attach_kvstore(self._kv)
         self._pending_fold_confirmations: dict[Tuple[int, str], PreparedPlayerAction] = {}
-        self._middleware = PokerBotMiddleware(self._model)
+        self._middleware = PokerBotMiddleware(self._model, self._kv)
 
         application.add_handler(CommandHandler("ready", self._handle_ready))
         application.add_handler(CommandHandler("start", self._handle_start))
@@ -197,6 +199,18 @@ class PokerBotController:
             CallbackQueryHandler(
                 self._handle_lobby_start,
                 pattern=r"^lobby_start$",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_nav_back,
+                pattern="^nav_back$",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_nav_home,
+                pattern="^nav_home$",
             )
         )
         application.add_handler(
@@ -601,6 +615,77 @@ class PokerBotController:
         chat = update.effective_chat
         if user is None or chat is None:
             return
+
+        menu_context = await self.middleware.build_menu_context(update, context)
+        await self.view._send_menu(chat.id, menu_context)
+
+    async def _handle_nav_back(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle back button navigation."""
+
+        query = update.callback_query
+        if not query:
+            return
+
+        await query.answer()
+
+        user = update.effective_user
+        chat = update.effective_chat
+        if not user or not chat:
+            return
+
+        current_state = await self.middleware.menu_state.get_state(
+            user_id=user.id,
+            chat_id=chat.id,
+        )
+
+        if not current_state:
+            new_location = MenuLocation.MAIN_MENU
+        else:
+            parent = MENU_HIERARCHY.get(current_state.location)
+            new_location = parent if parent else MenuLocation.MAIN_MENU
+
+        new_state = MenuState(
+            location=new_location,
+            parent=MENU_HIERARCHY.get(new_location),
+            context_data={},
+            timestamp=time.time(),
+        )
+
+        await self.middleware.menu_state.set_state(
+            user_id=user.id,
+            chat_id=chat.id,
+            state=new_state,
+        )
+
+        menu_context = await self.middleware.build_menu_context(update, context)
+        await self.view._send_menu(chat.id, menu_context)
+
+    async def _handle_nav_home(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle home button navigation."""
+
+        query = update.callback_query
+        if not query:
+            return
+
+        await query.answer()
+
+        user = update.effective_user
+        chat = update.effective_chat
+        if not user or not chat:
+            return
+
+        await self.middleware.menu_state.clear_state(
+            user_id=user.id,
+            chat_id=chat.id,
+        )
 
         menu_context = await self.middleware.build_menu_context(update, context)
         await self.view._send_menu(chat.id, menu_context)

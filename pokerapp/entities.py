@@ -3,7 +3,7 @@
 from abc import abstractmethod
 import enum
 import datetime
-from typing import Tuple, List, Optional, Literal
+from typing import Tuple, List, Optional, Literal, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from uuid import uuid4
@@ -265,6 +265,8 @@ class MenuContext:
     chat_type: Literal["private", "group", "supergroup"]
     user_id: int
     language_code: str = "en"
+    current_menu_location: Optional[str] = None
+    menu_context_data: Dict[str, Any] = None
 
     # User state
     in_active_game: bool = False
@@ -277,6 +279,12 @@ class MenuContext:
 
     # Private-specific
     active_private_game_code: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Ensure optional context containers are initialized."""
+
+        if self.menu_context_data is None:
+            self.menu_context_data = {}
 
     def is_private_chat(self) -> bool:
         """Check if this is a private (1-on-1) conversation."""
@@ -297,6 +305,26 @@ class MenuContext:
         """Determine if private game commands should be visible."""
 
         return self.is_private_chat()
+
+    def get_context_value(self, key: str, default: Any = None) -> Any:
+        """Retrieve value from menu context data."""
+
+        return self.menu_context_data.get(key, default)
+
+    def has_back_navigation(self) -> bool:
+        """Check if back button should be shown."""
+
+        if self.current_menu_location is None:
+            return False
+
+        from .menu_state import MenuLocation, MENU_HIERARCHY
+
+        try:
+            location = MenuLocation(self.current_menu_location)
+            parent = MENU_HIERARCHY.get(location)
+            return parent is not None
+        except (ValueError, KeyError):
+            return False
 
 
 # Q9: Predefined stake levels for private games

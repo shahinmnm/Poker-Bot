@@ -182,10 +182,25 @@
       "waiting": "⏳ بانتظار أن يبدأ المضيف...",
       "waiting_players": "⏳ بانتظار اللاعبين..."
     },
+    "nav": {
+      "back": "رجوع",
+      "home": "القائمة الرئيسية"
+    },
     "menu": {
       "common": {
         "help": "❓ المساعدة",
         "settings": "⚙️ الإعدادات"
+      },
+      "location": {
+        "main": "القائمة الرئيسية",
+        "private_setup": "إنشاء لعبة خاصة",
+        "private_view": "لعبة خاصة",
+        "stake_select": "اختيار الرهانات",
+        "player_mgmt": "إدارة اللاعبين",
+        "group_setup": "إعداد لعبة جماعية",
+        "group_view": "لعبة جماعية",
+        "settings": "الإعدادات",
+        "lang_select": "اختيار اللغة"
       },
       "group": {
         "admin_panel": "⚙️ لوحة تحكم المشرف",

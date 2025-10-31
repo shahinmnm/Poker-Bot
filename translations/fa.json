@@ -182,10 +182,25 @@
       "waiting": "⏳ منتظر شروع میزبان...",
       "waiting_players": "⏳ در انتظار بازیکنان..."
     },
+    "nav": {
+      "back": "بازگشت",
+      "home": "منوی اصلی"
+    },
     "menu": {
       "common": {
         "help": "❓ راهنما",
         "settings": "⚙️ تنظیمات"
+      },
+      "location": {
+        "main": "منوی اصلی",
+        "private_setup": "ایجاد بازی خصوصی",
+        "private_view": "بازی خصوصی",
+        "stake_select": "انتخاب مبلغ شرط",
+        "player_mgmt": "مدیریت بازیکنان",
+        "group_setup": "تنظیمات بازی گروهی",
+        "group_view": "بازی گروهی",
+        "settings": "تنظیمات",
+        "lang_select": "انتخاب زبان"
       },
       "group": {
         "admin_panel": "⚙️ مدیریت گروه",

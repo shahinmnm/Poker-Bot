@@ -182,10 +182,25 @@
       "waiting": "⏳ Esperando a que el anfitrión inicie...",
       "waiting_players": "⏳ Esperando jugadores..."
     },
+    "nav": {
+      "back": "Atrás",
+      "home": "Menú Principal"
+    },
     "menu": {
       "common": {
         "help": "❓ Ayuda",
         "settings": "⚙️ Configuración"
+      },
+      "location": {
+        "main": "Menú Principal",
+        "private_setup": "Crear Juego Privado",
+        "private_view": "Juego Privado",
+        "stake_select": "Seleccionar Apuestas",
+        "player_mgmt": "Gestionar Jugadores",
+        "group_setup": "Configuración de Juego Grupal",
+        "group_view": "Juego Grupal",
+        "settings": "Configuración",
+        "lang_select": "Selección de Idioma"
       },
       "group": {
         "admin_panel": "⚙️ Panel de administradores",

@@ -27,6 +27,7 @@ from pokerapp.i18n import LanguageContext, translation_manager
 from pokerapp.kvstore import RedisKVStore, ensure_kv
 from pokerapp.live_message import LiveMessageManager
 from pokerapp.render_cache import RenderCache
+from .menu_state import MenuLocation, get_breadcrumb_path, MENU_HIERARCHY
 
 
 logger = logging.getLogger(__name__)
@@ -889,6 +890,72 @@ class PokerBotViewer:
         else:
             await self._send_group_menu(chat_id, menu_context)
 
+    def _build_navigation_row(
+        self,
+        context: MenuContext,
+        language_context: Any,
+    ) -> List[InlineKeyboardButton]:
+        """Build back/home navigation buttons based on menu state."""
+
+        buttons: List[InlineKeyboardButton] = []
+
+        location_enum: Optional[MenuLocation] = None
+        parent_location: Optional[MenuLocation] = None
+        if context.current_menu_location:
+            try:
+                location_enum = MenuLocation(context.current_menu_location)
+                parent_location = MENU_HIERARCHY.get(location_enum)
+            except ValueError:
+                location_enum = None
+                parent_location = None
+
+        if parent_location is not None:
+            back_label = self._t("ui.nav.back", context=language_context)
+            buttons.append(
+                InlineKeyboardButton(
+                    f"⬅️ {back_label}",
+                    callback_data="nav_back",
+                )
+            )
+
+        if location_enum and location_enum != MenuLocation.MAIN_MENU:
+            home_label = self._t("ui.nav.home", context=language_context)
+            buttons.append(
+                InlineKeyboardButton(
+                    f"🏠 {home_label}",
+                    callback_data="nav_home",
+                )
+            )
+
+        return buttons
+
+    def _render_breadcrumb(
+        self,
+        context: MenuContext,
+        language_context: Any,
+    ) -> str:
+        """Render breadcrumb navigation path."""
+
+        if not context.current_menu_location:
+            return ""
+
+        try:
+            location = MenuLocation(context.current_menu_location)
+        except ValueError:
+            return ""
+
+        path = get_breadcrumb_path(location)
+        if len(path) <= 1:
+            return ""
+
+        labels: List[str] = []
+        for loc in path:
+            key = f"ui.menu.location.{loc.value}"
+            label = self._t(key, context=language_context)
+            labels.append(label)
+
+        return " › ".join(labels)
+
     async def _send_private_menu(
         self,
         chat_id: int,
@@ -971,6 +1038,14 @@ class PokerBotViewer:
                 )
             ]
         )
+
+        breadcrumb = self._render_breadcrumb(context, language_context)
+        if breadcrumb:
+            title = f"{breadcrumb}\n\n{title}"
+
+        nav_row = self._build_navigation_row(context, language_context)
+        if nav_row:
+            keyboard.append(nav_row)
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -1068,6 +1143,14 @@ class PokerBotViewer:
                 )
             ]
         )
+
+        breadcrumb = self._render_breadcrumb(context, language_context)
+        if breadcrumb:
+            title = f"{breadcrumb}\n\n{title}"
+
+        nav_row = self._build_navigation_row(context, language_context)
+        if nav_row:
+            keyboard.append(nav_row)
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 

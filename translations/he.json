@@ -182,10 +182,25 @@
       "waiting": "⏳ ממתינים שהמארח יתחיל...",
       "waiting_players": "⏳ ממתינים לשחקנים..."
     },
+    "nav": {
+      "back": "חזרה",
+      "home": "תפריט ראשי"
+    },
     "menu": {
       "common": {
         "help": "❓ עזרה",
         "settings": "⚙️ הגדרות"
+      },
+      "location": {
+        "main": "תפריט ראשי",
+        "private_setup": "יצירת משחק פרטי",
+        "private_view": "משחק פרטי",
+        "stake_select": "בחירת הימורים",
+        "player_mgmt": "ניהול שחקנים",
+        "group_setup": "הגדרת משחק קבוצתי",
+        "group_view": "משחק קבוצתי",
+        "settings": "הגדרות",
+        "lang_select": "בחירת שפה"
       },
       "group": {
         "admin_panel": "⚙️ לוח ניהול קבוצה",
