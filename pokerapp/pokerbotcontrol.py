@@ -686,8 +686,14 @@ class PokerBotController:
                     user_id=user.id,
                     lang=lang_for_menu,
                 )
+                user_name = (
+                    getattr(user, "full_name", None)
+                    or getattr(user, "first_name", None)
+                    or getattr(user, "username", "")
+                )
                 await self._view.send_stake_selection(
                     chat_id=chat.id,
+                    user_name=user_name,
                     message_id=message.message_id,
                     language_code=lang_for_menu,
                 )
