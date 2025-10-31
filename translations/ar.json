@@ -92,6 +92,12 @@
         "message": "هل أنت متأكد أنك تريد الانسحاب؟\nأوراقك: {cards}",
         "pot_amount": "قيمة الرهان الحالية: ${amount}"
       }
+    },
+    "private": {
+      "invite": {
+        "accept": "✅ Accept Invitation",
+        "decline": "❌ Decline"
+      }
     }
   },
   "msg": {
@@ -117,6 +123,11 @@
       "generic": "❌ حدث خطأ. حاول مجدداً.",
       "network": "🌐 مشكلة في الاتصال. تحقق من الشبكة.",
       "timeout": "⏱️ انتهى الوقت المتاح للحركة"
+    },
+    "private": {
+      "invite": {
+        "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?"
+      }
     }
   },
   "help": {

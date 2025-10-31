@@ -92,6 +92,12 @@
         "message": "آیا مطمئن هستید که می‌خواهید فولد کنید؟\nکارت‌های شما: {cards}",
         "pot_amount": "پات فعلی: ${amount}"
       }
+    },
+    "private": {
+      "invite": {
+        "accept": "✅ Accept Invitation",
+        "decline": "❌ Decline"
+      }
     }
   },
   "msg": {
@@ -117,6 +123,11 @@
       "generic": "❌ خطایی رخ داد. لطفاً دوباره تلاش کنید.",
       "network": "🌐 خطای شبکه. اتصال خود را بررسی کنید.",
       "timeout": "⏱️ زمان اقدام به پایان رسید"
+    },
+    "private": {
+      "invite": {
+        "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?"
+      }
     }
   },
   "help": {

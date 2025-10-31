@@ -92,6 +92,12 @@
         "message": "¿Seguro que quieres retirarte?\nTienes: {cards}",
         "pot_amount": "Bote actual: ${amount}"
       }
+    },
+    "private": {
+      "invite": {
+        "accept": "✅ Accept Invitation",
+        "decline": "❌ Decline"
+      }
     }
   },
   "msg": {
@@ -117,6 +123,11 @@
       "generic": "❌ Ocurrió un error. Inténtalo de nuevo.",
       "network": "🌐 Error de red. Revisa tu conexión.",
       "timeout": "⏱️ Se agotó el tiempo de acción"
+    },
+    "private": {
+      "invite": {
+        "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?"
+      }
     }
   },
   "help": {
