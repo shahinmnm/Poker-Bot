@@ -182,10 +182,25 @@
       "waiting": "⏳ Waiting for host to start...",
       "waiting_players": "⏳ Waiting for players..."
     },
+    "nav": {
+      "back": "Back",
+      "home": "Home"
+    },
     "menu": {
       "common": {
         "help": "❓ Help",
         "settings": "⚙️ Settings"
+      },
+      "location": {
+        "main": "Main Menu",
+        "private_setup": "Create Private Game",
+        "private_view": "Private Game",
+        "stake_select": "Select Stakes",
+        "player_mgmt": "Manage Players",
+        "group_setup": "Group Game Setup",
+        "group_view": "Group Game",
+        "settings": "Settings",
+        "lang_select": "Language Selection"
       },
       "group": {
         "admin_panel": "⚙️ Group Admin",

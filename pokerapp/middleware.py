@@ -15,6 +15,7 @@ from telegram.ext import CallbackContext, ContextTypes
 from pokerapp.notify_utils import LoggerHelper
 from pokerapp.entities import MenuContext
 from pokerapp.i18n import translation_manager
+from .menu_state import MenuStateManager, MenuLocation, MenuState
 
 logger = logging.getLogger(__name__)
 log_helper = LoggerHelper.for_logger(logger)
@@ -133,8 +134,15 @@ class UserRateLimiter:
 class PokerBotMiddleware:
     """Resolve per-chat menu context for rendering dynamic menus."""
 
-    def __init__(self, model) -> None:
+    def __init__(self, model, store) -> None:
         self._model = model
+        self._menu_state_manager = MenuStateManager(store=store)
+
+    @property
+    def menu_state(self) -> MenuStateManager:
+        """Expose menu state manager."""
+
+        return self._menu_state_manager
 
     async def get_user_language(self, user_id: int) -> str:
         """Return the preferred language code for ``user_id``."""
@@ -164,6 +172,16 @@ class PokerBotMiddleware:
 
         # Query game state from model
         model = self._model
+
+        current_menu_state: Optional[MenuState] = await self._menu_state_manager.get_state(
+            user_id=user_id,
+            chat_id=chat_id,
+        )
+        current_location = (
+            current_menu_state.location
+            if current_menu_state
+            else MenuLocation.MAIN_MENU
+        )
 
         # Check if user is in any active game
         in_active_game = False
@@ -204,6 +222,10 @@ class PokerBotMiddleware:
             chat_type=chat_type,
             user_id=user_id,
             language_code=language_code,
+            current_menu_location=current_location.value,
+            menu_context_data=(
+                current_menu_state.context_data if current_menu_state else {}
+            ),
             in_active_game=in_active_game,
             is_game_host=is_game_host,
             has_pending_invite=has_pending_invite,
