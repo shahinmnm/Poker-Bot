@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
+from functools import lru_cache
 
 from pokerapp.i18n import SupportedLanguage, TranslationManager
 
@@ -29,17 +29,18 @@ def _load_payload(manager: TranslationManager, code: str) -> tuple[dict, dict[st
     return data, strings, meta
 
 
-@pytest.fixture(scope="module")
-def translation_manager_instance() -> TranslationManager:
-    """Provide a translation manager bound to the repository resources."""
+
+@lru_cache(maxsize=1)
+def _translation_manager_instance() -> TranslationManager:
+    """Return a cached translation manager bound to repository resources."""
 
     return TranslationManager(translations_dir=str(TRANSLATIONS_DIR))
 
 
-def test_translation_files_have_required_sections(translation_manager_instance: TranslationManager) -> None:
+def test_translation_files_have_required_sections() -> None:
     """Every language file must exist and contain the expected sections."""
 
-    manager = translation_manager_instance
+    manager = _translation_manager_instance()
     data_en, strings_en, meta_en = _load_payload(manager, "en")
 
     assert REQUIRED_SECTIONS.issubset(data_en), "English translation must provide full structure"
@@ -78,10 +79,10 @@ def test_translation_files_have_required_sections(translation_manager_instance: 
         assert runtime_meta.get("font") == meta.get("font")
 
 
-def test_translations_are_localized(translation_manager_instance: TranslationManager) -> None:
+def test_translations_are_localized() -> None:
     """Non-English translations should not be direct copies of English."""
 
-    manager = translation_manager_instance
+    manager = _translation_manager_instance()
     english_strings = manager.translations["en"]
     total_keys = len(english_strings)
 
@@ -104,10 +105,10 @@ def test_translations_are_localized(translation_manager_instance: TranslationMan
         assert len(identical) <= 8, f"{code}: too many untranslated strings: {sorted(identical)}"
 
 
-def test_language_context_uses_metadata(translation_manager_instance: TranslationManager) -> None:
+def test_language_context_uses_metadata() -> None:
     """Language context should reflect rtl and font metadata from translation files."""
 
-    manager = translation_manager_instance
+    manager = _translation_manager_instance()
 
     rtl_context = manager.get_language_context("ar")
     assert rtl_context.direction == "rtl"
@@ -126,10 +127,10 @@ def test_language_context_uses_metadata(translation_manager_instance: Translatio
     assert spanish_context.font == "system"
 
 
-def test_translation_keys_remain_in_sync(translation_manager_instance: TranslationManager) -> None:
+def test_translation_keys_remain_in_sync() -> None:
     """Ensure every language file exposes the same translation keys as English."""
 
-    manager = translation_manager_instance
+    manager = _translation_manager_instance()
     english_keys = set(manager.translations["en"].keys())
 
     for code, mapping in manager.translations.items():
