@@ -92,6 +92,12 @@
         "message": "Are you sure you want to fold?\nYou have: {cards}",
         "pot_amount": "Current pot: ${amount}"
       }
+    },
+    "private": {
+      "invite": {
+        "accept": "✅ Accept Invitation",
+        "decline": "❌ Decline"
+      }
     }
   },
   "msg": {
@@ -117,6 +123,11 @@
       "generic": "❌ An error occurred. Please try again.",
       "network": "🌐 Network error. Check your connection.",
       "timeout": "⏱️ Action timed out"
+    },
+    "private": {
+      "invite": {
+        "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?"
+      }
     }
   },
   "help": {

@@ -92,6 +92,12 @@
         "message": "Вы уверены, что хотите сбросить карты?\nУ вас на руках: {cards}",
         "pot_amount": "Текущий банк: ${amount}"
       }
+    },
+    "private": {
+      "invite": {
+        "accept": "✅ Accept Invitation",
+        "decline": "❌ Decline"
+      }
     }
   },
   "msg": {
@@ -117,6 +123,11 @@
       "generic": "❌ Произошла ошибка. Попробуйте снова.",
       "network": "🌐 Ошибка сети. Проверьте подключение.",
       "timeout": "⏱️ Время на действие истекло"
+    },
+    "private": {
+      "invite": {
+        "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?"
+      }
     }
   },
   "help": {

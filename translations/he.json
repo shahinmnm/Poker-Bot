@@ -92,6 +92,12 @@
         "message": "האם לקפל את היד?\nהקלפים שלכם: {cards}",
         "pot_amount": "קופה נוכחית: ${amount}"
       }
+    },
+    "private": {
+      "invite": {
+        "accept": "✅ Accept Invitation",
+        "decline": "❌ Decline"
+      }
     }
   },
   "msg": {
@@ -117,6 +123,11 @@
       "generic": "❌ אירעה שגיאה. נסו שוב.",
       "network": "🌐 שגיאת רשת. בדקו את החיבור.",
       "timeout": "⏱️ הזמן לביצוע מהלך הסתיים"
+    },
+    "private": {
+      "invite": {
+        "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?"
+      }
     }
   },
   "help": {
