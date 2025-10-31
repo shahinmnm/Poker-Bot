@@ -36,7 +36,12 @@
       "game_starting": "🎮 Игра начнётся через {seconds} с...",
       "new_game": "🆕 Новая игра",
       "active_games": "📊 Активные столы: {count}",
-      "no_active_games": "Нет активных игр. Создайте новую!"
+      "no_active_games": "Нет активных игр. Создайте новую!",
+      "players": "👥 Players ({count}/{max})",
+      "waiting": "⏳ Waiting for host to start...",
+      "ready_to_start": "✅ Ready to start!",
+      "player_entry": "• {player}",
+      "host_entry": "👑 {player}"
     },
     "menu": {
       "main": "📋 Главное меню",
@@ -65,10 +70,12 @@
       "error": {
         "invalid_action": "❌ Недопустимое действие",
         "not_your_turn": "⏸️ Сейчас не ваш ход",
-        "insufficient_chips": "❌ Недостаточно фишек",
-        "game_full": "🚫 Стол заполнен",
+        "insufficient_chips": "❌ Insufficient chips\nRequired: {required}\nAvailable: {balance}",
+        "game_full": "🚫 Game is full (max {max} players).",
         "already_in_game": "⚠️ Вы уже за столом",
-        "min_raise": "⚠️ Минимальный рейз ${amount}"
+        "min_raise": "⚠️ Минимальный рейз ${amount}",
+        "already_in_game_other": "⚠️ {player} is already in a game.",
+        "not_your_turn_with_player": "It's {player}'s move."
       }
     },
     "controller": {
@@ -171,6 +178,13 @@
       "two_pair": "Две пары",
       "pair": "Пара",
       "high_card": "Старшая карта"
+    },
+    "round": {
+      "pre_flop": "🎴 Pre-flop - Blinds posted",
+      "flop": "🃏 Flop - Three cards revealed",
+      "turn": "🎯 Turn - Fourth card revealed",
+      "river": "🌊 River - Fifth card revealed",
+      "showdown": "🏆 Showdown - Determining winner"
     }
   },
   "popup": {

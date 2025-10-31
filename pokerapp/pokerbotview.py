@@ -1378,27 +1378,36 @@ class PokerBotViewer:
     ) -> Message:
         """Send localized lobby status message."""
 
-        title = self._t("lobby.title")
-        player_text = self._t("lobby.players", count=player_count, max=max_players)
+        title = self._t("ui.lobby.title")
+        player_text = self._t(
+            "ui.lobby.players",
+            count=player_count,
+            max=max_players,
+        )
 
-        text_parts = [title, "", player_text]
-
-        for i, player_name in enumerate(players):
-            if i == 0 and is_host:
-                text_parts.append(f"{self._t('lobby.host')} {player_name}")
+        player_entries: List[str] = []
+        for index, player_name in enumerate(players):
+            if index == 0 and is_host:
+                player_entries.append(
+                    self._t("ui.lobby.host_entry", player=player_name)
+                )
             else:
-                text_parts.append(f"• {player_name}")
+                player_entries.append(
+                    self._t("ui.lobby.player_entry", player=player_name)
+                )
 
-        if player_count < 2:
-            text_parts.append("")
-            text_parts.append(self._t("lobby.waiting"))
-        elif player_count >= 2:
-            text_parts.append("")
-            text_parts.append(self._t("lobby.ready_to_start"))
+        player_list = "\n".join(player_entries)
+        status_key = "ui.lobby.ready_to_start" if player_count >= 2 else "ui.lobby.waiting"
+        status_text = self._t(status_key)
+
+        segments = [title, "", player_text]
+        if player_list:
+            segments.extend(["", player_list])
+        segments.extend(["", status_text])
 
         return await self._send_localized_message(
             chat_id=chat_id,
-            text="\n".join(text_parts),
+            text="\n".join(segments),
         )
 
     async def send_game_started_message(

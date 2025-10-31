@@ -29,14 +29,19 @@
       "cancel_fold": "❌ Cancel"
     },
     "lobby": {
-      "title": "🎰 Poker Lobby",
+      "title": "🎮 Game Lobby",
       "waiting_players": "⏳ Waiting for players...",
       "min_players": "Need at least {min} players to start",
       "players_ready": "{ready}/{total} players ready",
       "game_starting": "🎮 Game starting in {seconds}s...",
       "new_game": "🆕 New Game",
       "active_games": "📊 Active Games: {count}",
-      "no_active_games": "No active games. Start one!"
+      "no_active_games": "No active games. Start one!",
+      "players": "👥 Players ({count}/{max})",
+      "waiting": "⏳ Waiting for host to start...",
+      "ready_to_start": "✅ Ready to start!",
+      "player_entry": "• {player}",
+      "host_entry": "👑 {player}"
     },
     "menu": {
       "main": "📋 Main Menu",
@@ -65,10 +70,12 @@
       "error": {
         "invalid_action": "❌ Invalid action",
         "not_your_turn": "⏸️ It's not your turn",
-        "insufficient_chips": "❌ Insufficient chips",
-        "game_full": "🚫 Game is full",
+        "insufficient_chips": "❌ Insufficient chips\nRequired: {required}\nAvailable: {balance}",
+        "game_full": "🚫 Game is full (max {max} players).",
         "already_in_game": "⚠️ You're already in a game",
-        "min_raise": "⚠️ Minimum raise is ${amount}"
+        "min_raise": "⚠️ Minimum raise is ${amount}",
+        "already_in_game_other": "⚠️ {player} is already in a game.",
+        "not_your_turn_with_player": "It's {player}'s move."
       }
     },
     "controller": {
@@ -171,6 +178,13 @@
       "two_pair": "Two Pair",
       "pair": "Pair",
       "high_card": "High Card"
+    },
+    "round": {
+      "pre_flop": "🎴 Pre-flop - Blinds posted",
+      "flop": "🃏 Flop - Three cards revealed",
+      "turn": "🎯 Turn - Fourth card revealed",
+      "river": "🌊 River - Fifth card revealed",
+      "showdown": "🏆 Showdown - Determining winner"
     }
   },
   "popup": {
