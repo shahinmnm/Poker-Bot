@@ -11,10 +11,23 @@ from typing import Iterable, List
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
-from pokerapp.i18n import SupportedLanguage, TranslationManager
+
+def _ensure_repo_root_on_path() -> None:
+    """Add the repository root to ``sys.path`` when running as a script."""
+
+    repo_root = str(REPO_ROOT)
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+
+
+def _load_translation_dependencies():
+    """Import translation modules lazily to satisfy linting constraints."""
+
+    _ensure_repo_root_on_path()
+    from pokerapp.i18n import SupportedLanguage, TranslationManager
+
+    return SupportedLanguage, TranslationManager
 
 
 REQUIRED_SECTIONS = {"ui", "msg", "help", "game", "popup"}
@@ -28,6 +41,7 @@ def _has_letters(value: str) -> bool:
 
 
 def _validate_directory(translations_dir: Path) -> List[str]:
+    SupportedLanguage, TranslationManager = _load_translation_dependencies()
     try:
         manager = TranslationManager(translations_dir=str(translations_dir))
     except Exception as exc:  # pragma: no cover - defensive guard

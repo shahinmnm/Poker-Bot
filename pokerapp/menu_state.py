@@ -172,7 +172,7 @@ class MenuStateManager:
 class MenuStateRecovery:
     """Recovery utilities for corrupted or invalid menu states."""
 
-    def __init__(self, kvstore: "KVStore"):
+    def __init__(self, kvstore: "KVStoreRedis"):
         self._kvstore = kvstore
         self._logger = logging.getLogger(__name__)
 

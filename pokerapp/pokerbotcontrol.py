@@ -3,7 +3,7 @@
 import inspect
 import logging
 import time
-from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from telegram import (
     BotCommand,

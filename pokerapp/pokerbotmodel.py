@@ -78,6 +78,7 @@ class ModelTextKeys:
     JOIN_NOT_ACCEPTING = "model.join.not_accepting"
     JOIN_SUCCESS = "model.join.success"
 
+
 @dataclass(slots=True)
 class PreparedPlayerAction:
     """Lightweight container describing a validated action request."""
@@ -176,7 +177,7 @@ class PokerBotModel:
         Returns:
             True if balance sufficient, False otherwise (error sent to user)
         """
-        user_language = self._apply_user_language(update)
+        self._apply_user_language(update)
 
         balance = wallet.value()
         if balance < min_balance:
@@ -907,7 +908,7 @@ class PokerBotModel:
     ) -> None:
         """Initialize a group game using players from the lobby."""
 
-        self._apply_user_language(update)
+        user_language = self._apply_user_language(update)
 
         cache = RequestCache()
 
