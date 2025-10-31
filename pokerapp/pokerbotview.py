@@ -1239,7 +1239,7 @@ class PokerBotViewer:
                 [
                     InlineKeyboardButton(
                         text=self._t(
-                            "ui.language.back",
+                            "language.back",
                             context=language_context,
                         ),
                         callback_data=f"lang:back:{origin}",
@@ -1457,7 +1457,7 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     text=self._t(
-                        f"ui.private.stake_menu.button.{option}",
+                        f"private.stake_menu.button.{option}",
                         context=language_context,
                     ),
                     callback_data=f"stake:{option}",
@@ -1470,7 +1470,7 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     text=self._t(
-                        "ui.private.stake_menu.button.language",
+                        "private.stake_menu.button.language",
                         context=language_context,
                     ),
                     callback_data="stake:language",
@@ -1481,7 +1481,7 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     text=self._t(
-                        "ui.private.stake_menu.button.cancel",
+                        "private.stake_menu.button.cancel",
                         context=language_context,
                     ),
                     callback_data="stake:cancel",
@@ -1549,7 +1549,7 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     self._t(
-                        "ui.private.invite.accept",
+                        "private.invite.accept",
                         context=language_context,
                     ),
                     callback_data=f"invite_accept:{game_code}",
@@ -1558,7 +1558,7 @@ class PokerBotViewer:
             [
                 InlineKeyboardButton(
                     self._t(
-                        "ui.private.invite.decline",
+                        "private.invite.decline",
                         context=language_context,
                     ),
                     callback_data=f"invite_decline:{game_code}",
@@ -1830,11 +1830,11 @@ class PokerBotViewer:
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
-                    self._t("ui.private.invite.accept"),
+                    self._t("private.invite.accept"),
                     callback_data=f"invite_accept:{game_code}",
                 ),
                 InlineKeyboardButton(
-                    self._t("ui.private.invite.decline"),
+                    self._t("private.invite.decline"),
                     callback_data=f"invite_decline:{game_code}",
                 ),
             ]
