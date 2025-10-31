@@ -1471,30 +1471,38 @@ class PokerBotViewer:
             (message_text, keyboard)
         """
 
-        small_blind = format(stake_config["small_blind"], ",")
-        big_blind = format(stake_config["big_blind"], ",")
-        min_buyin = format(stake_config["min_buyin"], ",")
+        small_blind = self._format_currency(
+            stake_config["small_blind"],
+            include_symbol=False,
+        )
+        big_blind = self._format_currency(
+            stake_config["big_blind"],
+            include_symbol=False,
+        )
+        min_buyin = self._format_currency(
+            stake_config["min_buyin"],
+            include_symbol=False,
+        )
 
-        message = (
-            f"🎴 Game Invitation\n\n"
-            f"{host_name} invited you to join their private poker game!\n\n"
-            f"🎯 Game Code: {game_code}\n\n"
-            f"💰 Stakes: {stake_config['name']}\n"
-            f" • Small Blind: {small_blind}\n"
-            f" • Big Blind: {big_blind}\n"
-            f"💵 Min Buy-in: {min_buyin} chips\n\n"
-            f"Do you want to join?"
+        message = self._t(
+            "msg.private.invite.detailed_body",
+            host=host_name,
+            code=game_code,
+            stake_name=stake_config["name"],
+            small_blind=small_blind,
+            big_blind=big_blind,
+            min_buyin=min_buyin,
         )
 
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
-                    "✅ Accept",
-                    callback_data="invite_accept:" + str(game_code)
+                    self._t("ui.private.invite.accept"),
+                    callback_data=f"invite_accept:{game_code}",
                 ),
                 InlineKeyboardButton(
-                    "❌ Decline",
-                    callback_data="invite_decline:" + str(game_code)
+                    self._t("ui.private.invite.decline"),
+                    callback_data=f"invite_decline:{game_code}",
                 ),
             ]
         ])

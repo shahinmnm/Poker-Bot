@@ -142,7 +142,8 @@
     },
     "private": {
       "invite": {
-        "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?"
+        "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?",
+        "detailed_body": "🎴 <b>Game Invitation</b>\n\n{host} invited you to join!\n\n🎯 Game Code: {code}\n\n💰 Stakes: {stake_name}\n • Small Blind: ${small_blind}\n • Big Blind: ${big_blind}\n💵 Min Buy-in: ${min_buyin}\n\nDo you want to join?"
       },
       "lobby": {
         "title": "🔒 Private Game Lobby",
