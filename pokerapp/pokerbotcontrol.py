@@ -183,6 +183,18 @@ class PokerBotController:
         )
         application.add_handler(
             CallbackQueryHandler(
+                self._handle_menu_callback,
+                pattern=(
+                    r"^(?:"
+                    r"private_(?:view_game|manage|create)"
+                    r"|group_(?:view_game|join|leave|start|admin)"
+                    r"|view_invites|settings|help)"
+                    r"$"
+                ),
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
                 self._handle_lobby_sit,
                 pattern=r"^lobby_sit$",
             )
@@ -989,6 +1001,217 @@ class PokerBotController:
 
         await self._respond_to_query(query)
         await self._model.leave_private_game(update, context)
+
+    async def _handle_menu_callback(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Dispatch context-aware menu button callbacks to handlers."""
+
+        query = update.callback_query
+
+        if query is None or not query.data:
+            return
+
+        action = query.data
+
+        handlers = {
+            "private_view_game": self._handle_menu_private_view_game,
+            "private_manage": self._handle_menu_private_manage,
+            "private_create": self._handle_menu_private_create,
+            "view_invites": self._handle_menu_view_invites,
+            "settings": self._handle_menu_settings,
+            "help": self._handle_menu_help,
+            "group_view_game": self._handle_menu_group_view_game,
+            "group_join": self._handle_menu_group_join,
+            "group_leave": self._handle_menu_group_leave,
+            "group_start": self._handle_menu_group_start,
+            "group_admin": self._handle_menu_group_admin,
+        }
+
+        handler = handlers.get(action)
+
+        if handler is None:
+            await self._respond_to_query(query)
+            log_helper.warn("MenuCallbackUnknown", callback_data=action)
+            return
+
+        await handler(update, context)
+
+    async def _handle_menu_private_view_game(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._model.show_private_game_status(update, context)
+
+    async def _handle_menu_private_manage(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._model.show_private_game_status(update, context)
+
+    async def _handle_menu_private_create(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._handle_private(update, context)
+
+    async def _handle_menu_view_invites(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._model.send_pending_invites_summary(update, context)
+
+    async def _handle_menu_settings(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._handle_language(update, context)
+
+    async def _handle_menu_help(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is not None:
+            await self._respond_to_query(query)
+        await self._handle_help(update, context)
+
+    async def _handle_menu_group_join(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        await self._handle_lobby_sit(update, context)
+
+    async def _handle_menu_group_leave(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        await self._handle_lobby_leave(update, context)
+
+    async def _handle_menu_group_start(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        await self._handle_lobby_start(update, context)
+
+    async def _handle_menu_group_view_game(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is None:
+            return
+
+        chat = update.effective_chat
+
+        if chat is None:
+            await self._respond_to_query(query)
+            return
+
+        try:
+            game = self._model._game(chat.id)
+        except Exception as exc:  # pragma: no cover - defensive
+            log_helper.warn("MenuGroupViewGameLookupFailed", error=str(exc))
+            await self._respond_to_query(
+                query,
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_NO_GAME,
+                    query=query,
+                ),
+            )
+            return
+
+        players = getattr(game, "players", []) or []
+        if not players:
+            await self._respond_to_query(
+                query,
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_NO_GAME,
+                    query=query,
+                ),
+            )
+            return
+
+        current_player = None
+        index = getattr(game, "current_player_index", -1)
+        if 0 <= index < len(players):
+            current_player = players[index]
+
+        try:
+            await self._model._coordinator._send_or_update_game_state(
+                game=game,
+                current_player=current_player,
+                chat_id=chat.id,
+            )
+            await self._respond_to_query(query)
+        except Exception as exc:  # pragma: no cover - network side-effects
+            log_helper.warn("MenuGroupViewGameFailed", error=str(exc))
+            await self._respond_to_query(
+                query,
+                text=self._translate(
+                    ControllerTextKeys.RAISE_ERROR_NO_GAME,
+                    query=query,
+                ),
+            )
+
+    async def _handle_menu_group_admin(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        query = update.callback_query
+        if query is None:
+            return
+
+        await self._respond_to_query(query)
+
+        title = self._translate("ui.menu.group.admin_panel", query=query)
+        help_lines = [
+            title,
+            "",
+            "/ban <user> - Remove a disruptive player",
+            "/stop - End the current game",
+            "/language - Change table language",
+        ]
+
+        target_chat = update.effective_chat
+        message = query.message
+
+        chat_id = None
+        if message and message.chat:
+            chat_id = message.chat.id
+        elif target_chat:
+            chat_id = target_chat.id
+
+        if chat_id is not None:
+            await self._view.send_message(chat_id=chat_id, text="\n".join(help_lines))
 
     async def _handle_callback_query(
         self,
