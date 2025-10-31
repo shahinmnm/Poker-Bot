@@ -97,6 +97,11 @@
       "invite": {
         "accept": "✅ Accept Invitation",
         "decline": "❌ Decline"
+      },
+      "lobby": {
+        "start": "🎰 START GAME",
+        "invite": "📨 Invite Player",
+        "leave": "🚪 Leave Lobby"
       }
     }
   },
@@ -127,6 +132,14 @@
     "private": {
       "invite": {
         "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?"
+      },
+      "lobby": {
+        "title": "🔒 Private Game Lobby",
+        "body": "{title}\n\n🎯 Host: {host}\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\n{player_status}\n\n{players}\n\n{readiness}",
+        "player_status": "{status_icon} Players: {current}/{max} {min_indicator}",
+        "min_indicator": "(min {min_players})",
+        "ready": "✅ Ready to start!",
+        "waiting": "⏳ Waiting for more players (min {min_players})..."
       }
     }
   },
