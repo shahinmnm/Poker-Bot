@@ -86,6 +86,38 @@ class InMemoryKV:
         value = self._lists[key].pop()
         return _to_bytes(value)
 
+    # High-level helpers -------------------------------------------------
+
+    def set_user_language(self, user_id: int, language_code: str) -> None:
+        """Store the preferred language for ``user_id``."""
+
+        key = f"user:{user_id}:language"
+        self._values[key] = language_code
+
+    def get_user_language(self, user_id: int) -> Optional[str]:
+        """Return the preferred language for ``user_id`` if present."""
+
+        key = f"user:{user_id}:language"
+        value = self._values.get(key)
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        return value
+
+    def set_chat_language(self, chat_id: int, language_code: str) -> None:
+        """Persist the preferred language for a chat lobby."""
+
+        key = f"chat:{chat_id}:language"
+        self._values[key] = language_code
+
+    def get_chat_language(self, chat_id: int) -> Optional[str]:
+        """Retrieve a stored language preference for a chat lobby."""
+
+        key = f"chat:{chat_id}:language"
+        value = self._values.get(key)
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        return value
+
 
 class RedisKVStore:
     """Fallback Redis wrapper for environments without a Redis server."""
@@ -159,6 +191,10 @@ class RedisKVStore:
     ):
         return self._call("rpop", key)
 
+    # ------------------------------------------------------------------
+    # Language preference helpers
+    # ------------------------------------------------------------------
+
     def set_user_language(self, user_id: int, language_code: str) -> None:
         """Store user's preferred language."""
 
@@ -190,6 +226,41 @@ class RedisKVStore:
             logger.error(
                 "Failed to retrieve language for user %s: %s",
                 user_id,
+                exc,
+            )
+            return None
+
+    def set_chat_language(self, chat_id: int, language_code: str) -> None:
+        """Persist language preference for a group or private lobby."""
+
+        key = f"chat:{chat_id}:language"
+        try:
+            self.set(key, language_code, ex=None)
+            logger.debug(
+                "Stored chat language preference: chat=%s, lang=%s",
+                chat_id,
+                language_code,
+            )
+        except Exception as exc:  # pragma: no cover - logging side effect
+            logger.error(
+                "Failed to store language preference for chat %s: %s",
+                chat_id,
+                exc,
+            )
+
+    def get_chat_language(self, chat_id: int) -> Optional[str]:
+        """Return stored language preference for chat if available."""
+
+        key = f"chat:{chat_id}:language"
+        try:
+            language = self.get(key)
+            if isinstance(language, bytes):
+                language = language.decode("utf-8")
+            return language
+        except Exception as exc:  # pragma: no cover - logging side effect
+            logger.error(
+                "Failed to retrieve language for chat %s: %s",
+                chat_id,
                 exc,
             )
             return None

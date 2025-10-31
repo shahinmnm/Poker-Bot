@@ -103,6 +103,36 @@
       "already_claimed": "🎁 ¡Bono diario ya reclamado!\nTus fichas: *{amount}$*",
       "already_claimed_plain": "Ya recibiste el bono de hoy.\nTus fichas: {amount}$",
       "result": "Bono: *{bonus}$* {icon}\nTus fichas: *{total}$*"
+    },
+    "private": {
+      "stake_menu": {
+        "body": "{title}\n\n{subtitle}\n\n{options}\n\n{footer}",
+        "title": "🔒 CREAR PARTIDA PRIVADA",
+        "subtitle": "Elige tu nivel de apuestas:",
+        "footer": "⚠️ ¡Todos los jugadores necesitan el buy-in mínimo para unirse!",
+        "option_micro": "💎 Micro - Apuestas pequeñas, ideal para practicar",
+        "option_low": "🎯 Baja - Partidas casuales con amigos",
+        "option_medium": "🎲 Media - Acción estándar de póker",
+        "option_high": "💰 Alta - Solo para jugadores serios",
+        "option_premium": "👑 Premium - Mesa de altos apostadores",
+        "cancelled": "🚫 Creación de partida privada cancelada."
+      },
+      "invite": {
+        "body": "🎰 INVITACIÓN A PARTIDA PRIVADA\n\n{inviter} te invitó a una partida de póker privada.\n\n🎲 Apuestas: {stake}\n🔑 Código de juego: {code}\n\n¿Te unes?"
+      },
+      "lobby": {
+        "title": "🔒 SALA DE PARTIDA PRIVADA",
+        "player_status": "{status_icon} Jugadores: {current}/{max} {min_indicator}",
+        "min_indicator": "(mín {min_players})",
+        "ready": "✅ ¡Listo para comenzar!",
+        "waiting": "⏳ Esperando más jugadores…",
+        "body": "{title}\n\n🎯 Anfitrión: {host}\n🎲 Apuestas: {stake}\n🔑 Código: {code}\n\n{player_status}\n\n{players}\n\n{readiness}"
+      },
+      "error": {
+        "already_active": "❌ ¡Ya tienes una partida privada activa!\nUsa /leave para salir de tu partida actual primero.",
+        "invalid_stake": "❌ Nivel de apuesta inválido: {level}"
+      },
+      "created": "✅ ¡Partida privada creada!\n\n🎯 **Código de juego**: {code}\n💰 **Apuestas**: {stake}\n💵 **Buy-in**: {min_buyin} - {max_buyin}\n\n📨 Comparte este código con tus amigos:\n/join {code}\n\n👥 **Jugadores**: 1/{max_players}\n• {host} (Anfitrión)\n\n⏳ Esperando a que se unan jugadores..."
     }
   },
   "popup": {
@@ -135,6 +165,31 @@
       "sit": "🪑 Tomar asiento",
       "stand": "🚶 Levantarse",
       "start": "🎮 Iniciar Juego"
+    },
+    "language": {
+      "back": "⬅️ Atrás"
+    },
+    "private": {
+      "stake_menu": {
+        "button": {
+          "micro": "💎 Micro (5/10) - 200 mín",
+          "low": "🎯 Baja (10/20) - 400 mín",
+          "medium": "🎲 Media (25/50) - 1K mín",
+          "high": "💰 Alta (50/100) - 2K mín",
+          "premium": "👑 Premium (100/200) - 4K mín",
+          "language": "🌐 Idioma",
+          "cancel": "❌ Cancelar"
+        }
+      },
+      "invite": {
+        "accept": "✅ Aceptar invitación",
+        "decline": "❌ Rechazar"
+      },
+      "lobby": {
+        "start": "🎰 INICIAR PARTIDA",
+        "invite": "📨 Invitar jugador",
+        "leave": "🚪 Salir del lobby"
+      }
     },
     "controller": {
       "action": {
@@ -189,8 +244,12 @@
     },
     "lobby": {
       "host": "👑 Anfitrión",
+      "game_in_progress": "🎮 ¡La partida ya está en marcha! Espera a la siguiente ronda.",
       "joined": "✅ ¡{player} se unió!",
       "left": "👋 {player} salió",
+      "room_full": "🚫 La mesa está completa (máx. {max_players} jugadores).",
+      "already_ready": "✅ Ya estás marcado como listo.",
+      "insufficient_funds": "💸 No tienes fichas suficientes para esta mesa.",
       "players": "👥 Jugadores ({count}/{max})",
       "ready_to_start": "✅ ¡Listo para comenzar! Pulsa el botón abajo.",
       "title": "🎮 Sala de Juego",

@@ -260,9 +260,24 @@ class PokerBotModel:
     def _apply_user_language(self, update: Update) -> str:
         """Ensure view uses detected language for this update."""
 
+        chat = update.effective_chat
+        user = update.effective_user
+
         user_language = self._detect_and_cache_language(update)
-        self._view.set_language_context(user_language, user_id=getattr(update.effective_user, "id", None))
-        return user_language
+        resolved_language = translation_manager.resolve_language(lang=user_language)
+
+        if chat is not None:
+            chat_language = self._kv.get_chat_language(getattr(chat, "id", 0))
+            if chat_language:
+                resolved_language = translation_manager.resolve_language(lang=chat_language)
+            elif chat.type in ("group", "supergroup"):
+                self._kv.set_chat_language(chat.id, resolved_language)
+
+        self._view.set_language_context(
+            resolved_language,
+            user_id=getattr(user, "id", None),
+        )
+        return resolved_language
 
     async def refresh_language_for_user(self, user_id: int) -> None:
         """Re-render active UI components when a user changes language."""
@@ -627,7 +642,11 @@ class PokerBotModel:
                 await self._view.send_message_reply(
                     chat_id=chat_id,
                     message_id=message.message_id,
-                    text="🎮 Game in progress! Please wait for the next round.",
+                    text=self._translate(
+                        "msg.lobby.game_in_progress",
+                        user_id=user_id,
+                        lang=user_language,
+                    ),
                 )
                 return
 
@@ -635,7 +654,12 @@ class PokerBotModel:
                 await self._view.send_message_reply(
                     chat_id=chat_id,
                     message_id=message.message_id,
-                    text="The room is full",
+                    text=self._translate(
+                        "msg.lobby.room_full",
+                        user_id=user_id,
+                        lang=user_language,
+                        max_players=MAX_PLAYERS,
+                    ),
                 )
                 return
 
@@ -643,7 +667,11 @@ class PokerBotModel:
                 await self._view.send_message_reply(
                     chat_id=chat_id,
                     message_id=message.message_id,
-                    text="You are already ready",
+                    text=self._translate(
+                        "msg.lobby.already_ready",
+                        user_id=user_id,
+                        lang=user_language,
+                    ),
                 )
                 return
 
@@ -656,7 +684,11 @@ class PokerBotModel:
                 await self._view.send_message_reply(
                     chat_id=chat_id,
                     message_id=message.message_id,
-                    text="You don't have enough money for this table",
+                    text=self._translate(
+                        "msg.lobby.insufficient_funds",
+                        user_id=user_id,
+                        lang=user_language,
+                    ),
                 )
                 return
 
@@ -1584,7 +1616,7 @@ class PokerBotModel:
         This is the entry point when user types /private command.
         After stake selection, create_private_game_with_stake() is called.
         """
-        self._apply_user_language(update)
+        user_language = self._apply_user_language(update)
 
         user = update.effective_message.from_user
         chat_id = update.effective_chat.id
@@ -1596,9 +1628,10 @@ class PokerBotModel:
         if self._kv.exists(existing_game_key):
             await self._send_response(
                 update,
-                (
-                    "❌ You already have an active private game!\n"
-                    "Use /leave to exit your current game first."
+                self._translate(
+                    "msg.private.error.already_active",
+                    user_id=user.id,
+                    lang=user_language,
                 ),
             )
             return
@@ -1606,7 +1639,8 @@ class PokerBotModel:
         # Show stake selection menu
         await self._view.send_stake_selection(
             chat_id=chat_id,
-            user_name=user.full_name
+            user_name=user.full_name,
+            language_code=user_language,
         )
 
     async def create_private_game_with_stake(
@@ -1623,7 +1657,7 @@ class PokerBotModel:
             context: Callback context
             stake_level: Selected stake level ("low", "medium", "high")
         """
-        self._apply_user_language(update)
+        user_language = self._apply_user_language(update)
 
         from pokerapp.private_game import PrivateGame, PrivateGameState
 
@@ -1633,9 +1667,13 @@ class PokerBotModel:
         # Validate stake level
         stake_config = self._cfg.PRIVATE_STAKES.get(stake_level)
         if not stake_config:
-            await query.edit_message_text(
-                f"❌ Invalid stake level: {stake_level}"
+            error_text = self._translate(
+                "msg.private.error.invalid_stake",
+                user_id=user.id,
+                lang=user_language,
+                level=stake_level,
             )
+            await query.edit_message_text(error_text)
             return
 
         # Check user balance
@@ -1676,16 +1714,16 @@ class PokerBotModel:
         )
 
         # Show game created confirmation with lobby status
-        message = (
-            "✅ Private game created!\n\n"
-            f"🎯 **Game Code**: {game_code}\n"
-            f"💰 **Stakes**: {stake_config['name']}\n"
-            f"💵 **Buy-in**: {min_buyin} - {stake_config['max_buyin']}\n\n"
-            "📨 Share this code with friends:\n"
-            f"/join {game_code}\n\n"
-            f"👥 **Players**: 1/{self._cfg.PRIVATE_MAX_PLAYERS}\n"
-            f"• {user.full_name} (Host)\n\n"
-            "⏳ Waiting for players to join..."
+        message = self._translate(
+            "msg.private.created",
+            user_id=user.id,
+            lang=user_language,
+            code=game_code,
+            stake=stake_config["name"],
+            min_buyin=min_buyin,
+            max_buyin=stake_config["max_buyin"],
+            host=user.full_name,
+            max_players=self._cfg.PRIVATE_MAX_PLAYERS,
         )
         await query.edit_message_text(
             text=message,

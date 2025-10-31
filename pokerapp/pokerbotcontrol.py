@@ -620,16 +620,27 @@ class PokerBotController:
         if not user or not message or not chat:
             return
 
-        current_lang = self._kv.get_user_language(user.id) or translation_manager.DEFAULT_LANGUAGE
+        stored_user_lang = self._kv.get_user_language(user.id)
+        user_lang = translation_manager.resolve_language(
+            user_id=user.id,
+            lang=stored_user_lang,
+        )
+        self._kv.set_user_language(user.id, user_lang)
 
-        # Ensure we persist the detected language preference in storage so
-        # follow-up renders stay consistent even if invoked before a
-        # callback selection is made.
-        self._kv.set_user_language(user.id, current_lang)
+        active_lang = user_lang
+        if chat.type in ("group", "supergroup"):
+            chat_lang = self._kv.get_chat_language(chat.id)
+            if chat_lang:
+                active_lang = translation_manager.resolve_language(lang=chat_lang)
+            else:
+                active_lang = user_lang
+                self._kv.set_chat_language(chat.id, active_lang)
+
+        self._view.set_language_context(active_lang, user_id=user.id)
 
         await self._view.send_language_menu(
             chat_id=chat.id,
-            language_code=current_lang,
+            language_code=active_lang,
             reply_to_message_id=message.message_id,
         )
 
@@ -648,19 +659,70 @@ class PokerBotController:
         if not user:
             return
 
-        _, lang_code = query.data.split(":", 1)
+        parts = query.data.split(":", 3)
+        if len(parts) < 2:
+            return
 
-        self._kv.set_user_language(user.id, lang_code)
+        command = parts[1]
+        origin = parts[2] if len(parts) > 2 else None
+
+        if command == "back":
+            await self._view.answer_callback_query(query_id=query.id)
+            message = query.message
+            chat = message.chat if message else None
+
+            if origin == "stake" and chat and message:
+                if chat.type in ("group", "supergroup"):
+                    lang_for_menu = (
+                        self._kv.get_chat_language(chat.id)
+                        or translation_manager.DEFAULT_LANGUAGE
+                    )
+                else:
+                    lang_for_menu = (
+                        self._kv.get_user_language(user.id)
+                        or translation_manager.DEFAULT_LANGUAGE
+                    )
+                lang_for_menu = translation_manager.resolve_language(
+                    user_id=user.id,
+                    lang=lang_for_menu,
+                )
+                await self._view.send_stake_selection(
+                    chat_id=chat.id,
+                    message_id=message.message_id,
+                    language_code=lang_for_menu,
+                )
+            return
+
+        if command == "set":
+            if len(parts) < 3:
+                return
+            lang_code = parts[2]
+            origin = parts[3] if len(parts) > 3 else origin
+        else:
+            lang_code = command
+
+        resolved_lang = translation_manager.resolve_language(
+            user_id=user.id,
+            lang=lang_code,
+        )
+
+        self._kv.set_user_language(user.id, resolved_lang)
 
         # Update view language metadata immediately so subsequent renders use
         # the new locale before the next user-triggered update arrives.
         if hasattr(self, "_view"):
-            self._view.set_language_context(lang_code, user_id=user.id)
+            self._view.set_language_context(resolved_lang, user_id=user.id)
+
+        message = query.message
+        chat = message.chat if message else None
+
+        if chat and chat.type in ("group", "supergroup"):
+            self._kv.set_chat_language(chat.id, resolved_lang)
 
         confirmation = translation_manager.t(
             "settings.language_changed",
             user_id=user.id,
-            lang=lang_code,
+            lang=resolved_lang,
         )
 
         await self._view.answer_callback_query(
@@ -674,14 +736,12 @@ class PokerBotController:
         if hasattr(self, "_model") and hasattr(self._model, "refresh_language_for_user"):
             await self._model.refresh_language_for_user(user.id)
 
-        message = query.message
-        chat = message.chat if message else None
-
         if chat and message:
             await self._view.send_language_menu(
                 chat_id=chat.id,
-                language_code=lang_code,
+                language_code=resolved_lang,
                 message_id=message.message_id,
+                origin=origin,
             )
 
     async def _handle_button_clicked(
@@ -1978,6 +2038,42 @@ class PokerBotController:
 
         # Parse stake level from callback data (e.g., "stake:low" → "low")
         stake_level = query.data.split(":", 1)[1]
+
+        user = query.from_user
+        message = query.message
+        chat = message.chat if message else None
+
+        if stake_level == "cancel":
+            cancel_text = self._translate(
+                "msg.private.stake_menu.cancelled",
+                query=query,
+                user_id=getattr(user, "id", None),
+            )
+            await query.edit_message_text(cancel_text)
+            return
+
+        if stake_level == "language" and message and chat:
+            if chat.type in ("group", "supergroup"):
+                active_lang = (
+                    self._kv.get_chat_language(chat.id)
+                    or translation_manager.DEFAULT_LANGUAGE
+                )
+            else:
+                active_lang = (
+                    self._kv.get_user_language(user.id)
+                    or translation_manager.DEFAULT_LANGUAGE
+                )
+            active_lang = translation_manager.resolve_language(
+                user_id=user.id,
+                lang=active_lang,
+            )
+            await self._view.send_language_menu(
+                chat_id=chat.id,
+                language_code=active_lang,
+                message_id=message.message_id,
+                origin="stake",
+            )
+            return
 
         # Call model to create game with selected stake
         await self._model.create_private_game_with_stake(

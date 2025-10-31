@@ -868,6 +868,7 @@ class PokerBotViewer:
         language_code: str,
         message_id: Optional[MessageId] = None,
         reply_to_message_id: Optional[MessageId] = None,
+        origin: Optional[str] = None,
     ) -> None:
         """Render a language picker with the active locale highlighted."""
 
@@ -884,10 +885,13 @@ class PokerBotViewer:
                 label = f"{flag} {name}"
                 if code == language_code:
                     label = f"✅ {label}"
+                data_parts = ["lang", "set", code]
+                if origin:
+                    data_parts.append(origin)
                 row.append(
                     InlineKeyboardButton(
                         text=label,
-                        callback_data=f"lang:{code}",
+                        callback_data=":".join(data_parts),
                     )
                 )
             rows.append(row)
@@ -896,6 +900,19 @@ class PokerBotViewer:
             "settings.choose_language",
             context=language_context,
         )
+
+        if origin:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=self._t(
+                            "ui.language.back",
+                            context=language_context,
+                        ),
+                        callback_data=f"lang:back:{origin}",
+                    )
+                ]
+            )
 
         markup = InlineKeyboardMarkup(rows)
 
@@ -1092,64 +1109,94 @@ class PokerBotViewer:
         self,
         chat_id: int,
         user_name: str,
+        *,
+        language_code: Optional[str] = None,
+        message_id: Optional[int] = None,
     ) -> None:
         """Send stake selection menu for private game creation."""
 
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-        keyboard = [
+        language_context = self._get_language_context_for_user(language=language_code)
+        option_keys = ["micro", "low", "medium", "high", "premium"]
+
+        keyboard: List[List[InlineKeyboardButton]] = [
             [
                 InlineKeyboardButton(
-                    "💎 Micro (5/10) - 200 min",
-                    callback_data="stake:micro",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "🎯 Low (10/20) - 400 min",
-                    callback_data="stake:low",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "🎲 Medium (25/50) - 1K min",
-                    callback_data="stake:medium",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "💰 High (50/100) - 2K min",
-                    callback_data="stake:high",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "👑 Premium (100/200) - 4K min",
-                    callback_data="stake:premium",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "❌ Cancel",
-                    callback_data="stake:cancel",
-                ),
-            ],
+                    text=self._t(
+                        f"ui.private.stake_menu.button.{option}",
+                        context=language_context,
+                    ),
+                    callback_data=f"stake:{option}",
+                )
+            ]
+            for option in option_keys
         ]
+
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=self._t(
+                        "ui.private.stake_menu.button.language",
+                        context=language_context,
+                    ),
+                    callback_data="stake:language",
+                )
+            ]
+        )
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=self._t(
+                        "ui.private.stake_menu.button.cancel",
+                        context=language_context,
+                    ),
+                    callback_data="stake:cancel",
+                )
+            ]
+        )
+
+        options_block = "\n".join(
+            self._t(
+                f"msg.private.stake_menu.option_{option}",
+                context=language_context,
+            )
+            for option in option_keys
+        )
+
+        text = self._t(
+            "msg.private.stake_menu.body",
+            context=language_context,
+            title=self._t("msg.private.stake_menu.title", context=language_context),
+            subtitle=self._t(
+                "msg.private.stake_menu.subtitle", context=language_context
+            ),
+            options=options_block,
+            footer=self._t("msg.private.stake_menu.footer", context=language_context),
+        )
+
+        localized_text = self._localize_text(text, context=language_context)
         reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if message_id is not None:
+            await self._bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=localized_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN,
+                disable_web_page_preview=True,
+            )
+            return
 
         await self._send_localized_message(
             chat_id=chat_id,
-            text=(
-                "🔒 CREATE PRIVATE GAME\n\n"
-                "Choose your stake level:\n\n"
-                "💎 Micro - Small stakes, great for practice\n"
-                "🎯 Low - Casual games with friends\n"
-                "🎲 Medium - Standard poker action\n"
-                "💰 High - Serious players only\n"
-                "👑 Premium - High rollers table\n\n"
-                "⚠️ All players need minimum buy-in to join!"
-            ),
+            text=text,
+            context=language_context,
             reply_markup=reply_markup,
+            parse_mode=ParseMode.MARKDOWN,
+            disable_notification=True,
+            disable_web_page_preview=True,
         )
 
     async def send_player_invite(
@@ -1163,31 +1210,42 @@ class PokerBotViewer:
 
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+        language_context = self._language_context
+
         keyboard = [
             [
                 InlineKeyboardButton(
-                    "✅ Accept Invitation",
+                    self._t(
+                        "ui.private.invite.accept",
+                        context=language_context,
+                    ),
                     callback_data=f"invite_accept:{game_code}",
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    "❌ Decline",
+                    self._t(
+                        "ui.private.invite.decline",
+                        context=language_context,
+                    ),
                     callback_data=f"invite_decline:{game_code}",
                 ),
             ],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
+        message_text = self._t(
+            "msg.private.invite.body",
+            context=language_context,
+            inviter=inviter_name,
+            stake=stake_name,
+            code=game_code,
+        )
+
         await self._send_localized_message(
             chat_id=chat_id,
-            text=(
-                "🎰 PRIVATE GAME INVITATION\n\n"
-                f"{inviter_name} invited you to a private poker game!\n\n"
-                f"🎲 Stakes: {stake_name}\n"
-                f"🔑 Game Code: {game_code}\n\n"
-                "Will you join?"
-            ),
+            text=message_text,
+            context=language_context,
             reply_markup=reply_markup,
         )
 
@@ -1207,53 +1265,82 @@ class PokerBotViewer:
 
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+        language_context = self._language_context
         player_list = "\n".join([f" • {name}" for name in player_names])
 
         keyboard = []
         if can_start:
             keyboard.append([
                 InlineKeyboardButton(
-                    "🎰 START GAME",
+                    self._t(
+                        "ui.private.lobby.start",
+                        context=language_context,
+                    ),
                     callback_data=f"private_start:{game_code}",
                 ),
             ])
 
         keyboard.append([
             InlineKeyboardButton(
-                "📨 Invite Player",
+                self._t(
+                    "ui.private.lobby.invite",
+                    context=language_context,
+                ),
                 callback_data=f"private_invite:{game_code}",
             ),
         ])
         keyboard.append([
             InlineKeyboardButton(
-                "🚪 Leave Lobby",
+                self._t(
+                    "ui.private.lobby.leave",
+                    context=language_context,
+                ),
                 callback_data=f"private_leave:{game_code}",
             ),
         ])
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        status_emoji = "✅" if can_start else "⏳"
-        min_indicator = (
-            f"(min {min_players})" if current_players < min_players else ""
-        )
-        readiness = (
-            "✅ Ready to start!" if can_start else "⏳ Waiting for more players…"
-        )
+        min_indicator = ""
+        if current_players < min_players:
+            min_indicator = self._t(
+                "msg.private.lobby.min_indicator",
+                context=language_context,
+                min_players=min_players,
+            )
 
-        message = (
-            "🔒 PRIVATE GAME LOBBY\n\n"
-            f"🎯 Host: {host_name}\n"
-            f"🎲 Stakes: {stake_name}\n"
-            f"🔑 Code: {game_code}\n\n"
-            f"{status_emoji} Players: {current_players}/{max_players} "
-            f"{min_indicator}\n\n"
-            f"{player_list}\n\n"
-            f"{readiness}"
+        readiness_key = (
+            "msg.private.lobby.ready" if can_start else "msg.private.lobby.waiting"
+        )
+        readiness = self._t(
+            readiness_key,
+            context=language_context,
+            min_players=min_players,
+        )
+        player_status = self._t(
+            "msg.private.lobby.player_status",
+            context=language_context,
+            status_icon="✅" if can_start else "⏳",
+            current=current_players,
+            max=max_players,
+            min_indicator=min_indicator,
+        ).strip()
+
+        message = self._t(
+            "msg.private.lobby.body",
+            context=language_context,
+            title=self._t("msg.private.lobby.title", context=language_context),
+            host=host_name,
+            stake=stake_name,
+            code=game_code,
+            player_status=player_status,
+            players=player_list,
+            readiness=readiness,
         )
 
         await self._send_localized_message(
             chat_id=chat_id,
             text=message,
+            context=language_context,
             reply_markup=reply_markup,
         )
 
