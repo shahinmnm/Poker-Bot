@@ -29,7 +29,6 @@ def _load_payload(manager: TranslationManager, code: str) -> tuple[dict, dict[st
     return data, strings, meta
 
 
-
 @lru_cache(maxsize=1)
 def _translation_manager_instance() -> TranslationManager:
     """Return a cached translation manager bound to repository resources."""
