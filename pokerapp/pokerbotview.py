@@ -861,6 +861,64 @@ class PokerBotViewer:
             disable_web_page_preview=True,
         )
 
+    async def send_language_menu(
+        self,
+        *,
+        chat_id: ChatId,
+        language_code: str,
+        message_id: Optional[MessageId] = None,
+        reply_to_message_id: Optional[MessageId] = None,
+    ) -> None:
+        """Render a language picker with the active locale highlighted."""
+
+        language_context = translation_manager.get_language_context(language_code)
+        languages = translation_manager.get_supported_languages()
+
+        rows: List[List[InlineKeyboardButton]] = []
+        for index in range(0, len(languages), 2):
+            row: List[InlineKeyboardButton] = []
+            for lang_info in languages[index:index + 2]:
+                code = lang_info["code"]
+                name = lang_info.get("name", code.upper())
+                flag = lang_info.get("flag", "🏳️")
+                label = f"{flag} {name}"
+                if code == language_code:
+                    label = f"✅ {label}"
+                row.append(
+                    InlineKeyboardButton(
+                        text=label,
+                        callback_data=f"lang:{code}",
+                    )
+                )
+            rows.append(row)
+
+        header = self._t(
+            "settings.choose_language",
+            context=language_context,
+        )
+
+        markup = InlineKeyboardMarkup(rows)
+
+        if message_id is not None:
+            await self._bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=self._localize_text(header, context=language_context),
+                reply_markup=markup,
+                disable_web_page_preview=True,
+            )
+            return
+
+        await self._send_localized_message(
+            chat_id=chat_id,
+            text=header,
+            context=language_context,
+            reply_markup=markup,
+            reply_to_message_id=reply_to_message_id,
+            disable_notification=True,
+            disable_web_page_preview=True,
+        )
+
     async def answer_callback_query(
         self,
         query_id: str,
