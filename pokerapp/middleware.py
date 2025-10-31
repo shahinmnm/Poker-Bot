@@ -4,18 +4,67 @@ Middleware for analytics tracking and rate limiting.
 Provides monitoring and abuse prevention for the poker bot.
 """
 
+import asyncio
 import logging
 import time
 from collections import defaultdict, deque
-from typing import Dict, Deque, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Deque, Optional
 
 from telegram import Update
 from telegram.ext import CallbackContext
 
 from pokerapp.notify_utils import LoggerHelper
+from pokerapp.entities import MenuContext
+from pokerapp.i18n import translation_manager
+from .menu_state import MenuStateManager, MenuLocation, MenuState
 
 logger = logging.getLogger(__name__)
 log_helper = LoggerHelper.for_logger(logger)
+
+
+@dataclass
+class NavigationMetrics:
+    """Track navigation performance metrics."""
+
+    total_navigations: int = 0
+    back_actions: int = 0
+    home_actions: int = 0
+    state_cache_hits: int = 0
+    state_cache_misses: int = 0
+    avg_build_time_ms: float = 0.0
+
+    def record_navigation(self, nav_type: str):
+        """Record a navigation action."""
+
+        self.total_navigations += 1
+        if nav_type == "back":
+            self.back_actions += 1
+        elif nav_type == "home":
+            self.home_actions += 1
+
+    def record_build_time(self, duration_ms: float):
+        """Update average build time with new sample."""
+
+        n = self.total_navigations
+        if n == 0:
+            self.avg_build_time_ms = duration_ms
+        else:
+            self.avg_build_time_ms = (
+                (self.avg_build_time_ms * n + duration_ms) / (n + 1)
+            )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Export metrics as dictionary."""
+
+        return {
+            "total_navigations": self.total_navigations,
+            "back_actions": self.back_actions,
+            "home_actions": self.home_actions,
+            "state_cache_hits": self.state_cache_hits,
+            "state_cache_misses": self.state_cache_misses,
+            "avg_build_time_ms": round(self.avg_build_time_ms, 2),
+        }
 
 
 class AnalyticsMiddleware:
@@ -126,3 +175,140 @@ class UserRateLimiter:
 
         user_queue.append(now)
         return None
+
+
+class PokerBotMiddleware:
+    """Resolve per-chat menu context for rendering dynamic menus."""
+
+    def __init__(
+        self,
+        model,
+        store,
+        translation_manager_module=translation_manager,
+    ) -> None:
+        self._model = model
+        self._translation_manager = translation_manager_module
+        self._menu_state_manager = MenuStateManager(store=store)
+        self._metrics = NavigationMetrics()
+        self._logger = logging.getLogger(__name__)
+
+    @property
+    def menu_state(self) -> MenuStateManager:
+        """Expose menu state manager."""
+
+        return self._menu_state_manager
+
+    def get_navigation_metrics(self) -> Dict[str, Any]:
+        """Get current navigation performance metrics."""
+
+        return self._metrics.to_dict()
+
+    async def log_metrics_periodic(self, interval_seconds: int = 300):
+        """Periodically log navigation metrics (every 5 minutes by default)."""
+
+        while True:
+            await asyncio.sleep(interval_seconds)
+            metrics = self.get_navigation_metrics()
+            if metrics["total_navigations"] > 0:
+                self._logger.info("Navigation metrics: %s", metrics)
+
+    async def build_menu_context(
+        self,
+        chat_id: int,
+        chat_type: str,
+        user_id: int,
+        language_code: Optional[str] = None,
+        *,
+        chat: Optional[Any] = None,
+    ) -> MenuContext:
+        """Build a :class:`MenuContext` describing the active chat state."""
+
+        start_time = time.perf_counter()
+
+        if language_code:
+            resolved_language = self._translation_manager.resolve_language(
+                user_id=user_id,
+                lang=language_code,
+            )
+        else:
+            resolved_language = self._translation_manager.get_user_language_or_detect(
+                user_id,
+            )
+
+        model = self._model
+
+        current_menu_state: Optional[MenuState] = await self._menu_state_manager.get_state(
+            chat_id,
+        )
+
+        if current_menu_state is None:
+            self._metrics.state_cache_misses += 1
+        else:
+            self._metrics.state_cache_hits += 1
+
+        if current_menu_state is None:
+            current_location = MenuLocation.MAIN
+            context_data: Dict[str, Any] = {}
+        else:
+            try:
+                current_location = MenuLocation(current_menu_state.location)
+            except ValueError:
+                current_location = MenuLocation.MAIN
+            context_data = current_menu_state.context_data
+
+        in_active_game = False
+        is_game_host = False
+        has_pending_invite = await model.has_pending_invite(user_id)
+        active_private_game_code: Optional[str] = None
+        group_game = None
+
+        if chat_type == "private":
+            private_game = await model.get_user_private_game(user_id)
+            if private_game:
+                in_active_game = True
+                is_game_host = private_game.get("host_id") == user_id
+                active_private_game_code = private_game.get("code")
+        else:
+            group_game = await model.get_active_group_game(chat_id)
+            if group_game:
+                players = group_game.get("players", [])
+                in_active_game = user_id in players
+                is_game_host = group_game.get("host_id") == user_id
+
+        user_is_group_admin = False
+        if chat_type in ("group", "supergroup") and chat is not None:
+            try:
+                member = await chat.get_member(user_id)
+                user_is_group_admin = member.status in ("administrator", "creator")
+            except Exception:
+                pass
+
+        if chat_type != "private" and group_game is None:
+            group_game = await model.get_active_group_game(chat_id)
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        self._metrics.record_build_time(duration_ms)
+
+        if duration_ms > 100:
+            self._logger.warning(
+                "Slow menu context build: %.2f ms for chat %d",
+                duration_ms,
+                chat_id,
+            )
+
+        return MenuContext(
+            chat_id=chat_id,
+            chat_type=chat_type,
+            user_id=user_id,
+            language_code=resolved_language,
+            current_menu_location=current_location.value,
+            menu_context_data=context_data,
+            in_active_game=in_active_game,
+            is_game_host=is_game_host,
+            has_pending_invite=has_pending_invite,
+            group_has_active_game=bool(group_game)
+            if chat_type != "private"
+            else False,
+            user_is_group_admin=user_is_group_admin,
+            active_private_game_code=active_private_game_code,
+        )

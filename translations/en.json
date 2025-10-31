@@ -1,58 +1,235 @@
 {
+  "game": {
+    "card": {
+      "rank": {
+        "10": "Ten",
+        "2": "Two",
+        "3": "Three",
+        "4": "Four",
+        "5": "Five",
+        "6": "Six",
+        "7": "Seven",
+        "8": "Eight",
+        "9": "Nine",
+        "A": "Ace",
+        "J": "Jack",
+        "K": "King",
+        "Q": "Queen"
+      },
+      "suit": {
+        "clubs": "Clubs",
+        "diamonds": "Diamonds",
+        "hearts": "Hearts",
+        "spades": "Spades"
+      }
+    },
+    "hand": {
+      "flush": "Flush",
+      "four_of_kind": "Four of a Kind",
+      "full_house": "Full House",
+      "high_card": "High Card",
+      "pair": "Pair",
+      "royal_flush": "Royal Flush",
+      "straight": "Straight",
+      "straight_flush": "Straight Flush",
+      "three_of_kind": "Three of a Kind",
+      "two_pair": "Two Pair"
+    },
+    "round": {
+      "flop": "🃏 Flop - Three cards revealed",
+      "pre_flop": "🎴 Pre-flop - Blinds posted",
+      "river": "🌊 River - Fifth card revealed",
+      "showdown": "🏆 Showdown - Determining winner",
+      "turn": "🎯 Turn - Fourth card revealed"
+    },
+    "state": {
+      "finished": "Showdown",
+      "flop": "Flop",
+      "initial": "Waiting for players",
+      "pre_flop": "Pre-flop",
+      "river": "River",
+      "turn": "Turn"
+    }
+  },
+  "help": {
+    "commands": {
+      "list": "/start - Start the bot\n/menu - Main menu\n/newgame - Create new game\n/join - Join game\n/leave - Leave game\n/wallet - Check balance\n/help - Show help\n/language - Change language",
+      "title": "🤖 Bot Commands"
+    },
+    "hand_rankings": {
+      "list": "1. Royal Flush\n2. Straight Flush\n3. Four of a Kind\n4. Full House\n5. Flush\n6. Straight\n7. Three of a Kind\n8. Two Pair\n9. Pair\n10. High Card",
+      "title": "🏆 Hand Rankings (Best to Worst)"
+    },
+    "rules": {
+      "actions": "**Actions:**\n• Check: Pass action\n• Call: Match current bet\n• Raise: Increase bet\n• Fold: Forfeit hand\n• All-In: Bet all chips",
+      "betting_rounds": "**Betting Rounds:**\n1️⃣ Pre-flop (2 cards dealt)\n2️⃣ Flop (3 community cards)\n3️⃣ Turn (1 community card)\n4️⃣ River (1 community card)",
+      "objective": "**Objective:** Make the best 5-card hand from your 2 cards + 5 community cards.",
+      "title": "📖 Texas Hold'em Rules"
+    }
+  },
   "meta": {
-    "version": "1.0.0",
+    "font": "system",
     "language": "en",
     "rtl": false,
-    "font": "system"
+    "version": "1.0.0"
+  },
+  "msg": {
+    "current_bet": "🎯 Current bet: ${amount}",
+    "dealing_cards": "🃏 Dealing cards...",
+    "error": {
+      "generic": "❌ An error occurred. Please try again.",
+      "network": "🌐 Network error. Check your connection.",
+      "timeout": "⏱️ Action timed out"
+    },
+    "game_started": "🎮 Game started! Good luck!",
+    "new_round": "🔄 New round starting...",
+    "player_all_in": "🔥 {player} went all-in with ${amount}!",
+    "player_called": "💵 {player} called ${amount}",
+    "player_checked": "✅ {player} checked",
+    "player_folded": "❌ {player} folded",
+    "player_joined": "➕ {player} joined the game",
+    "player_left": "➖ {player} left the game",
+    "player_raised": "⬆️ {player} raised to ${amount}",
+    "player_ready": "✋ {player} is ready",
+    "pot": "💰 Pot: ${amount}",
+    "private": {
+      "invite": {
+        "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?",
+        "detailed_body": "🎴 <b>Game Invitation</b>\n\n{host} invited you to join!\n\n🎯 Game Code: {code}\n\n💰 Stakes: {stake_name}\n • Small Blind: ${small_blind}\n • Big Blind: ${big_blind}\n💵 Min Buy-in: ${min_buyin}\n\nDo you want to join?"
+      },
+      "lobby": {
+        "body": "{title}\n\n🎯 Host: {host}\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\n{player_status}\n\n{players}\n\n{readiness}",
+        "min_indicator": "(min {min_players})",
+        "player_status": "{status_icon} Players: {current}/{max} {min_indicator}",
+        "ready": "✅ Ready to start!",
+        "title": "🔒 Private Game Lobby",
+        "waiting": "⏳ Waiting for more players (min {min_players})..."
+      },
+      "stake_menu": {
+        "body": "{title}\n\n{subtitle}\n\n{options}\n\n{footer}",
+        "footer": "ℹ️ Minimum buy-in varies by stakes",
+        "option_high": "💎 High ($5K/$10K)",
+        "option_low": "💰 Low ($250/$500)",
+        "option_medium": "🎯 Medium ($1K/$2K)",
+        "option_micro": "💵 Micro ($50/$100)",
+        "option_premium": "🏆 Premium ($10K/$20K)",
+        "subtitle": "Choose your preferred blind levels:",
+        "title": "🎲 Select Stakes"
+      }
+    },
+    "showdown": "🎭 Showdown!",
+    "tie": "🤝 Tie! Pot split between: {players}",
+    "welcome": "👋 Welcome to Texas Hold'em Poker!",
+    "winner": "🏆 {player} wins ${amount}!",
+    "your_turn": "🎯 It's your turn, {player}!"
+  },
+  "popup": {
+    "fold_confirmation": {
+      "message": "Are you sure you want to fold?",
+      "pot": "Pot: ${amount}",
+      "title": "⚠️ Confirm Fold",
+      "your_cards": "Your cards: {cards}"
+    },
+    "toast": {
+      "error": "❌ {message}",
+      "info": "ℹ️ {message}",
+      "success": "✅ {message}"
+    }
   },
   "ui": {
     "action": {
-      "check": "Check",
+      "all_in": "All-In",
       "call": "Call",
+      "check": "Check",
       "fold": "Fold",
-      "raise": "Raise",
-      "all_in": "All-In"
+      "raise": "Raise"
     },
     "button": {
-      "check": "✅ Check",
-      "call": "💵 Call ${amount}",
-      "fold": "❌ Fold",
-      "raise": "⬆️ Raise",
       "all_in": "🔥 All-In",
-      "ready": "✋ Ready",
-      "start": "🎮 Start Game",
+      "call": "💵 Call ${amount}",
+      "cancel_fold": "❌ Cancel",
+      "check": "✅ Check",
+      "confirm_fold": "✅ Yes, Fold",
+      "fold": "❌ Fold",
       "join": "➕ Join",
       "leave": "➖ Leave",
+      "raise": "⬆️ Raise",
+      "ready": "✋ Ready",
       "sit": "🪑 Sit Down",
       "stand": "🚶 Stand Up",
-      "confirm_fold": "✅ Yes, Fold",
-      "cancel_fold": "❌ Cancel"
+      "start": "🎮 Start Game"
+    },
+    "controller": {
+      "toast": {
+        "action_recorded": "✅ Action recorded",
+        "fold_cancelled": "↩️ Fold cancelled",
+        "joined_game": "✅ Joined game",
+        "left_game": "👋 Left game"
+      }
+    },
+    "error": {
+      "navigation_failed": "⚠️ Navigation failed. Please try again.",
+      "invalid_state": "⚠️ Invalid menu state detected. Returning to main menu.",
+      "state_recovery": "♻️ Menu state recovered. Please continue."
     },
     "lobby": {
-      "title": "🎰 Poker Lobby",
-      "waiting_players": "⏳ Waiting for players...",
-      "min_players": "Need at least {min} players to start",
-      "players_ready": "{ready}/{total} players ready",
-      "game_starting": "🎮 Game starting in {seconds}s...",
-      "new_game": "🆕 New Game",
       "active_games": "📊 Active Games: {count}",
-      "no_active_games": "No active games. Start one!"
+      "game_starting": "🎮 Game starting in {seconds}s...",
+      "host_entry": "👑 {player}",
+      "min_players": "Need at least {min} players to start",
+      "new_game": "🆕 New Game",
+      "no_active_games": "No active games. Start one!",
+      "player_entry": "• {player}",
+      "players": "👥 Players ({count}/{max})",
+      "players_ready": "{ready}/{total} players ready",
+      "ready_to_start": "✅ Ready to start!",
+      "title": "🎮 Game Lobby",
+      "waiting": "⏳ Waiting for host to start...",
+      "waiting_players": "⏳ Waiting for players..."
+    },
+    "nav": {
+      "back": "Back",
+      "home": "Home"
     },
     "menu": {
-      "main": "📋 Main Menu",
-      "private": {
-        "title": "⚙️ Settings & Profile",
-        "wallet": "💰 Wallet",
-        "language": "🌐 Language",
-        "statistics": "📊 Statistics",
-        "help": "❓ Help"
+      "common": {
+        "help": "❓ Help",
+        "settings": "⚙️ Settings"
+      },
+      "location": {
+        "main": "Main Menu",
+        "private_setup": "Create Private Game",
+        "private_view": "Private Game",
+        "stake_select": "Select Stakes",
+        "player_mgmt": "Manage Players",
+        "group_setup": "Group Game Setup",
+        "group_view": "Group Game",
+        "settings": "Settings",
+        "lang_select": "Language Selection"
       },
       "group": {
-        "title": "🎮 Game Controls",
+        "admin_panel": "⚙️ Group Admin",
+        "join_game": "🎴 Join Game",
+        "leave_game": "🚪 Leave Game",
+        "main_title": "🎲 Poker Bot - Group Menu",
         "new_game": "🆕 New Game",
-        "join_game": "➕ Join Game",
-        "leave_game": "➖ Leave Game",
-        "rules": "📖 Rules"
+        "rules": "📖 Rules",
+        "start_game": "🎲 Start New Game",
+        "title": "🎮 Game Controls",
+        "view_game": "👀 View Game Status"
+      },
+      "main": "📋 Main Menu",
+      "private": {
+        "create_game": "🎰 Create Private Game",
+        "help": "❓ Help",
+        "language": "🌐 Language",
+        "main_title": "🎴 Poker Bot - Private Menu",
+        "manage_game": "⚙️ Manage Game",
+        "statistics": "📊 Statistics",
+        "title": "⚙️ Settings & Profile",
+        "view_game": "👀 View Current Game",
+        "view_invites": "📨 View Invites",
+        "wallet": "💰 Wallet"
       }
     },
     "language": {
@@ -88,127 +265,50 @@
     },
     "model": {
       "error": {
-        "invalid_action": "❌ Invalid action",
-        "not_your_turn": "⏸️ It's not your turn",
-        "insufficient_chips": "❌ Insufficient chips",
-        "game_full": "🚫 Game is full",
         "already_in_game": "⚠️ You're already in a game",
-        "min_raise": "⚠️ Minimum raise is ${amount}"
+        "already_in_game_other": "⚠️ {player} is already in a game.",
+        "game_full": "🚫 Game is full (max {max} players).",
+        "insufficient_chips": "❌ Insufficient chips\nRequired: {required}\nAvailable: {balance}",
+        "invalid_action": "❌ Invalid action",
+        "min_raise": "⚠️ Minimum raise is ${amount}",
+        "not_your_turn": "⏸️ It's not your turn",
+        "not_your_turn_with_player": "It's {player}'s move."
       }
     },
-    "controller": {
-      "toast": {
-        "action_recorded": "✅ Action recorded",
-        "fold_cancelled": "↩️ Fold cancelled",
-        "joined_game": "✅ Joined game",
-        "left_game": "👋 Left game"
+    "private": {
+      "invite": {
+        "accept": "✅ Accept Invitation",
+        "decline": "❌ Decline"
+      },
+      "lobby": {
+        "invite": "📨 Invite Player",
+        "leave": "🚪 Leave Lobby",
+        "start": "🎰 START GAME"
+      },
+      "stake_menu": {
+        "button": {
+          "cancel": "❌ Cancel",
+          "high": "💎 High",
+          "language": "🌐 Change Language",
+          "low": "💰 Low",
+          "medium": "🎯 Medium",
+          "micro": "💵 Micro",
+          "premium": "🏆 Premium"
+        }
       }
+    },
+    "settings": {
+      "language_changed": "✅ Language changed to English",
+      "language_select": "🌐 Select your language:",
+      "wallet_balance": "💰 Balance: ${amount}",
+      "wallet_empty": "Your wallet is empty. Contact admin to add chips."
     },
     "viewer": {
       "fold_confirmation": {
-        "title": "⚠️ Confirm Fold",
         "message": "Are you sure you want to fold?\nYou have: {cards}",
-        "pot_amount": "Current pot: ${amount}"
+        "pot_amount": "Current pot: ${amount}",
+        "title": "⚠️ Confirm Fold"
       }
-    }
-  },
-  "msg": {
-    "welcome": "👋 Welcome to Texas Hold'em Poker!",
-    "game_started": "🎮 Game started! Good luck!",
-    "your_turn": "🎯 It's your turn, {player}!",
-    "player_folded": "❌ {player} folded",
-    "player_called": "💵 {player} called ${amount}",
-    "player_raised": "⬆️ {player} raised to ${amount}",
-    "player_checked": "✅ {player} checked",
-    "player_all_in": "🔥 {player} went all-in with ${amount}!",
-    "player_joined": "➕ {player} joined the game",
-    "player_left": "➖ {player} left the game",
-    "player_ready": "✋ {player} is ready",
-    "winner": "🏆 {player} wins ${amount}!",
-    "pot": "💰 Pot: ${amount}",
-    "current_bet": "🎯 Current bet: ${amount}",
-    "new_round": "🔄 New round starting...",
-    "dealing_cards": "🃏 Dealing cards...",
-    "showdown": "🎭 Showdown!",
-    "tie": "🤝 Tie! Pot split between: {players}",
-    "error": {
-      "generic": "❌ An error occurred. Please try again.",
-      "network": "🌐 Network error. Check your connection.",
-      "timeout": "⏱️ Action timed out"
-    }
-  },
-  "help": {
-    "rules": {
-      "title": "📖 Texas Hold'em Rules",
-      "objective": "**Objective:** Make the best 5-card hand from your 2 cards + 5 community cards.",
-      "betting_rounds": "**Betting Rounds:**\n1️⃣ Pre-flop (2 cards dealt)\n2️⃣ Flop (3 community cards)\n3️⃣ Turn (1 community card)\n4️⃣ River (1 community card)",
-      "actions": "**Actions:**\n• Check: Pass action\n• Call: Match current bet\n• Raise: Increase bet\n• Fold: Forfeit hand\n• All-In: Bet all chips"
-    },
-    "commands": {
-      "title": "🤖 Bot Commands",
-      "list": "/start - Start the bot\n/menu - Main menu\n/newgame - Create new game\n/join - Join game\n/leave - Leave game\n/wallet - Check balance\n/help - Show help\n/language - Change language"
-    },
-    "hand_rankings": {
-      "title": "🏆 Hand Rankings (Best to Worst)",
-      "list": "1. Royal Flush\n2. Straight Flush\n3. Four of a Kind\n4. Full House\n5. Flush\n6. Straight\n7. Three of a Kind\n8. Two Pair\n9. Pair\n10. High Card"
-    }
-  },
-  "game": {
-    "state": {
-      "initial": "Waiting for players",
-      "pre_flop": "Pre-flop",
-      "flop": "Flop",
-      "turn": "Turn",
-      "river": "River",
-      "finished": "Showdown"
-    },
-    "card": {
-      "rank": {
-        "A": "Ace",
-        "K": "King",
-        "Q": "Queen",
-        "J": "Jack",
-        "10": "Ten",
-        "9": "Nine",
-        "8": "Eight",
-        "7": "Seven",
-        "6": "Six",
-        "5": "Five",
-        "4": "Four",
-        "3": "Three",
-        "2": "Two"
-      },
-      "suit": {
-        "spades": "Spades",
-        "hearts": "Hearts",
-        "diamonds": "Diamonds",
-        "clubs": "Clubs"
-      }
-    },
-    "hand": {
-      "royal_flush": "Royal Flush",
-      "straight_flush": "Straight Flush",
-      "four_of_kind": "Four of a Kind",
-      "full_house": "Full House",
-      "flush": "Flush",
-      "straight": "Straight",
-      "three_of_kind": "Three of a Kind",
-      "two_pair": "Two Pair",
-      "pair": "Pair",
-      "high_card": "High Card"
-    }
-  },
-  "popup": {
-    "fold_confirmation": {
-      "title": "⚠️ Confirm Fold",
-      "message": "Are you sure you want to fold?",
-      "your_cards": "Your cards: {cards}",
-      "pot": "Pot: ${amount}"
-    },
-    "toast": {
-      "success": "✅ {message}",
-      "error": "❌ {message}",
-      "info": "ℹ️ {message}"
     }
   }
 }

@@ -3,7 +3,7 @@
 from abc import abstractmethod
 import enum
 import datetime
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Literal, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from uuid import uuid4
@@ -122,6 +122,31 @@ class Game:
         # Version number used to invalidate stale inline keyboard callbacks.
         self.live_message_version = 0
 
+    def set_mode_from_chat(self, chat_type: str) -> None:
+        """Configure game mode using the provided Telegram ``chat_type``.
+
+        Args:
+            chat_type: Telegram chat type string (``"private"``, ``"group"``,
+                or ``"supergroup"``).
+
+        Raises:
+            TypeError: If *chat_type* is not a string.
+            ValueError: If *chat_type* is not a supported Telegram chat type.
+        """
+
+        if not isinstance(chat_type, str):
+            raise TypeError("chat_type must be a string")
+
+        normalized = chat_type.strip().lower()
+        if normalized in ("group", "supergroup"):
+            self.mode = GameMode.GROUP
+            # Stakes only apply to private games – clear any previous config.
+            self.stake_config = None
+        elif normalized == "private":
+            self.mode = GameMode.PRIVATE
+        else:
+            raise ValueError(f"Unsupported chat type: {chat_type!r}")
+
     def players_by(self, states: Tuple[PlayerState]) -> List[Player]:
         return list(filter(lambda p: p.state in states, self.players))
 
@@ -230,6 +255,76 @@ class BalanceValidator:
     def can_afford_bet(balance: int, bet_amount: int) -> bool:
         """Check if player can afford specific bet"""
         return balance >= bet_amount
+
+
+@dataclass
+class MenuContext:
+    """Context information for building chat-appropriate menus."""
+
+    chat_id: int
+    chat_type: Literal["private", "group", "supergroup"]
+    user_id: int
+    language_code: str = "en"
+    current_menu_location: Optional[str] = None
+    menu_context_data: Dict[str, Any] = None
+
+    # User state
+    in_active_game: bool = False
+    is_game_host: bool = False
+    has_pending_invite: bool = False
+
+    # Group-specific
+    group_has_active_game: bool = False
+    user_is_group_admin: bool = False
+
+    # Private-specific
+    active_private_game_code: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Ensure optional context containers are initialized."""
+
+        if self.menu_context_data is None:
+            self.menu_context_data = {}
+
+    def is_private_chat(self) -> bool:
+        """Check if this is a private (1-on-1) conversation."""
+
+        return self.chat_type == "private"
+
+    def is_group_chat(self) -> bool:
+        """Check if this is a group or supergroup."""
+
+        return self.chat_type in ("group", "supergroup")
+
+    def can_access_group_commands(self) -> bool:
+        """Determine if group-specific commands should be visible."""
+
+        return self.is_group_chat()
+
+    def can_access_private_commands(self) -> bool:
+        """Determine if private game commands should be visible."""
+
+        return self.is_private_chat()
+
+    def get_context_value(self, key: str, default: Any = None) -> Any:
+        """Retrieve value from menu context data."""
+
+        return self.menu_context_data.get(key, default)
+
+    def has_back_navigation(self) -> bool:
+        """Check if back button should be shown."""
+
+        if self.current_menu_location is None:
+            return False
+
+        from .menu_state import MenuLocation, MENU_HIERARCHY
+
+        try:
+            location = MenuLocation(self.current_menu_location)
+            parent = MENU_HIERARCHY.get(location)
+            return parent is not None
+        except (ValueError, KeyError):
+            return False
 
 
 # Q9: Predefined stake levels for private games

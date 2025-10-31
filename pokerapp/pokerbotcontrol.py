@@ -2,10 +2,12 @@
 
 import inspect
 import logging
+import time
 from typing import Any, Optional, Tuple, TYPE_CHECKING
 
 from telegram import (
     BotCommand,
+    CallbackQuery,
     Update,
 )
 from telegram.error import BadRequest
@@ -26,6 +28,8 @@ from pokerapp.pokerbotmodel import (
     PreparedPlayerAction,
 )
 from pokerapp.request_cache import RequestCache
+from pokerapp.middleware import PokerBotMiddleware
+from pokerapp.menu_state import MenuLocation, MenuState, MENU_HIERARCHY
 
 if TYPE_CHECKING:
     from pokerapp.live_message import LiveMessageManager
@@ -64,19 +68,19 @@ class ControllerTextKeys:
 
 
 class ControllerCommandKeys:
-    START = "controller.commands.start"
-    READY = "controller.commands.ready"
-    PRIVATE = "controller.commands.private"
-    JOIN = "controller.commands.join"
-    INVITE = "controller.commands.invite"
-    ACCEPT = "controller.commands.accept"
-    DECLINE = "controller.commands.decline"
-    LEAVE = "controller.commands.leave"
-    MONEY = "controller.commands.money"
-    CARDS = "controller.commands.cards"
-    BAN = "controller.commands.ban"
-    STOP = "controller.commands.stop"
-    HELP = "controller.commands.help"
+    START = "ui.controller.commands.start"
+    READY = "ui.controller.commands.ready"
+    PRIVATE = "ui.controller.commands.private"
+    JOIN = "ui.controller.commands.join"
+    INVITE = "ui.controller.commands.invite"
+    ACCEPT = "ui.controller.commands.accept"
+    DECLINE = "ui.controller.commands.decline"
+    LEAVE = "ui.controller.commands.leave"
+    MONEY = "ui.controller.commands.money"
+    CARDS = "ui.controller.commands.cards"
+    BAN = "ui.controller.commands.ban"
+    STOP = "ui.controller.commands.stop"
+    HELP = "ui.controller.commands.help"
 
 
 class PokerBotController:
@@ -106,9 +110,11 @@ class PokerBotController:
         self._kv = ensure_kv(kv if kv is not None else getattr(model, "_kv", None))
         translation_manager.attach_kvstore(self._kv)
         self._pending_fold_confirmations: dict[Tuple[int, str], PreparedPlayerAction] = {}
+        self._middleware = PokerBotMiddleware(self._model, self._kv)
 
         application.add_handler(CommandHandler("ready", self._handle_ready))
         application.add_handler(CommandHandler("start", self._handle_start))
+        application.add_handler(CommandHandler("menu", self._handle_menu))
         application.add_handler(CommandHandler("stop", self._handle_stop))
         application.add_handler(CommandHandler("money", self._handle_money))
         application.add_handler(CommandHandler("ban", self._handle_ban))
@@ -197,12 +203,36 @@ class PokerBotController:
             )
         )
         application.add_handler(
+            CallbackQueryHandler(
+                self._handle_nav_back,
+                pattern="^nav_back$",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                self._handle_nav_home,
+                pattern="^nav_home$",
+            )
+        )
+        application.add_handler(
             CallbackQueryHandler(self._handle_callback_query)
         )
 
         application.post_init = self._post_init
 
         log_helper.info("ControllerInit", "Handlers registered")
+
+    @property
+    def middleware(self) -> PokerBotMiddleware:
+        """Expose middleware helpers for composing menu context."""
+
+        return self._middleware
+
+    @property
+    def view(self) -> "PokerBotViewer":
+        """Return the associated view implementation."""
+
+        return self._view
 
     def _translate(
         self,
@@ -560,6 +590,230 @@ class PokerBotController:
             )
         await self._model.start(update, context)
 
+        chat = update.effective_chat
+        message = update.effective_message
+        if user is None or chat is None or message is None:
+            return
+
+        menu_context = await self.middleware.build_menu_context(
+            chat_id=chat.id,
+            chat_type=chat.type,
+            user_id=user.id,
+            language_code=user.language_code,
+            chat=chat,
+        )
+
+        welcome_text = translation_manager.t(
+            "msg.welcome",
+            lang=menu_context.language_code,
+        )
+        await message.reply_text(welcome_text)
+
+        await self.view._send_menu(chat.id, menu_context)
+
+    async def _handle_menu(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Display context-aware menu for /menu command."""
+
+        user = update.effective_user
+        chat = update.effective_chat
+        if user is None or chat is None:
+            return
+
+        menu_context = await self.middleware.build_menu_context(
+            chat_id=chat.id,
+            chat_type=chat.type,
+            user_id=user.id,
+            language_code=user.language_code,
+            chat=chat,
+        )
+        await self.view._send_menu(chat.id, menu_context)
+
+    async def _safe_navigation_update(
+        self,
+        query: CallbackQuery,
+        target_location: MenuLocation,
+        error_context: str,
+    ) -> bool:
+        """Safely update menu state with comprehensive error handling."""
+
+        message = query.message
+        if message is None:
+            return False
+
+        chat = message.chat
+        chat_id = chat.id
+
+        try:
+            new_state = MenuState(
+                chat_id=chat_id,
+                location=target_location.value,
+                context_data={},
+                timestamp=time.time(),
+            )
+
+            await self._middleware.menu_state.set_state(new_state)
+
+            user = query.from_user
+            if user is None:
+                raise ValueError("CallbackQuery missing from_user")
+
+            menu_context = await self._middleware.build_menu_context(
+                chat_id=chat_id,
+                chat_type=chat.type,
+                user_id=user.id,
+                language_code=(user.language_code or "en"),
+                chat=chat,
+            )
+
+            if menu_context.is_private_chat():
+                await self.view._send_private_menu(
+                    chat_id=chat_id,
+                    context=menu_context,
+                )
+            else:
+                await self.view._send_group_menu(
+                    chat_id=chat_id,
+                    context=menu_context,
+                )
+
+            await query.answer()
+            return True
+
+        except Exception as exc:  # pragma: no cover - defensive
+            self._logger.error(
+                "Navigation error during %s for chat %d: %s",
+                error_context,
+                chat_id,
+                exc,
+                exc_info=True,
+            )
+
+            try:
+                user = query.from_user
+                language = user.language_code if user else None
+                translator = translation_manager.get_translator(language)
+                error_msg = translator("ui.error.navigation_failed")
+                await query.answer(error_msg, show_alert=True)
+            except Exception:
+                await query.answer("⚠️ Navigation error", show_alert=True)
+
+            return False
+
+    async def _handle_nav_back(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle back button navigation."""
+
+        query = update.callback_query
+        if not query:
+            return
+
+        user = update.effective_user
+        chat = update.effective_chat
+        if not user or not chat:
+            return
+
+        try:
+            current_state = await self.middleware.menu_state.get_state(chat.id)
+
+            if current_state is None:
+                await self._safe_navigation_update(
+                    query,
+                    MenuLocation.MAIN,
+                    "back (no current state)",
+                )
+                return
+
+            try:
+                current_location = MenuLocation(current_state.location)
+            except ValueError:
+                self._logger.warning(
+                    "Invalid location '%s' for chat %d, defaulting to MAIN",
+                    current_state.location,
+                    chat.id,
+                )
+                await self._safe_navigation_update(
+                    query,
+                    MenuLocation.MAIN,
+                    "back (invalid location)",
+                )
+                return
+
+            parent_location_value = MENU_HIERARCHY.get(current_location)
+
+            if parent_location_value is None:
+                await query.answer("Already at main menu")
+                return
+
+            if isinstance(parent_location_value, MenuLocation):
+                parent_location = parent_location_value
+            else:
+                try:
+                    parent_location = MenuLocation(parent_location_value)
+                except ValueError:
+                    self._logger.error(
+                        "Invalid parent location '%s' in hierarchy",
+                        parent_location_value,
+                    )
+                    parent_location = MenuLocation.MAIN
+
+            self._middleware._metrics.record_navigation("back")
+
+            await self._safe_navigation_update(
+                query,
+                parent_location,
+                "back navigation",
+            )
+
+        except Exception as exc:  # pragma: no cover - defensive
+            self._logger.error(
+                "Unexpected error in _handle_nav_back: %s",
+                exc,
+                exc_info=True,
+            )
+            await query.answer("⚠️ Navigation error", show_alert=True)
+
+    async def _handle_nav_home(
+        self,
+        update: Update,
+        context: CallbackContext,
+    ) -> None:
+        """Handle home button navigation."""
+
+        query = update.callback_query
+        if not query:
+            return
+
+        user = update.effective_user
+        chat = update.effective_chat
+        if not user or not chat:
+            return
+
+        try:
+            await self.middleware.menu_state.clear_state(chat.id)
+
+            self._middleware._metrics.record_navigation("home")
+
+            await self._safe_navigation_update(
+                query,
+                MenuLocation.MAIN,
+                "home navigation",
+            )
+
+        except Exception as exc:  # pragma: no cover - defensive
+            self._logger.error(
+                "Unexpected error in _handle_nav_home: %s",
+                exc,
+                exc_info=True,
+            )
+            await query.answer("⚠️ Navigation error", show_alert=True)
+
     async def _handle_stop(
         self,
         update: Update,
@@ -686,8 +940,14 @@ class PokerBotController:
                     user_id=user.id,
                     lang=lang_for_menu,
                 )
+                user_name = (
+                    getattr(user, "full_name", None)
+                    or getattr(user, "first_name", None)
+                    or getattr(user, "username", "")
+                )
                 await self._view.send_stake_selection(
                     chat_id=chat.id,
+                    user_name=user_name,
                     message_id=message.message_id,
                     language_code=lang_for_menu,
                 )

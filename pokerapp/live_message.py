@@ -26,6 +26,7 @@ from pokerapp.device_detector import (
 from pokerapp.kvstore import ensure_kv
 from pokerapp.render_cache import RenderCache, RenderResult
 from pokerapp.compact_formatter import CompactFormatter
+from pokerapp.i18n import translation_manager
 
 
 @dataclass(slots=True)
@@ -89,11 +90,11 @@ class LiveMessageManager:
         5: "🌃",  # River
     }
 
-    STAGE_NAMES = {
-        0: "Pre-flop",
-        3: "Flop",
-        4: "Turn",
-        5: "River",
+    STAGE_NAME_KEYS = {
+        0: "game.round.pre_flop",
+        3: "game.round.flop",
+        4: "game.round.turn",
+        5: "game.round.river",
     }
 
     STAGE_ICONS = {
@@ -160,6 +161,15 @@ class LiveMessageManager:
         self._language_code = code
         self._language_direction = direction
         self._language_font = font
+
+    def _get_stage_name(self, card_count: int) -> str:
+        """Return localized stage name for the given number of community cards."""
+
+        key = self.STAGE_NAME_KEYS.get(card_count)
+        if key:
+            return translation_manager.t(key, lang=self._language_code)
+
+        return translation_manager.t("game.state.initial", lang=self._language_code)
 
     def _apply_direction(self, text: Optional[str]) -> Optional[str]:
         if not text or self._language_direction != "rtl":
@@ -837,7 +847,7 @@ class LiveMessageManager:
         players = list(getattr(game, "players", []) or [])
         active_count = sum(1 for p in players if p.state != PlayerState.FOLD)
         num_cards = len(game.cards_table or [])
-        stage_name = self.STAGE_NAMES.get(num_cards, "Pre-flop")
+        stage_name = self._get_stage_name(num_cards)
         stage_icon = self.STAGE_ICONS.get(num_cards, "♠️")
         board_line = self._format_board_line(
             game.cards_table or [],
@@ -1007,7 +1017,7 @@ class LiveMessageManager:
             lines.append("🃏 <b>BOARD</b>")
             lines.append(html.escape(board_text))
         else:
-            stage_name = self.STAGE_NAMES.get(len(board_cards), "Pre-flop")
+            stage_name = self._get_stage_name(len(board_cards))
             stage_icon = self.STAGE_ICONS.get(len(board_cards), "♠️")
             lines.append(f"🃏 <b>{stage_icon} {html.escape(stage_name)}</b>")
             board_display = board_text or "—"
@@ -1220,7 +1230,11 @@ class LiveMessageManager:
     ) -> str:
         board_raw = context.get("board_display_raw") or "—"
         stage_icon = context.get("stage_icon", "♠️")
-        stage_name = html.escape(context.get("stage_name", "Pre-flop"))
+        default_stage = translation_manager.t(
+            "game.state.initial",
+            lang=self._language_code,
+        )
+        stage_name = html.escape(context.get("stage_name", default_stage))
 
         if board_raw.strip() in {"—", "🂠 🂠 🂠"}:
             return "🔒 Cards will be revealed during betting"

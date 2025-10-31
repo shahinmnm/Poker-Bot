@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+from functools import lru_cache
 
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -20,12 +21,14 @@ from pokerapp.entities import (
     MessageId,
     ChatId,
     Mention,
+    MenuContext,
 )
 from pokerapp.device_detector import DeviceProfile, DeviceType
 from pokerapp.i18n import LanguageContext, translation_manager
 from pokerapp.kvstore import RedisKVStore, ensure_kv
 from pokerapp.live_message import LiveMessageManager
 from pokerapp.render_cache import RenderCache
+from .menu_state import MenuLocation, get_breadcrumb_path, MENU_HIERARCHY
 
 
 logger = logging.getLogger(__name__)
@@ -55,6 +58,7 @@ class PokerBotViewer:
         if logger is None:
             logger = logging.getLogger(__name__)
         self._logger = logger
+        self._translation_manager = translation_manager
         self._kv = ensure_kv(kv)
         if user_language is None:
             user_language = translation_manager.DEFAULT_LANGUAGE
@@ -151,6 +155,12 @@ class PokerBotViewer:
         """Expose active language metadata for consumers."""
 
         return self._language_context
+
+    @property
+    def i18n(self):
+        """Provide access to the translation manager (backwards compatibility)."""
+
+        return translation_manager
 
     def _apply_direction(
         self,
@@ -861,6 +871,329 @@ class PokerBotViewer:
             disable_web_page_preview=True,
         )
 
+    async def send_menu(
+        self,
+        chat_id: int,
+        menu_context: MenuContext,
+    ) -> None:
+        """Public entry point for sending a context-aware menu."""
+
+        await self._send_menu(chat_id, menu_context)
+
+    async def _send_menu(
+        self,
+        chat_id: int,
+        menu_context: MenuContext,
+    ) -> None:
+        """Send appropriate menu based on chat type and user state."""
+
+        if menu_context.chat_type == "private":
+            await self._send_private_menu(chat_id, menu_context)
+        else:
+            await self._send_group_menu(chat_id, menu_context)
+
+    def _build_navigation_row(
+        self,
+        context: MenuContext,
+        language_context: Any,
+    ) -> List[InlineKeyboardButton]:
+        """Build back/home navigation buttons based on menu state."""
+
+        buttons: List[InlineKeyboardButton] = []
+
+        location_enum: Optional[MenuLocation] = None
+        parent_location: Optional[MenuLocation] = None
+        if context.current_menu_location:
+            try:
+                location_enum = MenuLocation(context.current_menu_location)
+                parent_location = MENU_HIERARCHY.get(location_enum)
+            except ValueError:
+                location_enum = None
+                parent_location = None
+
+        if parent_location is not None:
+            back_label = self._t("ui.nav.back", context=language_context)
+            buttons.append(
+                InlineKeyboardButton(
+                    f"⬅️ {back_label}",
+                    callback_data="nav_back",
+                )
+            )
+
+        if location_enum and location_enum != MenuLocation.MAIN_MENU:
+            home_label = self._t("ui.nav.home", context=language_context)
+            buttons.append(
+                InlineKeyboardButton(
+                    f"🏠 {home_label}",
+                    callback_data="nav_home",
+                )
+            )
+
+        return buttons
+
+    @lru_cache(maxsize=128)
+    def _get_location_label_cached(
+        self,
+        location_key: str,
+        language_code: str,
+    ) -> str:
+        """Cache frequently accessed location labels."""
+
+        translator = self._translation_manager.get_translator(language_code)
+        return translator(f"ui.menu.location.{location_key}")
+
+    def _render_breadcrumb(
+        self,
+        context: MenuContext,
+        language_context: Any,
+    ) -> Optional[str]:
+        """Render breadcrumb trail with caching optimization."""
+
+        if not context.current_menu_location:
+            return None
+
+        try:
+            current_location = MenuLocation(context.current_menu_location)
+        except ValueError:
+            return None
+
+        path = get_breadcrumb_path(current_location)
+
+        if not path or len(path) <= 1:
+            return None
+
+        labels: List[str] = []
+        for location in path:
+            try:
+                label = self._get_location_label_cached(
+                    location.value,
+                    context.language_code,
+                )
+                labels.append(label)
+            except KeyError:
+                self._logger.warning(
+                    "Missing translation for location: %s",
+                    location.value,
+                )
+                labels.append(location.value.upper())
+
+        separator = " → " if context.language_code != "fa" else " ← "
+        breadcrumb = separator.join(labels)
+
+        return f"📍 {breadcrumb}\n"
+
+    def clear_location_cache(self):
+        """Clear cached location labels (call when translations update)."""
+
+        self._get_location_label_cached.cache_clear()
+
+    async def _send_private_menu(
+        self,
+        chat_id: int,
+        context: MenuContext,
+    ) -> None:
+        """Build and send menu for private (1-on-1) chats."""
+
+        language_context = translation_manager.get_language_context(
+            context.language_code
+        )
+
+        title = self._t("ui.menu.private.main_title", context=language_context)
+
+        keyboard: List[List[InlineKeyboardButton]] = []
+
+        if context.active_private_game_code:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "ui.menu.private.view_game",
+                            context=language_context,
+                        ),
+                        callback_data="private_view_game",
+                    )
+                ]
+            )
+
+            if context.is_game_host:
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            self._t(
+                                "ui.menu.private.manage_game",
+                                context=language_context,
+                            ),
+                            callback_data="private_manage",
+                        )
+                    ]
+                )
+        else:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "ui.menu.private.create_game",
+                            context=language_context,
+                        ),
+                        callback_data="private_create",
+                    )
+                ]
+            )
+
+        if context.has_pending_invite:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "ui.menu.private.view_invites",
+                            context=language_context,
+                        ),
+                        callback_data="view_invites",
+                    )
+                ]
+            )
+
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    self._t("ui.menu.common.settings", context=language_context),
+                    callback_data="settings",
+                )
+            ]
+        )
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    self._t("ui.menu.common.help", context=language_context),
+                    callback_data="help",
+                )
+            ]
+        )
+
+        breadcrumb = self._render_breadcrumb(context, language_context)
+        if breadcrumb:
+            title = f"{breadcrumb}\n\n{title}"
+
+        nav_row = self._build_navigation_row(context, language_context)
+        if nav_row:
+            keyboard.append(nav_row)
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await self._send_localized_message(
+            chat_id=chat_id,
+            text=title,
+            context=language_context,
+            reply_markup=reply_markup,
+            disable_notification=True,
+            disable_web_page_preview=True,
+        )
+
+    async def _send_group_menu(
+        self,
+        chat_id: int,
+        context: MenuContext,
+    ) -> None:
+        """Build and send menu for group chats."""
+
+        language_context = translation_manager.get_language_context(
+            context.language_code
+        )
+
+        title = self._t("ui.menu.group.main_title", context=language_context)
+
+        keyboard: List[List[InlineKeyboardButton]] = []
+
+        if context.group_has_active_game:
+            if context.in_active_game:
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            self._t(
+                                "ui.menu.group.view_game",
+                                context=language_context,
+                            ),
+                            callback_data="group_view_game",
+                        )
+                    ]
+                )
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            self._t(
+                                "ui.menu.group.leave_game",
+                                context=language_context,
+                            ),
+                            callback_data="group_leave",
+                        )
+                    ]
+                )
+            else:
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            self._t(
+                                "ui.menu.group.join_game",
+                                context=language_context,
+                            ),
+                            callback_data="group_join",
+                        )
+                    ]
+                )
+        else:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "ui.menu.group.start_game",
+                            context=language_context,
+                        ),
+                        callback_data="group_start",
+                    )
+                ]
+            )
+
+        if context.user_is_group_admin:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "ui.menu.group.admin_panel",
+                            context=language_context,
+                        ),
+                        callback_data="group_admin",
+                    )
+                ]
+            )
+
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    self._t("ui.menu.common.help", context=language_context),
+                    callback_data="help",
+                )
+            ]
+        )
+
+        breadcrumb = self._render_breadcrumb(context, language_context)
+        if breadcrumb:
+            title = f"{breadcrumb}\n\n{title}"
+
+        nav_row = self._build_navigation_row(context, language_context)
+        if nav_row:
+            keyboard.append(nav_row)
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await self._send_localized_message(
+            chat_id=chat_id,
+            text=title,
+            context=language_context,
+            reply_markup=reply_markup,
+            disable_notification=True,
+            disable_web_page_preview=True,
+        )
+
     async def send_language_menu(
         self,
         *,
@@ -1378,27 +1711,36 @@ class PokerBotViewer:
     ) -> Message:
         """Send localized lobby status message."""
 
-        title = self._t("lobby.title")
-        player_text = self._t("lobby.players", count=player_count, max=max_players)
+        title = self._t("ui.lobby.title")
+        player_text = self._t(
+            "ui.lobby.players",
+            count=player_count,
+            max=max_players,
+        )
 
-        text_parts = [title, "", player_text]
-
-        for i, player_name in enumerate(players):
-            if i == 0 and is_host:
-                text_parts.append(f"{self._t('lobby.host')} {player_name}")
+        player_entries: List[str] = []
+        for index, player_name in enumerate(players):
+            if index == 0 and is_host:
+                player_entries.append(
+                    self._t("ui.lobby.host_entry", player=player_name)
+                )
             else:
-                text_parts.append(f"• {player_name}")
+                player_entries.append(
+                    self._t("ui.lobby.player_entry", player=player_name)
+                )
 
-        if player_count < 2:
-            text_parts.append("")
-            text_parts.append(self._t("lobby.waiting"))
-        elif player_count >= 2:
-            text_parts.append("")
-            text_parts.append(self._t("lobby.ready_to_start"))
+        player_list = "\n".join(player_entries)
+        status_key = "ui.lobby.ready_to_start" if player_count >= 2 else "ui.lobby.waiting"
+        status_text = self._t(status_key)
+
+        segments = [title, "", player_text]
+        if player_list:
+            segments.extend(["", player_list])
+        segments.extend(["", status_text])
 
         return await self._send_localized_message(
             chat_id=chat_id,
-            text="\n".join(text_parts),
+            text="\n".join(segments),
         )
 
     async def send_game_started_message(
@@ -1462,30 +1804,38 @@ class PokerBotViewer:
             (message_text, keyboard)
         """
 
-        small_blind = format(stake_config["small_blind"], ",")
-        big_blind = format(stake_config["big_blind"], ",")
-        min_buyin = format(stake_config["min_buyin"], ",")
+        small_blind = self._format_currency(
+            stake_config["small_blind"],
+            include_symbol=False,
+        )
+        big_blind = self._format_currency(
+            stake_config["big_blind"],
+            include_symbol=False,
+        )
+        min_buyin = self._format_currency(
+            stake_config["min_buyin"],
+            include_symbol=False,
+        )
 
-        message = (
-            f"🎴 Game Invitation\n\n"
-            f"{host_name} invited you to join their private poker game!\n\n"
-            f"🎯 Game Code: {game_code}\n\n"
-            f"💰 Stakes: {stake_config['name']}\n"
-            f" • Small Blind: {small_blind}\n"
-            f" • Big Blind: {big_blind}\n"
-            f"💵 Min Buy-in: {min_buyin} chips\n\n"
-            f"Do you want to join?"
+        message = self._t(
+            "msg.private.invite.detailed_body",
+            host=host_name,
+            code=game_code,
+            stake_name=stake_config["name"],
+            small_blind=small_blind,
+            big_blind=big_blind,
+            min_buyin=min_buyin,
         )
 
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
-                    "✅ Accept",
-                    callback_data="invite_accept:" + str(game_code)
+                    self._t("ui.private.invite.accept"),
+                    callback_data=f"invite_accept:{game_code}",
                 ),
                 InlineKeyboardButton(
-                    "❌ Decline",
-                    callback_data="invite_decline:" + str(game_code)
+                    self._t("ui.private.invite.decline"),
+                    callback_data=f"invite_decline:{game_code}",
                 ),
             ]
         ])
