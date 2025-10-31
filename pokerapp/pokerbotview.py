@@ -998,7 +998,7 @@ class PokerBotViewer:
             context.language_code
         )
 
-        title = self._t("ui.menu.private.main_title", context=language_context)
+        title = self._t("menu.private.main_title", context=language_context)
 
         keyboard: List[List[InlineKeyboardButton]] = []
 
@@ -1007,7 +1007,7 @@ class PokerBotViewer:
                 [
                     InlineKeyboardButton(
                         self._t(
-                            "ui.menu.private.view_game",
+                            "menu.private.view_game",
                             context=language_context,
                         ),
                         callback_data="private_view_game",
@@ -1020,7 +1020,7 @@ class PokerBotViewer:
                     [
                         InlineKeyboardButton(
                             self._t(
-                                "ui.menu.private.manage_game",
+                                "menu.private.manage_game",
                                 context=language_context,
                             ),
                             callback_data="private_manage",
@@ -1032,7 +1032,7 @@ class PokerBotViewer:
                 [
                     InlineKeyboardButton(
                         self._t(
-                            "ui.menu.private.create_game",
+                            "menu.private.create_game",
                             context=language_context,
                         ),
                         callback_data="private_create",
@@ -1045,7 +1045,7 @@ class PokerBotViewer:
                 [
                     InlineKeyboardButton(
                         self._t(
-                            "ui.menu.private.view_invites",
+                            "menu.private.view_invites",
                             context=language_context,
                         ),
                         callback_data="view_invites",
