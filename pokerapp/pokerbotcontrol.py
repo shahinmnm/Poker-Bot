@@ -744,7 +744,7 @@ class PokerBotController:
                 user = query.from_user
                 language = user.language_code if user else None
                 translator = translation_manager.get_translator(language)
-                error_msg = translator("ui.error.navigation_failed")
+                error_msg = translator("error.navigation_failed")
                 await query.answer(error_msg, show_alert=True)
             except Exception:
                 await query.answer("⚠️ Navigation error", show_alert=True)
@@ -890,7 +890,7 @@ class PokerBotController:
     ) -> None:
         """Handle /help command with game rules."""
         help_text = self._translate(
-            "help.controller.full_text",
+            "help.full_text",
             update=update,
         )
         await update.effective_message.reply_text(help_text)
@@ -1559,7 +1559,7 @@ class PokerBotController:
                 context_data={},
             )
 
-        title = self._translate("ui.menu.group.admin_panel", query=query)
+        title = self._translate("menu.group.admin_panel", query=query)
         help_lines = [
             title,
             "",
