@@ -66,19 +66,19 @@ class ControllerTextKeys:
 
 
 class ControllerCommandKeys:
-    START = "ui.controller.commands.start"
-    READY = "ui.controller.commands.ready"
-    PRIVATE = "ui.controller.commands.private"
-    JOIN = "ui.controller.commands.join"
-    INVITE = "ui.controller.commands.invite"
-    ACCEPT = "ui.controller.commands.accept"
-    DECLINE = "ui.controller.commands.decline"
-    LEAVE = "ui.controller.commands.leave"
-    MONEY = "ui.controller.commands.money"
-    CARDS = "ui.controller.commands.cards"
-    BAN = "ui.controller.commands.ban"
-    STOP = "ui.controller.commands.stop"
-    HELP = "ui.controller.commands.help"
+    START = "controller.commands.start"
+    READY = "controller.commands.ready"
+    PRIVATE = "controller.commands.private"
+    JOIN = "controller.commands.join"
+    INVITE = "controller.commands.invite"
+    ACCEPT = "controller.commands.accept"
+    DECLINE = "controller.commands.decline"
+    LEAVE = "controller.commands.leave"
+    MONEY = "controller.commands.money"
+    CARDS = "controller.commands.cards"
+    BAN = "controller.commands.ban"
+    STOP = "controller.commands.stop"
+    HELP = "controller.commands.help"
 
 
 class PokerBotController:
