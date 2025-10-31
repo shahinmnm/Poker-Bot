@@ -602,17 +602,15 @@ class PokerBotController:
             return
 
         state = MenuState(
-            location=location,
-            parent=MENU_HIERARCHY.get(location),
+            chat_id=chat_id,
+            location=(
+                location.value if isinstance(location, MenuLocation) else str(location)
+            ),
             context_data=context_data or {},
             timestamp=time.time(),
         )
 
-        await self.middleware.menu_state.set_state(
-            user_id=user_id,
-            chat_id=chat_id,
-            state=state,
-        )
+        await self.middleware.menu_state.set_state(state)
 
     async def _handle_start(
         self,
@@ -1006,7 +1004,7 @@ class PokerBotController:
             self._view.set_language_context(resolved_lang, user_id=user.id)
 
         message = query.message
-        chat = message.chat if message else None
+        chat = message.chat if message else update.effective_chat
 
         if chat and chat.type in ("group", "supergroup"):
             self._kv.set_chat_language(chat.id, resolved_lang)
@@ -1035,6 +1033,17 @@ class PokerBotController:
                 message_id=message.message_id,
                 origin=origin,
             )
+
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.MAIN_MENU,
+                context_data={},
+            )
+
+            menu_context = await self.middleware.build_menu_context(update, context)
+            await self.view._send_menu(chat.id, menu_context)
 
     async def _handle_button_clicked(
         self,
@@ -1294,6 +1303,15 @@ class PokerBotController:
         query = update.callback_query
         if query is not None:
             await self._respond_to_query(query)
+        user = update.effective_user
+        chat = update.effective_chat
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.PRIVATE_GAME_MANAGEMENT,
+                context_data={},
+            )
         await self._model.show_private_game_status(update, context)
 
     async def _handle_menu_private_manage(
@@ -1304,6 +1322,15 @@ class PokerBotController:
         query = update.callback_query
         if query is not None:
             await self._respond_to_query(query)
+        user = update.effective_user
+        chat = update.effective_chat
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.PRIVATE_GAME_MANAGEMENT,
+                context_data={},
+            )
         await self._model.show_private_game_status(update, context)
 
     async def _handle_menu_private_create(
@@ -1314,6 +1341,15 @@ class PokerBotController:
         query = update.callback_query
         if query is not None:
             await self._respond_to_query(query)
+        user = update.effective_user
+        chat = update.effective_chat
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.MAIN_MENU,
+                context_data={},
+            )
         await self._handle_private(update, context)
 
     async def _handle_menu_view_invites(
@@ -1324,6 +1360,15 @@ class PokerBotController:
         query = update.callback_query
         if query is not None:
             await self._respond_to_query(query)
+        user = update.effective_user
+        chat = update.effective_chat
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.INVITATIONS,
+                context_data={},
+            )
         await self._model.send_pending_invites_summary(update, context)
 
     async def _handle_menu_settings(
@@ -1334,6 +1379,15 @@ class PokerBotController:
         query = update.callback_query
         if query is not None:
             await self._respond_to_query(query)
+        user = update.effective_user
+        chat = update.effective_chat
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.SETTINGS,
+                context_data={},
+            )
         await self._handle_language(update, context)
 
     async def _handle_menu_help(
@@ -1344,6 +1398,15 @@ class PokerBotController:
         query = update.callback_query
         if query is not None:
             await self._respond_to_query(query)
+        user = update.effective_user
+        chat = update.effective_chat
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.HELP,
+                context_data={},
+            )
         await self._handle_help(update, context)
 
     async def _handle_menu_group_join(
@@ -1351,6 +1414,15 @@ class PokerBotController:
         update: Update,
         context: CallbackContext,
     ) -> None:
+        user = update.effective_user
+        chat = update.effective_chat
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.GROUP_LOBBY,
+                context_data={},
+            )
         await self._handle_lobby_sit(update, context)
 
     async def _handle_menu_group_leave(
@@ -1358,6 +1430,15 @@ class PokerBotController:
         update: Update,
         context: CallbackContext,
     ) -> None:
+        user = update.effective_user
+        chat = update.effective_chat
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.MAIN_MENU,
+                context_data={},
+            )
         await self._handle_lobby_leave(update, context)
 
     async def _handle_menu_group_start(
@@ -1365,6 +1446,15 @@ class PokerBotController:
         update: Update,
         context: CallbackContext,
     ) -> None:
+        user = update.effective_user
+        chat = update.effective_chat
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.GROUP_LOBBY,
+                context_data={},
+            )
         await self._handle_lobby_start(update, context)
 
     async def _handle_menu_group_view_game(
@@ -1377,6 +1467,15 @@ class PokerBotController:
             return
 
         chat = update.effective_chat
+        user = update.effective_user
+
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.ACTIVE_GAME,
+                context_data={},
+            )
 
         if chat is None:
             await self._respond_to_query(query)
@@ -1438,6 +1537,16 @@ class PokerBotController:
             return
 
         await self._respond_to_query(query)
+
+        user = update.effective_user
+        chat = update.effective_chat
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.ADMIN_PANEL,
+                context_data={},
+            )
 
         title = self._translate("ui.menu.group.admin_panel", query=query)
         help_lines = [
@@ -2577,6 +2686,14 @@ class PokerBotController:
                 origin="stake",
             )
             return
+
+        if user and chat:
+            await self._persist_menu_state(
+                user_id=user.id,
+                chat_id=chat.id,
+                location=MenuLocation.PRIVATE_GAME_CREATION,
+                context_data={"stake_level": stake_level},
+            )
 
         # Call model to create game with selected stake
         await self._model.create_private_game_with_stake(
