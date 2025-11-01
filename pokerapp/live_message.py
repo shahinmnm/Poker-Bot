@@ -601,6 +601,15 @@ class LiveMessageManager:
             chat_key = str(new_snapshot.get("chat_id", ""))
             if chat_key and chat_key in self._chat_states:
                 state = self._chat_states[chat_key]
+                # Cancel any pending banner task before clearing state
+                if state.banner_task and not state.banner_task.done():
+                    state.banner_task.cancel()
+                    self._logger.debug(
+                        "🚫 Canceled stale banner task for game %s (new game %s)",
+                        prev_game_id,
+                        new_game_id,
+                    )
+                    state.banner_task = None
                 state.last_game_snapshot = None
                 state.stable_text = ""
                 state.stable_markup = None
@@ -2267,6 +2276,13 @@ class LiveMessageManager:
                     )
                     return
             if state.last_payload_hash != expected_hash:
+                return
+            # Defensive: Don't edit if stable state was cleared
+            if not state.stable_text:
+                self._logger.debug(
+                    "🚫 Banner clear skipped - stable_text is empty | chat=%s",
+                    chat_id,
+                )
                 return
             try:
                 await self._bot.edit_message_text(
