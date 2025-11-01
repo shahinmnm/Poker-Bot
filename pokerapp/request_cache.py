@@ -32,7 +32,7 @@ class RequestCache:
 
         self._miss_count += 1
 
-        from pokerapp.entities import WalletManagerModel
+        from pokerapp.pokerbotmodel import WalletManagerModel
 
         wallet = await WalletManagerModel.load(
             user_id,
