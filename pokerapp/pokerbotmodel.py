@@ -347,7 +347,6 @@ class PokerBotModel:
         self,
         update: Update,
         message: str,
-        parse_mode: Optional[str] = None,
         reply_to_message_id: Optional[int] = None,
     ) -> None:
         """
