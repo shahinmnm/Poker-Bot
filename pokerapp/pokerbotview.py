@@ -12,6 +12,7 @@ from telegram import (
     ReplyKeyboardMarkup,
     Bot,
 )
+from telegram.error import BadRequest
 from telegram.constants import ParseMode
 from pokerapp.cards import Card, Cards
 from pokerapp.entities import (
@@ -1217,6 +1218,10 @@ class PokerBotViewer:
             disable_web_page_preview=True,
         )
 
+    _STALE_CALLBACK_MESSAGE = (
+        "Query is too old and response timeout expired or query id is invalid"
+    )
+
     async def send_language_menu(
         self,
         *,
@@ -1279,13 +1284,32 @@ class PokerBotViewer:
         markup = InlineKeyboardMarkup(rows)
 
         if message_id is not None:
-            await self._bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=self._localize_text(header, context=language_context),
-                reply_markup=markup,
-                disable_web_page_preview=True,
+            localized_header = self._localize_text(
+                header,
+                context=language_context,
             )
+
+            try:
+                await self._bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=localized_header,
+                    reply_markup=markup,
+                    disable_web_page_preview=True,
+                )
+            except BadRequest as error:
+                error_text = (getattr(error, "message", None) or str(error)).lower()
+                if "message is not modified" in error_text:
+                    logger.debug(
+                        "LanguageMenuUnchanged",
+                        extra={
+                            "chat_id": chat_id,
+                            "message_id": message_id,
+                            "language_code": language_code,
+                        },
+                    )
+                    return
+                raise
             return
 
         await self._send_localized_message(
@@ -1396,11 +1420,47 @@ class PokerBotViewer:
     ) -> None:
         """Acknowledge a callback query by its identifier."""
 
-        await self._bot.answer_callback_query(
-            callback_query_id=query_id,
-            text=text,
-            show_alert=show_alert,
-        )
+        if not query_id:
+            logger.debug("AnswerCallbackSkipped", extra={"reason": "missing_query_id"})
+            return
+
+        try:
+            await self._bot.answer_callback_query(
+                callback_query_id=query_id,
+                text=text,
+                show_alert=show_alert,
+            )
+        except BadRequest as error:
+            error_text_raw = getattr(error, "message", None) or str(error)
+            error_text = error_text_raw.lower()
+
+            if "query_id_invalid" in error_text or "query id is invalid" in error_text:
+                logger.debug(
+                    "AnswerCallbackIgnored",
+                    extra={
+                        "query_id": query_id,
+                        "reason": "query_id_invalid",
+                    },
+                )
+                return
+
+            if self._STALE_CALLBACK_MESSAGE.lower() in error_text:
+                logger.debug(
+                    "AnswerCallbackStale",
+                    extra={
+                        "query_id": query_id,
+                    },
+                )
+                return
+
+            logger.warning(
+                "AnswerCallbackFailed",
+                extra={
+                    "query_id": query_id,
+                    "error": error_text_raw,
+                    "show_alert": show_alert,
+                },
+            )
 
     async def send_dice_reply(
         self,
