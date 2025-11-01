@@ -8,7 +8,6 @@ import contextlib
 import datetime as _dt
 import hashlib
 import html
-import inspect
 import json
 import time
 from dataclasses import dataclass, field
@@ -164,10 +163,7 @@ class ChatRenderState:
     last_payload_hash: Optional[str] = None
     last_content_hash: Optional[str] = None
     last_keyboard_json: str = ""
-    banner_task: Optional[asyncio.Task] = None
     pending_task: Optional[asyncio.Task] = None
-    stable_text: str = ""
-    stable_markup: Optional[InlineKeyboardMarkup] = None
     last_actor_user_id: Optional[int] = None
     raise_options: Dict[str, RaiseOptionMeta] = field(default_factory=dict)
     raise_order: List[str] = field(default_factory=list)
@@ -220,9 +216,8 @@ class LiveMessageManager:
         5: "🧊",
     }
     # Minimum spacing between consecutive updates per chat (seconds)
-    DEBOUNCE_WINDOW = 0.35
-    # Seconds before the transient banner is cleared
-    BANNER_DURATION = 2.5
+    DEBOUNCE_WINDOW = 0.0
+    # BANNER_DURATION removed - system deleted
     # Duration before deleting the private "your turn" ping
     TURN_PING_TTL = 5
     # Approximate per-turn timer in seconds (aligned with model default)
@@ -240,7 +235,6 @@ class LiveMessageManager:
         "timer_bucket",
     )
 
-    FLASH_STATE_TTL = 3600
 
     def __init__(
         self,
@@ -257,10 +251,6 @@ class LiveMessageManager:
         self._chat_states: Dict[str, ChatRenderState] = {}
         # Track hashes of rendered content to detect redundant updates
         self._content_hashes: Dict[int, str] = {}
-        # Track which cards have been revealed per chat for flash detection
-        self._flash_states: Dict[int, Set[str]] = {}
-        # Track cards currently highlighted with flash markers per chat
-        self._active_flash_cards: Dict[int, Set[str]] = {}
         self._kv = ensure_kv(kv) if kv is not None else None
         cache_backend = ensure_kv(kv) if kv is not None else ensure_kv(None)
         self._render_cache = render_cache or RenderCache(cache_backend, logger)
@@ -407,17 +397,7 @@ class LiveMessageManager:
             state.last_payload_hash = None
             state.last_content_hash = None
             state.last_keyboard_json = ""
-            # Clear all overlay state to prevent corruption
-            self._flash_states.pop(chat_id, None)
-            self._active_flash_cards.pop(chat_id, None)
             self._content_hashes.pop(chat_id, None)
-            # Cancel any pending banner tasks
-            if state.banner_task and not state.banner_task.done():
-                state.banner_task.cancel()
-            state.banner_task = None
-            # Clear stable banner text to prevent → arrow corruption
-            state.stable_text = ""
-            state.stable_markup = None
             self._logger.info(
                 "🧹 Cleared all overlay/banner state for new game | chat=%s, game=%s",
                 chat_id,
@@ -482,7 +462,6 @@ class LiveMessageManager:
         lock = self._chat_locks.setdefault(chat_key, asyncio.Lock())
 
         async with lock:
-            self._cancel_banner_task(state)
             version = (
                 message_version
                 if message_version is not None
@@ -502,10 +481,6 @@ class LiveMessageManager:
                 mode="raise_selection",
                 include_banner=False,
                 selected_raise=selection_key,
-                flash_cards=set(
-                    self._active_flash_cards.get(chat_id, set())
-                )
-                or None,
                 device_profile=device_profile,
             )
 
@@ -535,8 +510,6 @@ class LiveMessageManager:
             state.last_context = bundle.context
             state.last_payload_hash = bundle.payload_hash
             state.last_keyboard_json = bundle.keyboard_json
-            state.stable_text = bundle.stable_text
-            state.stable_markup = bundle.reply_markup
             state.raise_options = bundle.raise_options
             state.raise_order = bundle.raise_order
             state.raise_selections[user_id] = selection_key
@@ -558,7 +531,6 @@ class LiveMessageManager:
         lock = self._chat_locks.setdefault(chat_key, asyncio.Lock())
 
         async with lock:
-            self._cancel_banner_task(state)
             device_profile = self._resolve_device_profile(
                 chat_id,
                 state,
@@ -572,10 +544,6 @@ class LiveMessageManager:
                 version=game.get_live_message_version(),
                 mode="actions",
                 include_banner=False,
-                flash_cards=set(
-                    self._active_flash_cards.get(chat_id, set())
-                )
-                or None,
                 device_profile=device_profile,
             )
 
@@ -599,8 +567,6 @@ class LiveMessageManager:
             state.last_context = bundle.context
             state.last_payload_hash = bundle.payload_hash
             state.last_keyboard_json = bundle.keyboard_json
-            state.stable_text = bundle.stable_text
-            state.stable_markup = bundle.reply_markup
             state.raise_options = bundle.raise_options
             state.raise_order = bundle.raise_order
             state.raise_selections.clear()
@@ -643,27 +609,9 @@ class LiveMessageManager:
         return state
 
     def _get_debounce_delay(self, render_state: ChatRenderState) -> float:
-        """Calculate adaptive debounce delay based on network quality."""
+        """No debounce delay."""
 
-        quality = render_state.network_quality
-        delay_map = {
-            "fast": 0.1,
-            "slow": 0.3,
-            "poor": 1.0,
-            "unknown": 0.2,
-        }
-        delay = delay_map.get(quality, 0.2)
-
-        if getattr(render_state, "pending_task", None) is not None:
-            delay *= 1.5
-
-        self._logger.debug(
-            "Adaptive debounce: %.1fms (quality=%s)",
-            delay * 1000,
-            quality,
-        )
-
-        return delay
+        return 0.0
 
     def _resolve_device_profile(
         self,
@@ -715,59 +663,9 @@ class LiveMessageManager:
         previous_snapshot: Optional[dict],
         new_snapshot: dict,
     ) -> bool:
-        """Return True when a critical change should bypass debounce."""
+        """Always update immediately."""
 
-        if not previous_snapshot:
-            return True
-
-        # Force update if game changed
-        prev_game_id = previous_snapshot.get("game_id")
-        new_game_id = new_snapshot.get("game_id")
-        if prev_game_id != new_game_id:
-            self._logger.info(
-                "🔄 Game ID changed, forcing immediate update | "
-                "chat=%s, prev_game=%s, new_game=%s",
-                new_snapshot.get("chat_id"),
-                prev_game_id,
-                new_game_id,
-            )
-            # Clear cached snapshot to prevent stale comparisons
-            chat_key = str(new_snapshot.get("chat_id", ""))
-            if chat_key and chat_key in self._chat_states:
-                state = self._chat_states[chat_key]
-                # Cancel any pending banner task before clearing state
-                if state.banner_task and not state.banner_task.done():
-                    state.banner_task.cancel()
-                    self._logger.debug(
-                        "🚫 Canceled stale banner task for game %s (new game %s)",
-                        prev_game_id,
-                        new_game_id,
-                    )
-                    state.banner_task = None
-                state.last_game_snapshot = None
-                state.stable_text = ""
-                state.stable_markup = None
-            return True
-
-        prev_state = previous_snapshot.get("state")
-        new_state = new_snapshot.get("state")
-
-        if prev_state != new_state:
-            chat_key = str(new_snapshot.get("chat_id", ""))
-            if chat_key and chat_key in self._chat_states:
-                state = self._chat_states[chat_key]
-                state.stable_text = ""
-                state.stable_markup = None
-                self._cancel_banner_task(state)
-            return True
-
-        prev_board = previous_snapshot.get("cards_table", [])
-        new_board = new_snapshot.get("cards_table", [])
-
-        if len(new_board) > len(prev_board):
-            return True
-
-        return False
+        return True
 
     async def _send_or_update_locked(
         self,
@@ -795,80 +693,22 @@ class LiveMessageManager:
             )
         state.last_game_snapshot = new_snapshot
 
-        await self._ensure_flash_state(chat_id)
+        # Simple board state tracking (no flash effects)
+        current_board = {
+            str(card) for card in (getattr(game, "cards_table", []) or [])
+        }
+        # Stored for potential future comparisons (no visual effects)
 
-        cards_on_table = list(getattr(game, "cards_table", []) or [])
-        new_cards = self._detect_new_cards(chat_id, cards_on_table)
-
-        if new_cards:
-            flash_state = self._flash_states.setdefault(chat_id, set())
-            flash_state.update(new_cards)
-            active_flash_cards: Set[str] = set(new_cards)
-            self._active_flash_cards[chat_id] = set(new_cards)
-            await self._persist_flash_state(chat_id)
-        else:
-            active_flash_cards = set(
-                self._active_flash_cards.get(chat_id, set())
-            )
-
-        base_hash = self._compute_content_hash(game, current_player)
-        flash_suffix = (
-            "|flash:" + "|".join(sorted(active_flash_cards))
-            if active_flash_cards
-            else "|flash:"
-        )
-        render_token = f"{base_hash}{flash_suffix}"
+        # Simple content check (no flash state)
+        render_token = self._compute_content_hash(game, current_player)
         previous_token = self._content_hashes.get(chat_id)
 
         if previous_token == render_token and state.last_payload_hash is not None:
-            self._logger.debug(
-                "⏭️ ContentSkip - No changes detected (hash=%s)",
-                base_hash[:8],
-            )
             return (
                 game.group_message_id if game.has_group_message() else None
             )
 
         self._content_hashes[chat_id] = render_token
-
-        if new_cards:
-
-            async def cleanup_flash() -> None:
-                await asyncio.sleep(2.5)
-
-                # Validate game hasn’t changed during sleep
-                chat_key = str(chat_id)
-                state = self._chat_states.get(chat_key)
-                if state and state.last_game_snapshot:
-                    snapshot_game_id = state.last_game_snapshot.get("game_id")
-                    current_game_id = getattr(game, "id", None)
-                    if snapshot_game_id != current_game_id:
-                        self._logger.debug(
-                            "🧹 FlashCleanup canceled - game changed | "
-                            "chat=%s, snapshot_game=%s, current_game=%s",
-                            chat_id,
-                            snapshot_game_id,
-                            current_game_id,
-                        )
-                        return
-
-                # Safe to cleanup flash state
-                self._flash_states[chat_id] = {
-                    str(card) for card in (getattr(game, "cards_table", []) or [])
-                }
-                self._active_flash_cards.pop(chat_id, None)
-                await self._persist_flash_state(chat_id)
-                self._logger.debug(
-                    "🧹 FlashCleanup completed - Removing flash markers | chat=%s",
-                    chat_id,
-                )
-                await self.send_or_update_game_state(
-                    chat_id=chat_id,
-                    game=game,
-                    current_player=current_player,
-                )
-
-            asyncio.create_task(cleanup_flash())
 
         device_profile = self._resolve_device_profile(
             chat_id,
@@ -884,7 +724,6 @@ class LiveMessageManager:
             version=next_version,
             mode="actions",
             include_banner=True,
-            flash_cards=active_flash_cards or None,
             device_profile=device_profile,
         )
 
@@ -921,8 +760,6 @@ class LiveMessageManager:
         state.last_payload_hash = bundle.payload_hash
         state.last_content_hash = content_hash
         state.last_keyboard_json = bundle.keyboard_json
-        state.stable_text = bundle.stable_text
-        state.stable_markup = bundle.reply_markup
         state.raise_options = bundle.raise_options
         state.raise_order = bundle.raise_order
         state.raise_selections.clear()
@@ -939,8 +776,6 @@ class LiveMessageManager:
                 state=state,
                 game=game,
             )
-        else:
-            self._cancel_banner_task(state)
 
         await self._ping_player_if_needed(
             state,
@@ -962,7 +797,6 @@ class LiveMessageManager:
         mode: str,
         include_banner: bool,
         selected_raise: Optional[str] = None,
-        flash_cards: Optional[Set[str]] = None,
         device_profile: DeviceProfile,
     ) -> RenderBundle:
         """Build message text, markup, and hashes for a render pass."""
@@ -970,7 +804,6 @@ class LiveMessageManager:
         context = self._build_render_context(
             game,
             current_player,
-            flash_cards=flash_cards,
             device_profile=device_profile,
         )
         context["language_code"] = self._language_code
@@ -1112,7 +945,6 @@ class LiveMessageManager:
         game: Game,
         current_player: Optional[Player],
         *,
-        flash_cards: Optional[Set[str]] = None,
         device_profile: DeviceProfile,
     ) -> Dict[str, Any]:
         players = list(getattr(game, "players", []) or [])
@@ -1120,10 +952,7 @@ class LiveMessageManager:
         num_cards = len(game.cards_table or [])
         stage_name = self._get_stage_name(num_cards)
         stage_icon = self.STAGE_ICONS.get(num_cards, "♠️")
-        board_line = self._format_board_line(
-            game.cards_table or [],
-            flash_cards=flash_cards,
-        )
+        board_line = self._format_board_cards(list(game.cards_table or []))
 
         actor_user_id = getattr(current_player, "user_id", None)
         to_act_name = self._get_player_name(current_player) if current_player else None
@@ -1295,7 +1124,7 @@ class LiveMessageManager:
         if compact:
             board_text = CompactFormatter.format_cards(board_cards)
         else:
-            board_text = self._format_board_line(board_cards)
+            board_text = self._format_board_cards(board_cards)
 
         lines.append("")
         if compact:
@@ -1689,21 +1518,15 @@ class LiveMessageManager:
 
         return " | ".join(entries)
 
-    def _format_board_line(
-        self,
-        cards,
-        *,
-        flash_cards: Optional[Set[str]] = None,
-    ) -> str:
+    def _format_board_cards(self, cards: List) -> str:
+        """Format board cards without any flash effects."""
         if not cards:
             return "🂠 🂠 🂠"
 
-        if flash_cards:
-            return self._format_cards_with_flash(cards, flash_cards)
-
         from pokerapp.pokerbotview import PokerBotViewer
 
-        return PokerBotViewer._format_cards_line(cards)
+        formatted = [PokerBotViewer._format_card(card) for card in cards]
+        return "  ".join(formatted)
 
     def _compute_content_hash(
         self,
@@ -1743,120 +1566,6 @@ class LiveMessageManager:
 
         content = "||".join(components)
         return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-
-    def _detect_new_cards(
-        self,
-        chat_id: int,
-        current_cards: List,
-    ) -> Set[str]:
-        """Return the set of community cards that are newly revealed."""
-
-        previous_flash = self._flash_states.get(chat_id, set())
-        current_card_strs = {str(card) for card in current_cards}
-        new_cards = current_card_strs - previous_flash
-
-        if new_cards:
-            self._logger.debug(
-                "✨ FlashDetect - New cards in chat %s: %s",
-                chat_id,
-                ", ".join(sorted(new_cards)),
-            )
-
-        return new_cards
-
-    def _flash_storage_key(self, chat_id: int) -> str:
-        return f"flash:{chat_id}"
-
-    async def _ensure_flash_state(self, chat_id: int) -> Set[str]:
-        if chat_id in self._flash_states:
-            return self._flash_states[chat_id]
-
-        stored = await self._load_flash_state(chat_id)
-        state = stored or set()
-        self._flash_states[chat_id] = state
-        return state
-
-    async def _load_flash_state(self, chat_id: int) -> Optional[Set[str]]:
-        if self._kv is None:
-            return None
-
-        key = self._flash_storage_key(chat_id)
-        try:
-            raw = self._kv.get(key)
-            if inspect.isawaitable(raw):
-                raw = await raw
-        except Exception as exc:  # pragma: no cover - defensive logging
-            self._logger.warning(
-                "⚠️ FlashStorageRead - Failed to load flash state for chat %s: %s",
-                chat_id,
-                exc,
-            )
-            return None
-
-        if not raw:
-            return None
-
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8")
-        elif not isinstance(raw, str):
-            raw = str(raw)
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as exc:  # pragma: no cover - defensive logging
-            self._logger.warning(
-                "⚠️ FlashStorageRead - Invalid flash payload for chat %s: %s",
-                chat_id,
-                exc,
-            )
-            return None
-
-        if isinstance(data, list):
-            return {str(item) for item in data}
-
-        return None
-
-    async def _persist_flash_state(self, chat_id: int) -> None:
-        if self._kv is None:
-            return
-
-        key = self._flash_storage_key(chat_id)
-        payload = json.dumps(sorted(self._flash_states.get(chat_id, set())))
-
-        try:
-            result = self._kv.set(key, payload, ex=self.FLASH_STATE_TTL)
-            if inspect.isawaitable(result):
-                await result
-        except Exception as exc:  # pragma: no cover - defensive logging
-            self._logger.warning(
-                "⚠️ FlashStorageWrite - Failed to persist flash state for chat %s: %s",
-                chat_id,
-                exc,
-            )
-
-    def _format_cards_with_flash(
-        self,
-        cards: List,
-        flash_cards: Set[str],
-    ) -> str:
-        """Format board cards and wrap new entries with sparkle markers."""
-
-        if not cards:
-            return "🂠 🂠 🂠"
-
-        from pokerapp.pokerbotview import PokerBotViewer
-
-        flash_lookup = set(flash_cards)
-        formatted: List[str] = []
-        for card in cards:
-            card_display = PokerBotViewer._format_card(card)
-            card_str = str(card)
-            if card_str in flash_lookup:
-                formatted.append(f"✨ {card_display} ✨")
-            else:
-                formatted.append(card_display)
-
-        return "  ".join(formatted)
 
     def _format_board_display(self, board_text: Optional[str], icon: Optional[str]) -> str:
         text = board_text or "—"
@@ -2420,12 +2129,6 @@ class LiveMessageManager:
         data = f"{text}\u241E{keyboard_json}"
         return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
-    def _cancel_banner_task(self, state: ChatRenderState) -> None:
-        task = state.banner_task
-        if task and not task.done():
-            task.cancel()
-        state.banner_task = None
-
     def _schedule_banner_clear(
         self,
         *,
@@ -2436,95 +2139,8 @@ class LiveMessageManager:
         state: ChatRenderState,
         game: Game,
     ) -> None:
-        self._cancel_banner_task(state)
-
-        if not state.stable_text:
-            return
-
-        async def _clear() -> None:
-            await asyncio.sleep(self.BANNER_DURATION)
-
-            # Verify banner clear is for current game
-            if state.last_game_snapshot:
-                snapshot_game_id = state.last_game_snapshot.get("game_id")
-                current_game_id = getattr(game, "id", None)
-                if snapshot_game_id != current_game_id:
-                    self._logger.debug(
-                        "🚫 Banner clear canceled - game changed | "
-                        "chat=%s, snapshot_game=%s, current_game=%s",
-                        chat_id,
-                        snapshot_game_id,
-                        current_game_id,
-                    )
-                    return
-            if state.last_payload_hash != expected_hash:
-                return
-            # Defensive: Don't edit if stable state was cleared
-            if not state.stable_text:
-                self._logger.debug(
-                    "🚫 Banner clear skipped - stable_text is empty | chat=%s",
-                    chat_id,
-                )
-                return
-            try:
-                plain_text = self._prepare_plain_text(state.stable_text)
-                await self._bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    text=plain_text,
-                    reply_markup=state.stable_markup,
-                    disable_web_page_preview=True,
-                )
-            except TelegramError as exc:
-                error_msg = str(exc).lower()
-                if "not modified" not in error_msg:
-                    self._logger.debug(
-                        "Banner clear skipped for chat %s: %s",
-                        chat_id,
-                        exc,
-                    )
-                return
-
-            keyboard_json = self._serialize_reply_markup(state.stable_markup)
-            state.last_payload_hash = self._payload_hash(
-                state.stable_text,
-                keyboard_json,
-            )
-            state.last_keyboard_json = keyboard_json
-
-        state.banner_task = asyncio.create_task(_clear())
-
-    async def _update_banner_delayed(
-        self,
-        *,
-        chat_id: int,
-        game: Game,
-        delay: float = 0.0,
-        update_callback: Optional[Callable[[], Awaitable[None]]] = None,
-    ) -> None:
-        """Apply a deferred banner update while guarding against game swaps."""
-
-        # Verify banner update is for current game
-        chat_key = str(chat_id)
-        state = self._chat_states.get(chat_key)
-        if state and state.last_game_snapshot:
-            snapshot_game_id = state.last_game_snapshot.get("game_id")
-            current_game_id = getattr(game, "id", None)
-            if snapshot_game_id != current_game_id:
-                self._logger.debug(
-                    "🚫 Banner update canceled - game changed | "
-                    "chat=%s, snapshot_game=%s, current_game=%s",
-                    chat_id,
-                    snapshot_game_id,
-                    current_game_id,
-                )
-                return
-
-        if delay > 0:
-            await asyncio.sleep(delay)
-
-        if update_callback is not None:
-            await update_callback()
+        """Banner system removed - no-op."""
+        return
 
     async def _dispatch_payload(
         self,
