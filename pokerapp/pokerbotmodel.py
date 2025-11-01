@@ -3,7 +3,6 @@
 import asyncio
 import datetime
 from datetime import datetime as dt
-import html
 import json
 import logging
 import secrets
@@ -41,6 +40,7 @@ from pokerapp.game_engine import TurnResult
 from pokerapp.notify_utils import NotificationManager
 from pokerapp.i18n import translation_manager
 from pokerapp.pokerbotview import PokerBotViewer
+from pokerapp.live_message import UnicodeTextFormatter
 from pokerapp.kvstore import ensure_kv
 from pokerapp.winnerdetermination import get_combination_name
 from pokerapp.request_cache import RequestCache
@@ -353,20 +353,20 @@ class PokerBotModel:
         """
         Centralized message sending with consistent interface.
         """
+
+        plain_message = UnicodeTextFormatter.strip_all_html(message)
         effective_message = update.effective_message
 
         if effective_message is not None:
             await effective_message.reply_text(
-                message,
-                parse_mode=parse_mode,
+                plain_message,
                 reply_to_message_id=reply_to_message_id,
             )
             return
 
         await self._bot.send_message(
             chat_id=update.effective_chat.id,
-            text=message,
-            parse_mode=parse_mode,
+            text=plain_message,
         )
 
     @property
@@ -609,23 +609,24 @@ class PokerBotModel:
                 await self._bot.send_message(
                     chat_id=int(chat_id),
                     text="🎲 Game ended with no winners (all folded).",
-                    parse_mode="HTML",
+                    parse_mode=None,
                 )
                 return
 
-            lines: List[str] = ["🏆 <b>Game Results:</b>\n"]
+            heading = UnicodeTextFormatter.make_bold("Game Results:")
+            lines: List[str] = [f"🏆 {heading}", ""]
 
             for rank, score in enumerate(sorted_scores, start=1):
                 players_with_score = normalized_results[score]
                 hand_name = get_combination_name(score)
 
                 if rank == 1:
-                    winner_heading = (
-                        f"🥇 <b>Winner(s) - {html.escape(hand_name)}</b>"
+                    winner_heading = UnicodeTextFormatter.make_bold(
+                        f"Winner(s) - {hand_name}"
                     )
-                    lines.append(winner_heading)
+                    lines.append(f"🥇 {winner_heading}")
                 else:
-                    lines.append(f"\n{rank}. {html.escape(hand_name)}")
+                    lines.append(f"{rank}. {hand_name}")
 
                 for player, hand_cards, winnings in players_with_score:
                     mention_raw = getattr(
@@ -633,35 +634,36 @@ class PokerBotModel:
                         "mention_markdown",
                         f"Player {player.user_id}",
                     )
-                    mention_raw = mention_raw.strip("`")
-                    if mention_raw.startswith("[") and "](" in mention_raw:
-                        label, link = mention_raw[1:].split("](", 1)
-                        link = link.rstrip(")")
-                        mention = (
-                            f'<a href="{html.escape(link, quote=True)}">'
-                            f"{html.escape(label)}</a>"
-                        )
+                    mention_clean = mention_raw.strip("`")
+                    if mention_clean.startswith("[") and "](" in mention_clean:
+                        label, _link = mention_clean[1:].split("](", 1)
+                        mention = label
                     else:
-                        mention = html.escape(mention_raw)
+                        mention = mention_clean
 
-                    cards_str = " ".join(
-                        html.escape(str(card)) for card in hand_cards[:5]
-                    )
+                    cards_str = " ".join(str(card) for card in hand_cards[:5])
 
-                    lines.append(f" • {mention}")
-                    lines.append(f" Cards: <code>{cards_str}</code>")
+                    lines.append(f"• {mention}")
+                    if cards_str:
+                        lines.append(f"  Cards: {cards_str}")
                     if winnings is not None:
-                        winnings_text = html.escape(str(winnings))
-                        lines.append(f" Winnings: <b>{winnings_text}$</b>")
+                        winnings_display = UnicodeTextFormatter.make_bold(
+                            f"Winnings: {winnings}$"
+                        )
+                        lines.append(f"  {winnings_display}")
+                lines.append("")
 
-            lines.append(f"\n💰 Total Pot: {html.escape(str(game.pot))}")
+            total_pot = UnicodeTextFormatter.make_bold(
+                f"Total Pot: {game.pot}"
+            )
+            lines.append(f"💰 {total_pot}")
 
-            result_text = "\n".join(lines)
+            result_text = "\n".join(lines).strip()
 
             await self._bot.send_message(
                 chat_id=int(chat_id),
                 text=result_text,
-                parse_mode="HTML",
+                parse_mode=None,
             )
 
             logger.info(
@@ -680,7 +682,7 @@ class PokerBotModel:
             await self._bot.send_message(
                 chat_id=int(chat_id),
                 text="❌ Error displaying results. Check logs.",
-                parse_mode="HTML",
+                parse_mode=None,
             )
 
         finally:
@@ -1841,9 +1843,10 @@ class PokerBotModel:
             host=user.full_name,
             max_players=self._cfg.PRIVATE_MAX_PLAYERS,
         )
+        plain_message = UnicodeTextFormatter.strip_all_html(message)
         await query.edit_message_text(
-            text=message,
-            parse_mode='Markdown'
+            text=plain_message,
+            parse_mode=None,
         )
 
     async def accept_private_game_invite(
@@ -1961,14 +1964,14 @@ class PokerBotModel:
         # Update invitation message
         message = (
             "✅ Invitation accepted!\n\n"
-            f"🎯 **Game Code**: {game_code}\n"
-            f"💰 **Stakes**: {stake_config['name']}\n\n"
+            f"🎯 {UnicodeTextFormatter.make_bold('Game Code')}: {game_code}\n"
+            f"💰 {UnicodeTextFormatter.make_bold('Stakes')}: {stake_config['name']}\n\n"
             "You have joined the game lobby.\n\n"
             "Waiting for host to start the game..."
         )
         await query.edit_message_text(
             text=message,
-            parse_mode='Markdown'
+            parse_mode=None,
         )
 
         # Notify host
@@ -2054,7 +2057,7 @@ class PokerBotModel:
         )
         await query.edit_message_text(
             text=message,
-            parse_mode='Markdown'
+            parse_mode=None,
         )
 
         # Notify host
@@ -2421,10 +2424,10 @@ class PokerBotModel:
         )
 
         try:
+            plain_message = UnicodeTextFormatter.strip_all_html(message)
             await self._bot.send_message(
                 chat_id=target_user_id,
-                text=message,
-                parse_mode="Markdown",
+                text=plain_message,
                 reply_markup=keyboard,
             )
             await self._send_response(
@@ -2871,17 +2874,29 @@ class PokerBotModel:
 
         # === STEP 3A: SEND GAME START NOTIFICATION ===
 
+        intro_heading = UnicodeTextFormatter.make_bold("Game Starting!")
+        players_heading = UnicodeTextFormatter.make_bold(
+            f"Players ({len(players)})"
+        )
+        stakes_heading = UnicodeTextFormatter.make_bold("Stakes")
+        blinds_heading = UnicodeTextFormatter.make_bold("Blinds")
+        players_lines = "\n".join(f"• {name}" for name in player_names)
+        if players_lines:
+            players_block = f"{players_heading}:\n{players_lines}"
+        else:
+            players_block = f"{players_heading}:"
+
+        start_message = (
+            f"🎮 {intro_heading}\n\n"
+            f"{players_block}\n\n"
+            f"{stakes_heading}: {stake_config['name']}\n"
+            f"{blinds_heading}: {small_blind}/{big_blind}\n\n"
+            "Good luck! 🍀"
+        )
+
         await self._view.send_message(
             chat_id=chat_id,
-            text=(
-                f"🎮 **Game Starting!**\n\n"
-                f"**Players ({len(players)})**: \n"
-                + "\n".join(f"• {name}" for name in player_names)
-                + f"\n\n**Stakes**: {stake_config['name']}\n"
-                f"**Blinds**: {small_blind}/{big_blind}\n\n"
-                "Good luck! 🍀"
-            ),
-            parse_mode="Markdown",
+            text=start_message,
         )
 
         logger.info(
@@ -2895,15 +2910,15 @@ class PokerBotModel:
         for player in players:
             try:
                 balance = player.wallet.value()
+                personal_message = (
+                    f"🎮 {UnicodeTextFormatter.make_bold('Game Started!')}\n\n"
+                    f"💰 {UnicodeTextFormatter.make_bold('Your Balance')}: ${format(balance, ',.0f')}\n"
+                    f"📊 {UnicodeTextFormatter.make_bold('Blinds')}: {small_blind}/{big_blind}\n\n"
+                    "Your cards will be dealt shortly. Good luck! 🍀"
+                )
                 await self._view.send_message(
                     chat_id=player.user_id,
-                    text=(
-                        f"🎮 **Game Started!**\n\n"
-                        f"💰 **Your Balance**: ${format(balance, ',.0f')}\n"
-                        f"📊 **Blinds**: ${small_blind}/{big_blind}\n\n"
-                        "Your cards will be dealt shortly. Good luck! 🍀"
-                    ),
-                    parse_mode="Markdown",
+                    text=personal_message,
                 )
                 logger.debug(
                     "Sent start notification to player %s (balance: $%d)",
@@ -2956,14 +2971,17 @@ class PokerBotModel:
             )
 
             # Notify players of failure
+            failure_heading = UnicodeTextFormatter.make_bold(
+                "Game Failed to Start"
+            )
+            failure_message = (
+                f"❌ {failure_heading}\n\n"
+                "An error occurred while initializing the game. "
+                "Please try again or contact support."
+            )
             await self._view.send_message(
                 chat_id=chat_id,
-                text=(
-                    "❌ **Game Failed to Start**\n\n"
-                    "An error occurred while initializing the game. "
-                    "Please try again or contact support."
-                ),
-                parse_mode="Markdown",
+                text=failure_message,
             )
 
             # Clean up lobby

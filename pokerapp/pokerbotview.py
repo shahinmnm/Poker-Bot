@@ -13,7 +13,6 @@ from telegram import (
     Bot,
 )
 from telegram.error import BadRequest
-from telegram.constants import ParseMode
 from pokerapp.cards import Card, Cards
 from pokerapp.entities import (
     Game,
@@ -27,7 +26,7 @@ from pokerapp.entities import (
 from pokerapp.device_detector import DeviceProfile, DeviceType
 from pokerapp.i18n import LanguageContext, translation_manager
 from pokerapp.kvstore import RedisKVStore, ensure_kv
-from pokerapp.live_message import LiveMessageManager
+from pokerapp.live_message import LiveMessageManager, UnicodeTextFormatter
 from pokerapp.keyboard_utils import (
     rehydrate_keyboard_layout,
     serialise_keyboard_layout,
@@ -202,7 +201,9 @@ class PokerBotViewer:
     ):
         """Send message with direction-aware wrapping."""
 
-        localized = self._localize_text(text, context=context)
+        plain_text = UnicodeTextFormatter.strip_all_html(text)
+        localized = self._localize_text(plain_text, context=context)
+        kwargs.setdefault("parse_mode", None)
         return await self._bot.send_message(chat_id=chat_id, text=localized, **kwargs)
 
     _SUIT_EMOJIS = {
@@ -727,11 +728,11 @@ class PokerBotViewer:
             ]
         )
 
+        plain_message = UnicodeTextFormatter.strip_all_html(message)
         await self._send_localized_message(
             chat_id=chat_id,
-            text=message,
+            text=plain_message,
             reply_markup=keyboard,
-            parse_mode=ParseMode.HTML,
             disable_notification=True,
             disable_web_page_preview=True,
             context=language_context,
@@ -770,10 +771,10 @@ class PokerBotViewer:
                     version=next_version,
                 )
 
+            clean_text = UnicodeTextFormatter.strip_all_html(text)
             message = await self._send_localized_message(
                 chat_id=chat_id,
-                text=text,
-                parse_mode=ParseMode.HTML,
+                text=clean_text,
                 reply_markup=reply_markup,
                 disable_notification=True,
                 disable_web_page_preview=True,
@@ -839,13 +840,14 @@ class PokerBotViewer:
                     version=next_version,
                 )
 
+            plain_text = UnicodeTextFormatter.strip_all_html(text)
             await self._bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=self._localize_text(text),
-                parse_mode=ParseMode.HTML,
+                text=self._localize_text(plain_text),
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
+                parse_mode=None,
             )
 
             if next_version is not None:
@@ -862,10 +864,10 @@ class PokerBotViewer:
         text: str,
         reply_markup: ReplyKeyboardMarkup = None,
     ) -> None:
+        plain_text = UnicodeTextFormatter.strip_all_html(text)
         await self._send_localized_message(
             chat_id=chat_id,
-            parse_mode=ParseMode.MARKDOWN,
-            text=text,
+            text=plain_text,
             reply_markup=reply_markup,
             disable_notification=True,
             disable_web_page_preview=True,
@@ -1481,11 +1483,11 @@ class PokerBotViewer:
         message_id: MessageId,
         text: str,
     ) -> None:
+        plain_text = UnicodeTextFormatter.strip_all_html(text)
         await self._send_localized_message(
             reply_to_message_id=message_id,
             chat_id=chat_id,
-            parse_mode=ParseMode.MARKDOWN,
-            text=text,
+            text=plain_text,
             disable_notification=True,
         )
 
@@ -1518,21 +1520,22 @@ class PokerBotViewer:
             if mention_markdown else panel_text
         )
 
+        plain_text = UnicodeTextFormatter.strip_all_html(message_text)
+        localized_text = self._localize_text(
+            plain_text,
+            context=language_context,
+        )
+
         send_kwargs = dict(
             chat_id=chat_id,
-            text=message_text,
+            text=localized_text,
             reply_markup=markup,
-            parse_mode=ParseMode.MARKDOWN,
             disable_notification=True,
         )
 
         if ready_message_id is not None:
             send_kwargs["reply_to_message_id"] = ready_message_id
 
-        send_kwargs["text"] = self._localize_text(
-            send_kwargs["text"],
-            context=language_context,
-        )
         await self._bot.send_message(**send_kwargs)
 
     async def send_or_update_private_hand(
@@ -1568,22 +1571,23 @@ class PokerBotViewer:
 
         try:
             if message_id is not None:
+                plain_text = UnicodeTextFormatter.strip_all_html(message_text)
                 await self._bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=message_id,
                     text=self._localize_text(
-                        message_text,
+                        plain_text,
                         context=language_context,
                     ),
-                    parse_mode=ParseMode.MARKDOWN,
+                    parse_mode=None,
                 )
                 return message_id
 
+            plain_text = UnicodeTextFormatter.strip_all_html(message_text)
             message = await self._send_localized_message(
                 chat_id=chat_id,
-                text=message_text,
+                text=plain_text,
                 reply_markup=reply_markup,
-                parse_mode=ParseMode.MARKDOWN,
                 disable_notification=disable_notification,
                 context=language_context,
             )
@@ -1685,8 +1689,8 @@ class PokerBotViewer:
             options=options_block,
             footer=self._t("msg.private.stake_menu.footer", context=language_context),
         )
-
-        localized_text = self._localize_text(text, context=language_context)
+        plain_text = UnicodeTextFormatter.strip_all_html(text)
+        localized_text = self._localize_text(plain_text, context=language_context)
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         if message_id is not None:
@@ -1695,17 +1699,16 @@ class PokerBotViewer:
                 message_id=message_id,
                 text=localized_text,
                 reply_markup=reply_markup,
-                parse_mode=ParseMode.MARKDOWN,
                 disable_web_page_preview=True,
+                parse_mode=None,
             )
             return
 
         await self._send_localized_message(
             chat_id=chat_id,
-            text=text,
+            text=plain_text,
             context=language_context,
             reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN,
             disable_notification=True,
             disable_web_page_preview=True,
         )

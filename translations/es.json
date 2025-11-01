@@ -102,8 +102,8 @@
     "pot": "💰 Bote: ${amount}",
     "private": {
       "invite": {
-        "body": "🎰 <b>Invitación a partida privada</b>\n\n{inviter} te invita a unirte.\n\n🎲 Apuestas: {stake}\n🔑 Código: {code}\n\n¿Te sumas?",
-        "detailed_body": "🎴 <b>Invitación de juego</b>\n\n{host} te invita a jugar.\n\n🎯 Código de partida: {code}\n\n💰 Apuestas: {stake_name}\n • Ciega pequeña: ${small_blind}\n • Ciega grande: ${big_blind}\n💵 Compra mínima: ${min_buyin}\n\n¿Quieres unirte?"
+        "body": "🎰 𝗜𝗻𝘃𝗶𝘁𝗮𝗰𝗶ó𝗻 𝗮 𝗽𝗮𝗿𝘁𝗶𝗱𝗮 𝗽𝗿𝗶𝘃𝗮𝗱𝗮\n\n{inviter} te invita a unirte.\n\n🎲 Apuestas: {stake}\n🔑 Código: {code}\n\n¿Te sumas?",
+        "detailed_body": "🎴 𝗜𝗻𝘃𝗶𝘁𝗮𝗰𝗶ó𝗻 𝗱𝗲 𝗷𝘂𝗲𝗴𝗼\n\n{host} te invita a jugar.\n\n🎯 Código de partida: {code}\n\n💰 Apuestas: {stake_name}\n• Ciega pequeña: ${small_blind}\n• Ciega grande: ${big_blind}\n💵 Compra mínima: ${min_buyin}\n\n¿Quieres unirte?"
       },
       "lobby": {
         "body": "{title}\n\n🎯 Anfitrión: {host}\n🎲 Apuestas: {stake}\n🔑 Código: {code}\n\n{player_status}\n\n{players}\n\n{readiness}",
@@ -235,8 +235,8 @@
         "success": "🇺🇸 ✅ Fold confirmed"
       },
       "invite": {
-        "accept_help": "🇺🇸 Send /accept <code> to accept your latest invite.",
-        "decline_help": "🇺🇸 Send /decline <code> to decline your latest invite."
+        "accept_help": "🇺🇸 Send /accept CODE to accept your latest invite.",
+        "decline_help": "🇺🇸 Send /decline CODE to decline your latest invite."
       },
       "lobby": {
         "left": "🇺🇸 👋 You left the lobby."
@@ -418,7 +418,7 @@
         "game_started": "🇺🇸 ⚠️ That private game has already started.",
         "not_accepting": "🇺🇸 ⚠️ That private game isn't accepting new players right now.",
         "success": "🇺🇸 ✅ You're in! Wait for the host to start the game.",
-        "usage": "🇺🇸 Use /join <code> to join a private game lobby."
+        "usage": "🇺🇸 Use /join CODE to join a private game lobby."
       }
     },
     "viewer": {

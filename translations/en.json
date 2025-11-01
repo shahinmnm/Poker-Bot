@@ -102,8 +102,8 @@
     "pot": "💰 Pot: ${amount}",
     "private": {
       "invite": {
-        "body": "🎰 <b>Private Game Invitation</b>\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?",
-        "detailed_body": "🎴 <b>Game Invitation</b>\n\n{host} invited you to join!\n\n🎯 Game Code: {code}\n\n💰 Stakes: {stake_name}\n • Small Blind: ${small_blind}\n • Big Blind: ${big_blind}\n💵 Min Buy-in: ${min_buyin}\n\nDo you want to join?"
+        "body": "🎰 𝗣𝗿𝗶𝘃𝗮𝘁𝗲 𝗚𝗮𝗺𝗲 𝗜𝗻𝘃𝗶𝘁𝗮𝘁𝗶𝗼𝗻\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?",
+        "detailed_body": "🎴 𝗚𝗮𝗺𝗲 𝗜𝗻𝘃𝗶𝘁𝗮𝘁𝗶𝗼𝗻\n\n{host} invited you to join!\n\n🎯 Game Code: {code}\n\n💰 Stakes: {stake_name}\n• Small Blind: ${small_blind}\n• Big Blind: ${big_blind}\n💵 Min Buy-in: ${min_buyin}\n\nDo you want to join?"
       },
       "lobby": {
         "body": "{title}\n\n🎯 Host: {host}\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\n{player_status}\n\n{players}\n\n{readiness}",
@@ -235,8 +235,8 @@
         "success": "✅ Fold confirmed"
       },
       "invite": {
-        "accept_help": "Send /accept <code> to accept your latest invite.",
-        "decline_help": "Send /decline <code> to decline your latest invite."
+        "accept_help": "Send /accept CODE to accept your latest invite.",
+        "decline_help": "Send /decline CODE to decline your latest invite."
       },
       "lobby": {
         "left": "👋 You left the lobby."
@@ -418,7 +418,7 @@
         "game_started": "⚠️ That private game has already started.",
         "not_accepting": "⚠️ That private game isn't accepting new players right now.",
         "success": "✅ You're in! Wait for the host to start the game.",
-        "usage": "Use /join <code> to join a private game lobby."
+        "usage": "Use /join CODE to join a private game lobby."
       }
     },
     "viewer": {

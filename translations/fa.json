@@ -102,8 +102,8 @@
     "pot": "💰 پات: ${amount}",
     "private": {
       "invite": {
-        "body": "🎰 <b>دعوت به بازی خصوصی</b>\n\n{inviter} شما را دعوت می‌کند!\n\n🎲 شرط‌ها: {stake}\n🔑 کد: {code}\n\nآیا می‌پیوندید؟",
-        "detailed_body": "🎴 <b>دعوتنامه بازی</b>\n\n{host} شما را به بازی دعوت کرده است!\n\n🎯 کد بازی: {code}\n\n💰 شرط‌ها: {stake_name}\n • بلایند کوچک: ${small_blind}\n • بلایند بزرگ: ${big_blind}\n💵 حداقل خرید: ${min_buyin}\n\nمایل به پیوستن هستید؟"
+        "body": "🎰 دعوت به بازی خصوصی\n\n{inviter} شما را دعوت می‌کند!\n\n🎲 شرط‌ها: {stake}\n🔑 کد: {code}\n\nآیا می‌پیوندید؟",
+        "detailed_body": "🎴 دعوتنامه بازی\n\n{host} شما را به بازی دعوت کرده است!\n\n🎯 کد بازی: {code}\n\n💰 شرط‌ها: {stake_name}\n• بلایند کوچک: ${small_blind}\n• بلایند بزرگ: ${big_blind}\n💵 حداقل خرید: ${min_buyin}\n\nمایل به پیوستن هستید؟"
       },
       "lobby": {
         "body": "{title}\n\n🎯 میزبان: {host}\n🎲 شرط‌ها: {stake}\n🔑 کد: {code}\n\n{player_status}\n\n{players}\n\n{readiness}",
@@ -235,8 +235,8 @@
         "success": "🇺🇸 ✅ Fold confirmed"
       },
       "invite": {
-        "accept_help": "🇺🇸 Send /accept <code> to accept your latest invite.",
-        "decline_help": "🇺🇸 Send /decline <code> to decline your latest invite."
+        "accept_help": "🇺🇸 Send /accept CODE to accept your latest invite.",
+        "decline_help": "🇺🇸 Send /decline CODE to decline your latest invite."
       },
       "lobby": {
         "left": "🇺🇸 👋 You left the lobby."
@@ -418,7 +418,7 @@
         "game_started": "🇺🇸 ⚠️ That private game has already started.",
         "not_accepting": "🇺🇸 ⚠️ That private game isn't accepting new players right now.",
         "success": "🇺🇸 ✅ You're in! Wait for the host to start the game.",
-        "usage": "🇺🇸 Use /join <code> to join a private game lobby."
+        "usage": "🇺🇸 Use /join CODE to join a private game lobby."
       }
     },
     "viewer": {
