@@ -1282,29 +1282,10 @@ class LiveMessageManager:
         render_state: ChatRenderState,
         latency_ms: float,
     ) -> None:
-        """Update rolling average latency and determine quality."""
-
-        n = min(render_state.latency_samples, 9)
-        old_avg = render_state.avg_latency_ms
-        new_avg = (old_avg * n + latency_ms) / (n + 1)
+        """Track latency for diagnostics only - not used for delays."""
 
         render_state.last_update_latency_ms = latency_ms
-        render_state.avg_latency_ms = new_avg
-        render_state.latency_samples += 1
-
-        if new_avg < 200:
-            render_state.network_quality = "fast"
-        elif new_avg < 1000:
-            render_state.network_quality = "slow"
-        else:
-            render_state.network_quality = "poor"
-
-        self._logger.debug(
-            "Network quality: %s (latency: %.1fms, avg: %.1fms)",
-            render_state.network_quality,
-            latency_ms,
-            new_avg,
-        )
+        render_state.network_quality = "fast"
 
     def _should_use_compact_mode(
         self,
@@ -1519,7 +1500,12 @@ class LiveMessageManager:
         return " | ".join(entries)
 
     def _format_board_cards(self, cards: List) -> str:
-        """Format board cards without any flash effects."""
+        """Format board cards without any flash effects.
+
+        Replaced the old _format_board_line and _format_cards_with_flash
+        which added sparkle markers (✨) around newly revealed cards.
+        Now cards are displayed immediately without animation delays.
+        """
         if not cards:
             return "🂠 🂠 🂠"
 
