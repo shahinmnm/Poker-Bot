@@ -917,13 +917,15 @@ class PokerBotController:
         self._kv.set_user_language(user.id, user_lang)
 
         active_lang = user_lang
+        origin = "private_settings"
         if chat.type in ("group", "supergroup"):
             chat_lang = self._kv.get_chat_language(chat.id)
             if chat_lang:
                 active_lang = translation_manager.resolve_language(lang=chat_lang)
             else:
-                active_lang = user_lang
+                active_lang = translation_manager.DEFAULT_LANGUAGE
                 self._kv.set_chat_language(chat.id, active_lang)
+            origin = "group_settings"
 
         self._view.set_language_context(active_lang, user_id=user.id)
 
@@ -931,6 +933,7 @@ class PokerBotController:
             chat_id=chat.id,
             language_code=active_lang,
             reply_to_message_id=message.message_id,
+            origin=origin,
         )
 
     async def _handle_language_selection(
@@ -988,6 +991,40 @@ class PokerBotController:
                 )
             return
 
+        if command == "open":
+            chat = query.message.chat if query.message else update.effective_chat
+            if not chat or not user:
+                await self._respond_to_query(query)
+                return
+
+            target = parts[2] if len(parts) > 2 else None
+
+            if target in {"group_settings", "group_menu"}:
+                language_seed = (
+                    self._kv.get_chat_language(chat.id)
+                    or translation_manager.DEFAULT_LANGUAGE
+                )
+            else:
+                language_seed = (
+                    self._kv.get_user_language(user.id)
+                    or translation_manager.DEFAULT_LANGUAGE
+                )
+
+            language_seed = translation_manager.resolve_language(
+                user_id=user.id,
+                lang=language_seed,
+            )
+
+            await self._view.send_language_menu(
+                chat_id=chat.id,
+                language_code=language_seed,
+                message_id=query.message.message_id if query.message else None,
+                origin=target,
+            )
+
+            await self._respond_to_query(query)
+            return
+
         if command == "set":
             if len(parts) < 3:
                 return
@@ -1001,21 +1038,29 @@ class PokerBotController:
             lang=lang_code,
         )
 
-        self._kv.set_user_language(user.id, resolved_lang)
+        apply_to_chat = origin in {"group_settings", "group_menu"}
+        apply_to_user = origin not in {"group_settings", "group_menu"}
 
-        # Update view language metadata immediately so subsequent renders use
-        # the new locale before the next user-triggered update arrives.
-        if hasattr(self, "_view"):
-            self._view.set_language_context(resolved_lang, user_id=user.id)
+        if apply_to_user:
+            self._kv.set_user_language(user.id, resolved_lang)
+
+            if hasattr(self, "_view"):
+                self._view.set_language_context(resolved_lang, user_id=user.id)
 
         message = query.message
         chat = message.chat if message else update.effective_chat
 
-        if chat and chat.type in ("group", "supergroup"):
+        if chat and chat.type in ("group", "supergroup") and apply_to_chat:
             self._kv.set_chat_language(chat.id, resolved_lang)
 
+        confirmation_key = (
+            "settings.group_language_changed"
+            if apply_to_chat
+            else "settings.language_changed"
+        )
+
         confirmation = translation_manager.t(
-            "settings.language_changed",
+            confirmation_key,
             user_id=user.id,
             lang=resolved_lang,
         )
@@ -1399,7 +1444,19 @@ class PokerBotController:
                 location=MenuLocation.SETTINGS,
                 context_data={},
             )
-        await self._handle_language(update, context)
+
+            menu_context = await self.middleware.build_menu_context(
+                chat_id=chat.id,
+                chat_type=chat.type,
+                user_id=user.id,
+                language_code=getattr(user, "language_code", None),
+                chat=chat,
+            )
+
+            await self.view.send_settings_menu(
+                chat_id=chat.id,
+                context=menu_context,
+            )
 
     async def _handle_menu_help(
         self,

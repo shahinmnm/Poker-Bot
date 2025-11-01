@@ -191,6 +191,7 @@ class PokerBotMiddleware:
         self._menu_state_manager = MenuStateManager(store=store)
         self._metrics = NavigationMetrics()
         self._logger = logging.getLogger(__name__)
+        self._kv = store
 
     @property
     def menu_state(self) -> MenuStateManager:
@@ -234,6 +235,21 @@ class PokerBotMiddleware:
             resolved_language = self._translation_manager.get_user_language_or_detect(
                 user_id,
             )
+
+        if chat_type in ("group", "supergroup"):
+            chat_language = None
+            if hasattr(self._kv, "get_chat_language"):
+                try:
+                    chat_language = self._kv.get_chat_language(chat_id)
+                except Exception:  # pragma: no cover - kv access guard
+                    chat_language = None
+
+            if chat_language:
+                resolved_language = self._translation_manager.resolve_language(
+                    lang=chat_language
+                )
+            else:
+                resolved_language = self._translation_manager.DEFAULT_LANGUAGE
 
         model = self._model
 

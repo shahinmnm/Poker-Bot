@@ -10,6 +10,7 @@ from typing import Dict, Optional, Set
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
+from pokerapp.i18n import translation_manager
 from pokerapp.kvstore import ensure_kv
 
 
@@ -165,8 +166,14 @@ class GroupLobbyManager:
     ) -> None:
         """Send or edit lobby message with current players."""
 
-        text = self._format_lobby_message(lobby)
-        keyboard = self._build_lobby_keyboard(lobby)
+        language_code = (
+            self._kv.get_chat_language(chat_id)
+            or translation_manager.DEFAULT_LANGUAGE
+        )
+        translator = translation_manager.get_translator(language_code)
+
+        text = self._format_lobby_message(lobby, translator)
+        keyboard = self._build_lobby_keyboard(lobby, translator)
 
         if lobby.message_id:
             try:
@@ -204,50 +211,69 @@ class GroupLobbyManager:
                 exc,
             )
 
-    def _format_lobby_message(self, lobby: GroupLobbyState) -> str:
+    def _format_lobby_message(
+        self,
+        lobby: GroupLobbyState,
+        translator,
+    ) -> str:
         """Return formatted lobby message text."""
 
         lines = [
-            "🎰 POKER GAME LOBBY 🎰",
+            translator("group_lobby.title"),
             "",
-            "👥 SEATED PLAYERS",
+            translator("group_lobby.players_header"),
         ]
 
         if lobby.seated_players:
             for user_id in sorted(lobby.seated_players):
                 name = lobby.player_names.get(user_id, str(user_id))
-                lines.append(f"✅ {name}")
+                lines.append(
+                    translator("group_lobby.player_entry", name=name)
+                )
         else:
-            lines.append("⛔ No players seated yet")
+            lines.append(translator("group_lobby.no_players"))
 
         total = lobby.player_count()
         lines.append("")
-        lines.append(f"📊 Total: {total} player(s)")
+        lines.append(
+            translator("group_lobby.total_players", count=total)
+        )
 
         if lobby.can_start_game():
-            lines.append("✅ Ready to start! (minimum 2 players)")
+            lines.append(
+                translator(
+                    "group_lobby.status.ready",
+                    min_players=2,
+                )
+            )
         else:
-            lines.append("⏳ Waiting for more players (minimum 2)")
+            lines.append(
+                translator(
+                    "group_lobby.status.waiting",
+                    min_players=2,
+                )
+            )
 
         lines.append("")
-        lines.append("⬇️ Use buttons below to manage ⬇️")
+        lines.append(translator("group_lobby.footer.manage"))
 
         return "\n".join(lines)
 
     def _build_lobby_keyboard(
         self,
         lobby: GroupLobbyState,
+        translator,
     ) -> InlineKeyboardMarkup:
         """Construct inline keyboard for lobby controls."""
 
         buttons = [
             [
                 InlineKeyboardButton(
-                    "🪑 Sit at Table",
+                    translator("group_lobby.buttons.sit"),
                     callback_data="lobby_sit",
                 ),
                 InlineKeyboardButton(
-                    "🚶 Leave Table",
+                    translator("group_lobby.buttons.leave"),
                     callback_data="lobby_leave",
                 ),
             ]
@@ -257,7 +283,7 @@ class GroupLobbyManager:
             buttons.append(
                 [
                     InlineKeyboardButton(
-                        "🎮 Start Game",
+                        translator("group_lobby.buttons.start"),
                         callback_data="lobby_start",
                     )
                 ]
