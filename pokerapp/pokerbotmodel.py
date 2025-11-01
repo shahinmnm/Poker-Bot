@@ -1436,6 +1436,12 @@ class PokerBotModel:
         # Advance street
         new_state, cards_to_deal = self._coordinator.advance_game_street(game)
 
+        # If advancing lands on FINISHED, the hand is over and we should
+        # immediately settle the game instead of requesting more actions.
+        if new_state == GameState.FINISHED:
+            await self._finish_game(game, chat_id)
+            return
+
         # Deal community cards if needed and track count
         cards_dealt = 0
 
