@@ -794,6 +794,7 @@ class LiveMessageManager:
                 message_id=message_id,
                 expected_hash=bundle.payload_hash,
                 state=state,
+                game=game,
             )
         else:
             self._cancel_banner_task(state)
@@ -2242,6 +2243,7 @@ class LiveMessageManager:
         message_id: int,
         expected_hash: str,
         state: ChatRenderState,
+        game: Game,
     ) -> None:
         self._cancel_banner_task(state)
 
@@ -2250,6 +2252,20 @@ class LiveMessageManager:
 
         async def _clear() -> None:
             await asyncio.sleep(self.BANNER_DURATION)
+
+            # Verify banner clear is for current game
+            if state.last_game_snapshot:
+                snapshot_game_id = state.last_game_snapshot.get("game_id")
+                current_game_id = getattr(game, "id", None)
+                if snapshot_game_id != current_game_id:
+                    self._logger.debug(
+                        "🚫 Banner clear canceled - game changed | "
+                        "chat=%s, snapshot_game=%s, current_game=%s",
+                        chat_id,
+                        snapshot_game_id,
+                        current_game_id,
+                    )
+                    return
             if state.last_payload_hash != expected_hash:
                 return
             try:
