@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
 from functools import lru_cache
+from pathlib import Path
+from typing import Optional
 
 from pokerapp.i18n import SupportedLanguage, TranslationManager
 
@@ -27,6 +27,19 @@ def _load_payload(manager: TranslationManager, code: str) -> tuple[dict, dict[st
         data = json.load(fh)
     strings, meta = manager._normalize_translation_payload(data, code)
     return data, strings, meta
+
+
+class _MemoryKVStore:
+    """Minimal in-memory KV store for language preference tests."""
+
+    def __init__(self) -> None:
+        self._user_languages: dict[int, str] = {}
+
+    def get_user_language(self, user_id: int) -> Optional[str]:
+        return self._user_languages.get(user_id)
+
+    def set_user_language(self, user_id: int, language_code: str) -> None:
+        self._user_languages[user_id] = language_code
 
 
 @lru_cache(maxsize=1)
@@ -171,3 +184,37 @@ def test_translate_missing_key_uses_english_baseline() -> None:
         # Restore original mapping so subsequent tests see the real data.
         if original is not None:
             manager.translations["es"][key] = original
+
+
+def test_detected_language_is_stored_when_missing_preference() -> None:
+    """Telegram language detection should seed the kv store when empty."""
+
+    manager = TranslationManager(translations_dir=str(TRANSLATIONS_DIR))
+    kv = _MemoryKVStore()
+    manager.attach_kvstore(kv)
+
+    resolved = manager.get_user_language_or_detect(
+        42,
+        telegram_language_code="es-ES",
+    )
+
+    assert resolved == "es"
+    assert kv.get_user_language(42) == "es"
+
+
+def test_stored_language_preference_is_not_overwritten_by_detection() -> None:
+    """Manual language choices must win over Telegram's reported locale."""
+
+    manager = TranslationManager(translations_dir=str(TRANSLATIONS_DIR))
+    kv = _MemoryKVStore()
+    manager.attach_kvstore(kv)
+
+    kv.set_user_language(7, "fa")
+
+    resolved = manager.get_user_language_or_detect(
+        7,
+        telegram_language_code="en",
+    )
+
+    assert resolved == "fa"
+    assert kv.get_user_language(7) == "fa"

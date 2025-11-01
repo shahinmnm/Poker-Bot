@@ -161,13 +161,15 @@ class TranslationManager:
             if candidate in self.translations:
                 normalized_stored = candidate
 
+        detected_language: Optional[str] = None
         if telegram_language_code:
             detected_language = self.detect_language(telegram_language_code)
 
-            if (
-                self._kvstore is not None
-                and detected_language != normalized_stored
-            ):
+        if normalized_stored:
+            return normalized_stored
+
+        if detected_language:
+            if self._kvstore is not None:
                 try:
                     self._kvstore.set_user_language(user_id, detected_language)
                 except AttributeError:  # pragma: no cover - defensive
@@ -175,10 +177,7 @@ class TranslationManager:
 
             return detected_language
 
-        if normalized_stored:
-            return normalized_stored
-
-        return self.detect_language(telegram_language_code)
+        return self.DEFAULT_LANGUAGE
 
     def t(
         self,
