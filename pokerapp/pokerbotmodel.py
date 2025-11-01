@@ -3917,11 +3917,16 @@ class PokerBotModel:
                     ),
                 )
 
-        if game.current_player_index >= len(game.players):
-            logger.error("Invalid current_player_index in game %s", game.id)
-            return PlayerActionValidation(
-                success=False,
-                message="❌ Game state error. Please wait",
+        if not (0 <= game.current_player_index < len(game.players)):
+            logger.error(
+                "❌ Invalid player index | index=%s, player_count=%s | game_id=%s",
+                game.current_player_index,
+                len(game.players),
+                getattr(game, "id", "unknown"),
+            )
+            raise ValueError(
+                f"Player index {game.current_player_index} out of range "
+                f"(0-{len(game.players) - 1})"
             )
 
         current_player = game.players[game.current_player_index]
