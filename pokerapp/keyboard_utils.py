@@ -125,4 +125,3 @@ def rehydrate_keyboard_layout(
         rows.append(buttons)
 
     return InlineKeyboardMarkup(rows)
-
