@@ -30,6 +30,7 @@ from pokerapp.pokerbotmodel import (
 from pokerapp.request_cache import RequestCache
 from pokerapp.middleware import PokerBotMiddleware
 from pokerapp.menu_state import MenuLocation, MenuState, MENU_HIERARCHY
+from pokerapp.live_message import UnicodeTextFormatter
 
 if TYPE_CHECKING:
     from pokerapp.live_message import LiveMessageManager
@@ -649,7 +650,8 @@ class PokerBotController:
             "msg.welcome",
             lang=menu_context.language_code,
         )
-        await message.reply_text(welcome_text)
+        plain_welcome = UnicodeTextFormatter.strip_all_html(welcome_text)
+        await message.reply_text(plain_welcome)
 
         await self.view._send_menu(chat.id, menu_context)
 
@@ -893,7 +895,8 @@ class PokerBotController:
             "help.full_text",
             update=update,
         )
-        await update.effective_message.reply_text(help_text)
+        plain_help = UnicodeTextFormatter.strip_all_html(help_text)
+        await update.effective_message.reply_text(plain_help)
 
     async def _handle_language(
         self,
@@ -1217,9 +1220,11 @@ class PokerBotController:
     ) -> None:
         """Handle /accept command (manual acceptance without button)."""
 
-        await update.effective_message.reply_text(
-            self._translate(ControllerTextKeys.INVITE_ACCEPT_HELP, update=update)
+        accept_text = self._translate(
+            ControllerTextKeys.INVITE_ACCEPT_HELP, update=update
         )
+        plain_accept = UnicodeTextFormatter.strip_all_html(accept_text)
+        await update.effective_message.reply_text(plain_accept)
 
     async def _handle_decline_invite(
         self,
@@ -1228,9 +1233,11 @@ class PokerBotController:
     ) -> None:
         """Handle /decline command (manual decline without button)."""
 
-        await update.effective_message.reply_text(
-            self._translate(ControllerTextKeys.INVITE_DECLINE_HELP, update=update)
+        decline_text = self._translate(
+            ControllerTextKeys.INVITE_DECLINE_HELP, update=update
         )
+        plain_decline = UnicodeTextFormatter.strip_all_html(decline_text)
+        await update.effective_message.reply_text(plain_decline)
 
     async def _handle_leave_private(
         self,

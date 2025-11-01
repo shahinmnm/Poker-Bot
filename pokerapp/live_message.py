@@ -1219,11 +1219,13 @@ class LiveMessageManager:
 
             extra_lines: List[str] = []
             if preview_raise is not None:
-                extra_lines.extend(["", f"🎯 <b>Selected raise:</b> {preview_raise}"])
+                selected_label = UnicodeTextFormatter.make_bold("Selected raise:")
+                extra_lines.extend(["", f"🎯 {selected_label} {preview_raise}"])
 
             recent = context.get("recent_actions", [])
             if recent:
-                extra_lines.extend(["", "📝 <b>Recent</b>"])
+                recent_label = UnicodeTextFormatter.make_bold("Recent")
+                extra_lines.extend(["", f"📝 {recent_label}"])
                 extra_lines.extend(f"• {action}" for action in recent)
 
             if extra_lines:
@@ -1236,18 +1238,21 @@ class LiveMessageManager:
         lines.append("")
 
         if preview_raise is not None:
-            lines.append(f"🎯 <b>Selected raise:</b> {preview_raise}")
+            selected_label = UnicodeTextFormatter.make_bold("Selected raise:")
+            lines.append(f"🎯 {selected_label} {preview_raise}")
             lines.append("")
 
-        lines.append(
-            f"👥 <b>Players ({context.get('active_count', 0)} active)</b>"
+        players_label = UnicodeTextFormatter.make_bold(
+            f"Players ({context.get('active_count', 0)} active)"
         )
+        lines.append(f"👥 {players_label}")
         lines.extend(context.get("player_rows", []))
 
         recent = context.get("recent_actions", [])
         if recent:
             lines.append("")
-            lines.append("📝 <b>Recent</b>")
+            recent_label = UnicodeTextFormatter.make_bold("Recent")
+            lines.append(f"📝 {recent_label}")
             lines.extend(f"• {action}" for action in recent)
 
         return "\n".join(lines)
@@ -1263,7 +1268,8 @@ class LiveMessageManager:
         """Compose a mobile-friendly summary, optionally using compact mode."""
 
         lines: List[str] = []
-        lines.append("🎴 <b>TEXAS HOLD'EM</b> 🎴")
+        title_text = UnicodeTextFormatter.make_bold("TEXAS HOLD'EM")
+        lines.append(f"🎴 {title_text} 🎴")
 
         board_cards = list(getattr(game, "cards_table", []) or [])
         if compact:
@@ -1273,12 +1279,16 @@ class LiveMessageManager:
 
         lines.append("")
         if compact:
-            lines.append("🃏 <b>BOARD</b>")
+            board_label = UnicodeTextFormatter.make_bold("BOARD")
+            lines.append(f"🃏 {board_label}")
             lines.append(html.escape(board_text))
         else:
             stage_name = self._get_stage_name(len(board_cards))
             stage_icon = self.STAGE_ICONS.get(len(board_cards), "♠️")
-            lines.append(f"🃏 <b>{stage_icon} {html.escape(stage_name)}</b>")
+            stage_label = UnicodeTextFormatter.make_bold(
+                f"{stage_icon} {html.escape(stage_name)}"
+            )
+            lines.append(f"🃏 {stage_label}")
             board_display = board_text or "—"
             max_chars = getattr(device_profile, "max_line_length", 0) or 0
             if max_chars and len(board_display) > max_chars:
@@ -1296,13 +1306,18 @@ class LiveMessageManager:
                 getattr(game, "pot", 0), side_values
             )
         else:
-            pot_line = f"💰 <b>Pot:</b> {html.escape(self._format_chips(getattr(game, 'pot', 0)))}"
+            pot_label = UnicodeTextFormatter.make_bold("Pot:")
+            pot_line = (
+                f"💰 {pot_label} "
+                f"{html.escape(self._format_chips(getattr(game, 'pot', 0)))}"
+            )
 
         lines.append("")
         lines.append(pot_line)
 
         lines.append("")
-        lines.append("👥 <b>PLAYERS</b>")
+        players_label = UnicodeTextFormatter.make_bold("PLAYERS")
+        lines.append(f"👥 {players_label}")
         if not getattr(game, "players", []):
             lines.append("ℹ️ No players seated yet")
         else:
@@ -1322,7 +1337,8 @@ class LiveMessageManager:
         recent_actions = getattr(game, "recent_actions", []) or []
         if recent_actions and not compact:
             lines.append("")
-            lines.append("📝 <b>Recent</b>")
+            recent_label = UnicodeTextFormatter.make_bold("Recent")
+            lines.append(f"📝 {recent_label}")
             lines.extend(f"• {html.escape(action)}" for action in recent_actions[-3:])
 
         body = "\n".join(lines)
@@ -1480,7 +1496,7 @@ class LiveMessageManager:
             f"Board     : {display['board']}",
         ]
 
-        return "<pre>" + "\n".join(hud_lines) + "</pre>"
+        return "\n".join(hud_lines)
 
     def _format_mobile_board(
         self,
@@ -1504,7 +1520,9 @@ class LiveMessageManager:
         if len(board_display) > max_chars:
             board_display = board_display[: max_chars - 1] + "…"
 
-        return f"{stage_icon} <b>{stage_name}</b>\n📋 <b>{board_display}</b>"
+        stage_label = UnicodeTextFormatter.make_bold(stage_name)
+        board_label = UnicodeTextFormatter.make_bold(board_display)
+        return f"{stage_icon} {stage_label}\n📋 {board_label}"
 
     def _format_players(
         self,
@@ -1542,14 +1560,14 @@ class LiveMessageManager:
                 status_text = "Waiting"
 
             if player.user_id == actor_user_id:
-                name = f"<b>{name}</b>"
+                name = UnicodeTextFormatter.make_bold(name)
                 status_text = f"⏳ {status_text.upper()}"
 
                 if timer_seconds is not None and timer_seconds > 0:
                     status_text += f" ({timer_seconds}s)"
 
             rows.append(
-                f"P{idx}: {name:<12} <code>{stack_text}</code> {status_symbol} {status_text}"
+                f"P{idx}: {name:<12} {stack_text} {status_symbol} {status_text}"
             )
 
         if not rows:
@@ -1600,9 +1618,10 @@ class LiveMessageManager:
             else:
                 state_label = "Active"
 
-            header_line = f"{status_icon} <b>{safe_name}</b>"
+            bold_name = UnicodeTextFormatter.make_bold(safe_name)
+            header_line = f"{status_icon} {bold_name}"
             if is_current:
-                header_line += " <i>(Your turn)</i>"
+                header_line += " (Your turn)"
 
             timer_suffix = ""
             if is_current and timer_seconds is not None and timer_seconds > 0:
@@ -1853,7 +1872,8 @@ class LiveMessageManager:
             return current_text
 
         previous_text = formatter(previous)
-        return f"<b>{previous_text} → {current_text}</b>"
+        diff_text = f"{previous_text} → {current_text}"
+        return UnicodeTextFormatter.make_bold(diff_text)
 
     def _format_currency_diff(
         self, previous: Optional[int], current: int
@@ -1880,22 +1900,28 @@ class LiveMessageManager:
         if stage_changed:
             stage_name = context.get("stage_name", "Stage").upper()
             icon = context.get("stage_icon", "♠️")
+            base_notice = UnicodeTextFormatter.make_bold(
+                f"{icon} {stage_name} dealt"
+            )
             if actor_changed:
-                return f"🔔 <b>{icon} {stage_name} dealt — your move!</b>"
-            return f"🔔 <b>{icon} {stage_name} dealt</b>"
+                move_notice = UnicodeTextFormatter.make_bold(
+                    f"{icon} {stage_name} dealt — your move!"
+                )
+                return f"🔔 {move_notice}"
+            return f"🔔 {base_notice}"
 
         if actor_changed:
             to_act = context.get("to_act_display_raw", "Your move")
-            return f"🔔 <b>{html.escape(to_act)}</b>"
+            return f"🔔 {UnicodeTextFormatter.make_bold(html.escape(to_act))}"
 
         if pot_changed:
             old_pot = previous.get("pot_value", 0)
             new_pot = context.get("pot_value", 0)
-            return (
-                "🔔 <b>Pot "
-                f"{html.escape(self._format_chips(old_pot))}"
-                f" → {html.escape(self._format_chips(new_pot))}</b>"
+            pot_text = (
+                f"Pot {html.escape(self._format_chips(old_pot))}"
+                f" → {html.escape(self._format_chips(new_pot))}"
             )
+            return f"🔔 {UnicodeTextFormatter.make_bold(pot_text)}"
 
         return None
 
@@ -2344,11 +2370,15 @@ class LiveMessageManager:
         if state_options is not None:
             option = state_options.get(selected_key)
             if option is not None:
-                return f"<b>{html.escape(option.preview_label)}</b>"
+                return UnicodeTextFormatter.make_bold(
+                    html.escape(option.preview_label)
+                )
         if context_options is not None:
             option = context_options.get(selected_key)
             if option is not None:
-                return f"<b>{html.escape(option.preview_label)}</b>"
+                return UnicodeTextFormatter.make_bold(
+                    html.escape(option.preview_label)
+                )
         return "—"
 
     def _serialize_reply_markup(
