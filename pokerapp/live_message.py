@@ -2646,37 +2646,11 @@ class LiveMessageManager:
             state.last_actor_user_id = actor_id
             return
 
-        try:
-            turn_text = context.get("to_act_display_raw") or "Your move"
-            sanitized_text = self._sanitize_text(turn_text, default="Your move")
-            message_text = f"✅ {sanitized_text}"
-
-            send_kwargs: Dict[str, Any] = {
-                "chat_id": chat_id,
-                "text": message_text,
-                "disable_notification": True,
-            }
-
-            group_message_id = getattr(game, "group_message_id", None)
-            if group_message_id:
-                send_kwargs["reply_to_message_id"] = group_message_id
-
-            message = await self._bot.send_message(**send_kwargs)
-        except TelegramError as exc:
-            self._logger.debug(
-                "Unable to send turn popup to chat %s: %s",
-                chat_id,
-                exc,
-            )
-            state.last_actor_user_id = actor_id
-            return
-
-        asyncio.create_task(
-            self._auto_delete_message(
-                message.chat_id,
-                message.message_id,
-                self.TURN_PING_TTL,
-            )
+        # The turn ping feature has been retired; simply record the new actor
+        # so we avoid duplicate notifications without sending a transient
+        # message to the chat.
+        self._logger.debug(
+            "Skipping turn ping for chat %s (feature disabled)", chat_id
         )
         state.last_actor_user_id = actor_id
 
