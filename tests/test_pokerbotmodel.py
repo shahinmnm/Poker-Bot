@@ -3,7 +3,7 @@
 import unittest
 from types import SimpleNamespace
 from typing import Dict, Tuple
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import redis
 from telegram import Bot
@@ -328,6 +328,26 @@ class HandlePlayerActionStateTests(unittest.IsolatedAsyncioTestCase):
                 coordinator = self.model._coordinator
                 coordinator.process_game_turn.assert_called_once()
                 coordinator._send_or_update_game_state.assert_awaited()
+
+    async def test_advance_to_finished_triggers_game_finish(self) -> None:
+        self.game.state = GameState.ROUND_RIVER
+
+        coordinator = self.model._coordinator
+        coordinator.commit_round_bets.reset_mock()
+        coordinator.advance_game_street.reset_mock()
+        coordinator.process_game_turn.reset_mock()
+
+        with patch.object(
+            self.model,
+            "_finish_game",
+            new=AsyncMock(),
+        ) as mock_finish:
+            await self.model._advance_to_next_street(self.game, self.chat_id)
+
+        coordinator.commit_round_bets.assert_called_once_with(self.game)
+        coordinator.advance_game_street.assert_called_once_with(self.game)
+        mock_finish.assert_awaited_once_with(self.game, self.chat_id)
+        coordinator.process_game_turn.assert_not_called()
 
 
 if __name__ == '__main__':
