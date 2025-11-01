@@ -226,9 +226,9 @@ class PokerBotMiddleware:
         start_time = time.perf_counter()
 
         if language_code:
-            resolved_language = self._translation_manager.resolve_language(
-                user_id=user_id,
-                lang=language_code,
+            resolved_language = self._translation_manager.get_user_language_or_detect(
+                user_id,
+                telegram_language_code=language_code,
             )
         else:
             resolved_language = self._translation_manager.get_user_language_or_detect(
