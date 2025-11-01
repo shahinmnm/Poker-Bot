@@ -203,7 +203,6 @@ class PokerBotViewer:
 
         plain_text = UnicodeTextFormatter.strip_all_html(text)
         localized = self._localize_text(plain_text, context=context)
-        kwargs.setdefault("parse_mode", None)
         return await self._bot.send_message(chat_id=chat_id, text=localized, **kwargs)
 
     _SUIT_EMOJIS = {
@@ -847,7 +846,6 @@ class PokerBotViewer:
                 text=self._localize_text(plain_text),
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
-                parse_mode=None,
             )
 
             if next_version is not None:
@@ -1579,7 +1577,6 @@ class PokerBotViewer:
                         plain_text,
                         context=language_context,
                     ),
-                    parse_mode=None,
                 )
                 return message_id
 
@@ -1700,7 +1697,6 @@ class PokerBotViewer:
                 text=localized_text,
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
-                parse_mode=None,
             )
             return
 
