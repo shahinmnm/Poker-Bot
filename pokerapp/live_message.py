@@ -12,7 +12,7 @@ import inspect
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
@@ -270,11 +270,25 @@ class LiveMessageManager:
             game.group_message_id = None
             state.last_game_snapshot = None
             state.last_context = {}
-            state.stable_text = ""
-            state.stable_markup = None
             state.last_payload_hash = None
             state.last_content_hash = None
             state.last_keyboard_json = ""
+            # Clear all overlay state to prevent corruption
+            self._flash_states.pop(chat_id, None)
+            self._active_flash_cards.pop(chat_id, None)
+            self._content_hashes.pop(chat_id, None)
+            # Cancel any pending banner tasks
+            if state.banner_task and not state.banner_task.done():
+                state.banner_task.cancel()
+            state.banner_task = None
+            # Clear stable banner text to prevent → arrow corruption
+            state.stable_text = ""
+            state.stable_markup = None
+            self._logger.info(
+                "🧹 Cleared all overlay/banner state for new game | chat=%s, game=%s",
+                chat_id,
+                getattr(game, "id", None),
+            )
         lock = self._chat_locks.get(chat_key)
         if lock is None:
             lock = asyncio.Lock()
@@ -572,6 +586,26 @@ class LiveMessageManager:
         if not previous_snapshot:
             return True
 
+        # Force update if game changed
+        prev_game_id = previous_snapshot.get("game_id")
+        new_game_id = new_snapshot.get("game_id")
+        if prev_game_id != new_game_id:
+            self._logger.info(
+                "🔄 Game ID changed, forcing immediate update | "
+                "chat=%s, prev_game=%s, new_game=%s",
+                new_snapshot.get("chat_id"),
+                prev_game_id,
+                new_game_id,
+            )
+            # Clear cached snapshot to prevent stale comparisons
+            chat_key = str(new_snapshot.get("chat_id", ""))
+            if chat_key and chat_key in self._chat_states:
+                state = self._chat_states[chat_key]
+                state.last_game_snapshot = None
+                state.stable_text = ""
+                state.stable_markup = None
+            return True
+
         prev_state = previous_snapshot.get("state")
         new_state = new_snapshot.get("state")
 
@@ -658,14 +692,31 @@ class LiveMessageManager:
 
             async def cleanup_flash() -> None:
                 await asyncio.sleep(2.5)
+
+                # Validate game hasn’t changed during sleep
+                chat_key = str(chat_id)
+                state = self._chat_states.get(chat_key)
+                if state and state.last_game_snapshot:
+                    snapshot_game_id = state.last_game_snapshot.get("game_id")
+                    current_game_id = getattr(game, "id", None)
+                    if snapshot_game_id != current_game_id:
+                        self._logger.debug(
+                            "🧹 FlashCleanup canceled - game changed | "
+                            "chat=%s, snapshot_game=%s, current_game=%s",
+                            chat_id,
+                            snapshot_game_id,
+                            current_game_id,
+                        )
+                        return
+
+                # Safe to cleanup flash state
                 self._flash_states[chat_id] = {
-                    str(card)
-                    for card in (getattr(game, "cards_table", []) or [])
+                    str(card) for card in (getattr(game, "cards_table", []) or [])
                 }
                 self._active_flash_cards.pop(chat_id, None)
                 await self._persist_flash_state(chat_id)
                 self._logger.debug(
-                    "🧹 FlashCleanup - Removing flash markers for chat %s",
+                    "🧹 FlashCleanup completed - Removing flash markers | chat=%s",
                     chat_id,
                 )
                 await self.send_or_update_game_state(
@@ -2228,6 +2279,38 @@ class LiveMessageManager:
             state.last_keyboard_json = keyboard_json
 
         state.banner_task = asyncio.create_task(_clear())
+
+    async def _update_banner_delayed(
+        self,
+        *,
+        chat_id: int,
+        game: Game,
+        delay: float = 0.0,
+        update_callback: Optional[Callable[[], Awaitable[None]]] = None,
+    ) -> None:
+        """Apply a deferred banner update while guarding against game swaps."""
+
+        # Verify banner update is for current game
+        chat_key = str(chat_id)
+        state = self._chat_states.get(chat_key)
+        if state and state.last_game_snapshot:
+            snapshot_game_id = state.last_game_snapshot.get("game_id")
+            current_game_id = getattr(game, "id", None)
+            if snapshot_game_id != current_game_id:
+                self._logger.debug(
+                    "🚫 Banner update canceled - game changed | "
+                    "chat=%s, snapshot_game=%s, current_game=%s",
+                    chat_id,
+                    snapshot_game_id,
+                    current_game_id,
+                )
+                return
+
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+        if update_callback is not None:
+            await update_callback()
 
     async def _dispatch_payload(
         self,
