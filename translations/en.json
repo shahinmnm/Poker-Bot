@@ -66,7 +66,10 @@
       "objective": "**Objective:** Make the best 5-card hand from your 2 cards + 5 community cards.",
       "title": "📖 Texas Hold'em Rules"
     },
-    "full_text": "🎴 Texas Hold’em Poker Bot\n\n📖 How to Play:\n• Use /start to open the main menu\n• Use /private to create or join private games\n• Use /help to see this message\n• Use /language to change your language\n\n🎮 Game Rules:\n• 2-10 players per game\n• Standard Texas Hold’em rules\n• Betting rounds: Pre-flop, Flop, Turn, River\n\n💰 Actions:\n• Fold - Give up your hand\n• Check - Pass without betting\n• Call - Match current bet\n• Raise - Increase the bet\n• All-in - Bet everything\n\n🏆 Hand Rankings (High to Low):\n1. Royal Flush\n2. Straight Flush\n3. Four of a Kind\n4. Full House\n5. Flush\n6. Straight\n7. Three of a Kind\n8. Two Pair\n9. One Pair\n10. High Card\n\nGood luck! 🍀"
+    "full_text": "🎴 Texas Hold’em Poker Bot\n\n📖 How to Play:\n• Use /start to open the main menu\n• Use /private to create or join private games\n• Use /help to see this message\n• Use /language to change your language\n\n🎮 Game Rules:\n• 2-10 players per game\n• Standard Texas Hold’em rules\n• Betting rounds: Pre-flop, Flop, Turn, River\n\n💰 Actions:\n• Fold - Give up your hand\n• Check - Pass without betting\n• Call - Match current bet\n• Raise - Increase the bet\n• All-in - Bet everything\n\n🏆 Hand Rankings (High to Low):\n1. Royal Flush\n2. Straight Flush\n3. Four of a Kind\n4. Full House\n5. Flush\n6. Straight\n7. Three of a Kind\n8. Two Pair\n9. One Pair\n10. High Card\n\nGood luck! 🍀",
+    "model": {
+      "fallback": "ℹ️ Poker help is temporarily unavailable. Please try again later."
+    }
   },
   "meta": {
     "font": "system",
@@ -80,7 +83,11 @@
     "error": {
       "generic": "❌ An error occurred. Please try again.",
       "network": "🌐 Network error. Check your connection.",
-      "timeout": "⏱️ Action timed out"
+      "timeout": "⏱️ Action timed out",
+      "insufficient_funds_detail": "❌ Not enough chips. You have {balance} but need {required}.",
+      "not_enough_players_ready": "⚠️ Waiting for more ready players before starting the game.",
+      "players_insufficient_funds": "⚠️ These players need more chips: {players}",
+      "wallet_not_enough": "❌ You don't have enough chips for that action."
     },
     "game_started": "🎮 Game started! Good luck!",
     "new_round": "🔄 New round starting...",
@@ -115,26 +122,48 @@
         "option_micro": "💵 Micro ($50/$100)",
         "option_premium": "🏆 Premium ($10K/$20K)",
         "subtitle": "Choose your preferred blind levels:",
-        "title": "🎲 Select Stakes"
-      }
+        "title": "🎲 Select Stakes",
+        "cancelled": "❌ Private table creation cancelled."
+      },
+      "error": {
+        "already_active": "⚠️ You already have an active private game. Finish or close it before creating another.",
+        "invalid_stake": "⚠️ Unknown stake level '{level}'. Please choose a different option."
+      },
+      "created": "🎉 Private table created!\nHost: {host}\nStakes: {stake}\nBuy-in: ${min_buyin} - ${max_buyin}\nCode: {code}\nMax players: {max_players}\n\nShare the code with friends to invite them."
     },
     "showdown": "🎭 Showdown!",
     "tie": "🤝 Tie! Pot split between: {players}",
     "welcome": "👋 Welcome to Texas Hold'em Poker!",
     "winner": "🏆 {player} wins ${amount}!",
-    "your_turn": "🎯 It's your turn, {player}!"
+    "your_turn": "🎯 It's your turn, {player}!",
+    "bonus": {
+      "already_claimed": "🎁 You've already claimed today's bonus. Current balance: ${amount}",
+      "already_claimed_plain": "Daily bonus already claimed. Balance: ${amount}",
+      "result": "{icon} Bonus unlocked! You received ${bonus}. New balance: ${total}"
+    },
+    "game_in_progress": "🎮 A game is already in progress.",
+    "lobby": {
+      "already_ready": "✅ You're already marked as ready.",
+      "game_in_progress": "🎮 A game is already running.",
+      "insufficient_funds": "💰 You don't have enough chips for this table.",
+      "room_full": "🚫 The lobby is full (max {max_players} players)."
+    }
   },
   "popup": {
     "fold_confirmation": {
       "message": "Are you sure you want to fold?",
       "pot": "Pot: ${amount}",
       "title": "⚠️ Confirm Fold",
-      "your_cards": "Your cards: {cards}"
+      "your_cards": "Your cards: {cards}",
+      "body": "⚠️ Confirm fold?\nPot: {pot}\nYou invested: {investment} ({percentage}% of pot)",
+      "confirm_button": "✅ Fold",
+      "cancel_button": "↩️ Keep playing"
     },
     "toast": {
       "error": "❌ {message}",
       "info": "ℹ️ {message}",
-      "success": "✅ {message}"
+      "success": "✅ {message}",
+      "fold_prompt": "Tap a button to confirm or cancel the fold."
     }
   },
   "ui": {
@@ -188,6 +217,40 @@
         "fold_cancelled": "↩️ Fold cancelled",
         "joined_game": "✅ Joined game",
         "left_game": "👋 Left game"
+      },
+      "action": {
+        "all_in": "🔥 All-in locked in!",
+        "call": "💵 Called {amount}",
+        "call_check": "✅ Call — no chips needed",
+        "check": "✅ Checked",
+        "fold": "❌ Folded",
+        "raise": "⬆️ Raise queued",
+        "raise_to": "⬆️ Raised to {amount}",
+        "submitted": "✅ Action submitted"
+      },
+      "fold": {
+        "cancelled": "↩️ Fold cancelled",
+        "expired": "⌛ Fold confirmation expired",
+        "failure": "⚠️ Fold could not be processed",
+        "success": "✅ Fold confirmed"
+      },
+      "invite": {
+        "accept_help": "Send /accept <code> to accept your latest invite.",
+        "decline_help": "Send /decline <code> to decline your latest invite."
+      },
+      "lobby": {
+        "left": "👋 You left the lobby."
+      },
+      "raise": {
+        "error_choose_amount": "Select a raise amount first.",
+        "error_context": "⚠️ This raise control is no longer active.",
+        "error_expired": "⌛ Raise selection expired.",
+        "error_invalid": "❌ That raise option isn't available.",
+        "error_no_game": "❌ No active game found.",
+        "error_selection": "⚠️ Couldn't determine your raise choice.",
+        "error_unavailable": "⚠️ Raise controls are currently unavailable.",
+        "error_unknown": "⚠️ Something went wrong while processing your raise.",
+        "error_user": "⚠️ Only the acting player can use this control."
       }
     },
     "error": {
@@ -259,46 +322,6 @@
       "back": "⬅️ Back"
     },
     "private": {
-      "stake_menu": {
-        "button": {
-          "micro": "💎 Micro (5/10) - 200 min",
-          "low": "🎯 Low (10/20) - 400 min",
-          "medium": "🎲 Medium (25/50) - 1K min",
-          "high": "💰 High (50/100) - 2K min",
-          "premium": "👑 Premium (100/200) - 4K min",
-          "language": "🌐 Language",
-          "cancel": "❌ Cancel"
-        }
-      },
-      "invite": {
-        "accept": "✅ Accept Invitation",
-        "decline": "❌ Decline"
-      },
-      "lobby": {
-        "start": "🎰 START GAME",
-        "invite": "📨 Invite Player",
-        "leave": "🚪 Leave Lobby"
-      }
-    },
-    "settings": {
-      "language_select": "🌐 Select your language:",
-      "language_changed": "✅ Language changed to English",
-      "wallet_balance": "💰 Balance: ${amount}",
-      "wallet_empty": "Your wallet is empty. Contact admin to add chips."
-    },
-    "model": {
-      "error": {
-        "already_in_game": "⚠️ You're already in a game",
-        "already_in_game_other": "⚠️ {player} is already in a game.",
-        "game_full": "🚫 Game is full (max {max} players).",
-        "insufficient_chips": "❌ Insufficient chips\nRequired: {required}\nAvailable: {balance}",
-        "invalid_action": "❌ Invalid action",
-        "min_raise": "⚠️ Minimum raise is ${amount}",
-        "not_your_turn": "⏸️ It's not your turn",
-        "not_your_turn_with_player": "It's {player}'s move."
-      }
-    },
-    "private": {
       "invite": {
         "accept": "✅ Accept Invitation",
         "decline": "❌ Decline"
@@ -324,17 +347,47 @@
       "language_changed": "✅ Language changed to English",
       "language_select": "🌐 Select your language:",
       "wallet_balance": "💰 Balance: ${amount}",
-      "wallet_empty": "Your wallet is empty. Contact admin to add chips."
+      "wallet_empty": "Your wallet is empty. Contact admin to add chips.",
+      "choose_language": "🌍 Choose Your Language"
+    },
+    "model": {
+      "error": {
+        "already_in_game": "⚠️ You're already in a game",
+        "already_in_game_other": "⚠️ {player} is already in a game.",
+        "game_full": "🚫 Game is full (max {max} players).",
+        "insufficient_chips": "❌ Insufficient chips\nRequired: {required}\nAvailable: {balance}",
+        "invalid_action": "❌ Invalid action",
+        "min_raise": "⚠️ Minimum raise is ${amount}",
+        "not_your_turn": "⏸️ It's not your turn",
+        "not_your_turn_with_player": "It's {player}'s move."
+      },
+      "join": {
+        "already_in_game": "⚠️ You're already seated in this private game.",
+        "code_invalid": "Invite codes must be 6 letters or numbers. '{code}' isn't valid.",
+        "code_required": "Please provide the 6-character invite code (e.g., /join ABC123).",
+        "game_full": "🚫 That private game is already full.",
+        "game_not_found": "❌ No private game found for code {code}.",
+        "game_started": "⚠️ That private game has already started.",
+        "not_accepting": "⚠️ That private game isn't accepting new players right now.",
+        "success": "✅ You're in! Wait for the host to start the game.",
+        "usage": "Use /join <code> to join a private game lobby."
+      }
     },
     "viewer": {
       "fold_confirmation": {
         "message": "Are you sure you want to fold?\nYou have: {cards}",
         "pot_amount": "Current pot: ${amount}",
         "title": "⚠️ Confirm Fold"
+      },
+      "hand": {
+        "header": "🃏 Your Hand",
+        "empty": "No cards yet. Hang tight!",
+        "pot": "💰 Pot: {amount}"
+      },
+      "table": {
+        "header": "🪑 Table",
+        "waiting": "Waiting for other players..."
       }
     }
-  },
-  "settings": {
-    "choose_language": "🌍 Choose Your Language"
   }
 }
