@@ -69,6 +69,32 @@ class GameCoordinator:
         if isinstance(effective_chat_id, str) and effective_chat_id.isdigit():
             effective_chat_id = int(effective_chat_id)
 
+        if (
+            game.state == GameState.FINISHED
+            and game.has_group_message()
+            and effective_chat_id is not None
+        ):
+            try:
+                await self._view.remove_message(
+                    chat_id=effective_chat_id,
+                    message_id=game.group_message_id,
+                )
+                log_helper.info(
+                    "CoordinatorFinishedCleanup",
+                    "Deleted finished game message",
+                    message_id=game.group_message_id,
+                )
+            except Exception as exc:  # pragma: no cover - Telegram failures
+                log_helper.debug(
+                    "CoordinatorFinishedCleanupFailed",
+                    "Could not delete finished game message",
+                    message_id=game.group_message_id,
+                    error=str(exc),
+                )
+            finally:
+                game.group_message_id = None
+            return
+
         live_manager = getattr(self._view, "_live_manager", None)
         if live_manager is not None:
             resolved_player = current_player

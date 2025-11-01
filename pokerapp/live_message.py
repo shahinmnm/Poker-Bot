@@ -249,6 +249,32 @@ class LiveMessageManager:
 
         chat_key = str(chat_id)
         state = self._get_state(chat_key)
+        last_snapshot_state = None
+        if state.last_game_snapshot:
+            last_snapshot_state = state.last_game_snapshot.get("state")
+        finished_snapshot = False
+        if last_snapshot_state is not None:
+            if last_snapshot_state == GameState.FINISHED:
+                finished_snapshot = True
+            else:
+                finished_snapshot = (
+                    getattr(last_snapshot_state, "name", "")
+                    == GameState.FINISHED.name
+                )
+
+        if game.state == GameState.INITIAL or finished_snapshot:
+            self._logger.info(
+                "🔄 Game reset detected - forcing message recreation | chat_id=%s",
+                chat_id,
+            )
+            game.group_message_id = None
+            state.last_game_snapshot = None
+            state.last_context = {}
+            state.stable_text = ""
+            state.stable_markup = None
+            state.last_payload_hash = None
+            state.last_content_hash = None
+            state.last_keyboard_json = ""
         lock = self._chat_locks.get(chat_key)
         if lock is None:
             lock = asyncio.Lock()
@@ -256,6 +282,7 @@ class LiveMessageManager:
 
         async with lock:
             pending_snapshot = self._capture_game_snapshot(game)
+            pending_snapshot["chat_id"] = chat_id
             skip_debounce = self._should_skip_debounce(
                 state.last_game_snapshot,
                 pending_snapshot,
@@ -549,10 +576,16 @@ class LiveMessageManager:
         new_state = new_snapshot.get("state")
 
         if prev_state != new_state:
+            chat_key = str(new_snapshot.get("chat_id", ""))
+            if chat_key and chat_key in self._chat_states:
+                state = self._chat_states[chat_key]
+                state.stable_text = ""
+                state.stable_markup = None
+                self._cancel_banner_task(state)
             return True
 
-        prev_board = previous_snapshot.get("board", [])
-        new_board = new_snapshot.get("board", [])
+        prev_board = previous_snapshot.get("cards_table", [])
+        new_board = new_snapshot.get("cards_table", [])
 
         if len(new_board) > len(prev_board):
             return True
@@ -1121,20 +1154,18 @@ class LiveMessageManager:
         return len(text.encode("utf-8"))
 
     def _capture_game_snapshot(self, game: Game) -> dict:
-        """Capture minimal game state for diff comparison."""
+        """Capture current game state for diffing."""
 
         return {
+            "game_id": getattr(game, "id", None),
+            "chat_id": getattr(game, "chat_id", None),
+            "state": getattr(game, "state", None),
+            "cards_table": list(getattr(game, "cards_table", []) or []),
             "pot": getattr(game, "pot", 0),
-            "board": [str(card) for card in getattr(game, "cards_table", []) or []],
-            "players": {
-                getattr(p, "user_id", idx): {
-                    "stack": getattr(p.wallet, "value", lambda: 0)(),
-                    "bet": getattr(p, "round_rate", 0),
-                    "state": getattr(getattr(p, "state", None), "name", "UNKNOWN"),
-                }
-                for idx, p in enumerate(getattr(game, "players", []) or [])
-            },
-            "state": getattr(getattr(game, "state", None), "name", "UNKNOWN"),
+            "current_player_index": getattr(game, "current_player_index", -1),
+            "player_count": len(getattr(game, "players", []) or []),
+            "max_round_rate": getattr(game, "max_round_rate", 0),
+            "snapshot_time": time.time(),
         }
 
     def _calculate_state_diff(
@@ -1155,36 +1186,39 @@ class LiveMessageManager:
                 "new": new_snapshot.get("pot"),
             }
 
-        old_board = old_snapshot.get("board", [])
-        new_board = new_snapshot.get("board", [])
+        old_board = old_snapshot.get("cards_table", [])
+        new_board = new_snapshot.get("cards_table", [])
         if len(new_board) > len(old_board):
             diff["new_cards"] = new_board[len(old_board):]
 
-        player_diffs: Dict[Any, Dict[str, Any]] = {}
-        for pid, new_data in new_snapshot.get("players", {}).items():
-            old_data = old_snapshot.get("players", {}).get(pid, {})
-            player_diff: Dict[str, Any] = {}
+        if old_snapshot.get("state") != new_snapshot.get("state"):
+            diff["state"] = {
+                "old": old_snapshot.get("state"),
+                "new": new_snapshot.get("state"),
+            }
 
-            if old_data.get("stack") != new_data.get("stack"):
-                player_diff["stack"] = {
-                    "old": old_data.get("stack"),
-                    "new": new_data.get("stack"),
-                }
+        if (
+            old_snapshot.get("current_player_index")
+            != new_snapshot.get("current_player_index")
+        ):
+            diff["current_player_index"] = {
+                "old": old_snapshot.get("current_player_index"),
+                "new": new_snapshot.get("current_player_index"),
+            }
 
-            if old_data.get("bet") != new_data.get("bet"):
-                player_diff["bet"] = {
-                    "old": old_data.get("bet", 0),
-                    "new": new_data.get("bet"),
-                }
+        if old_snapshot.get("player_count") != new_snapshot.get("player_count"):
+            diff["player_count"] = {
+                "old": old_snapshot.get("player_count"),
+                "new": new_snapshot.get("player_count"),
+            }
 
-            if old_data.get("state") != new_data.get("state"):
-                player_diff["state"] = new_data.get("state")
-
-            if player_diff:
-                player_diffs[pid] = player_diff
-
-        if player_diffs:
-            diff["players"] = player_diffs
+        if old_snapshot.get("max_round_rate") != new_snapshot.get(
+            "max_round_rate"
+        ):
+            diff["max_round_rate"] = {
+                "old": old_snapshot.get("max_round_rate"),
+                "new": new_snapshot.get("max_round_rate"),
+            }
 
         return diff
 
@@ -2207,10 +2241,11 @@ class LiveMessageManager:
 
         if game.has_group_message():
             start_time = time.perf_counter()
+            old_message_id = game.group_message_id
             try:
                 message = await self._bot.edit_message_text(
                     chat_id=chat_id,
-                    message_id=game.group_message_id,
+                    message_id=old_message_id,
                     text=bundle.message_text,
                     reply_markup=bundle.reply_markup,
                     parse_mode=self.PARSE_MODE,
@@ -2236,7 +2271,7 @@ class LiveMessageManager:
                 ):
                     self._logger.debug(
                         "Message %s content unchanged, skipping update",
-                        game.group_message_id,
+                        old_message_id,
                     )
                     return game.group_message_id
 
@@ -2247,16 +2282,26 @@ class LiveMessageManager:
                 ):
                     self._logger.warning(
                         "Message %s no longer exists, will send new message",
-                        game.group_message_id,
+                        old_message_id,
                     )
                     game.group_message_id = None
+                    self._logger.warning(
+                        "🔄 Message edit failed, will recreate | old_message_id=%s, error=%s",
+                        old_message_id,
+                        str(exc)[:100],
+                    )
                 else:
                     self._logger.error(
                         "Failed to edit message %s: %s, will send new message",
-                        game.group_message_id,
+                        old_message_id,
                         exc,
                     )
                     game.group_message_id = None
+                    self._logger.warning(
+                        "🔄 Message edit failed, will recreate | old_message_id=%s, error=%s",
+                        old_message_id,
+                        str(exc)[:100],
+                    )
 
         try:
             self._logger.debug("Sending new live message to chat %s", chat_id)
