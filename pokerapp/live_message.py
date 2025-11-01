@@ -27,6 +27,10 @@ from pokerapp.kvstore import ensure_kv
 from pokerapp.render_cache import RenderCache, RenderResult
 from pokerapp.compact_formatter import CompactFormatter
 from pokerapp.i18n import translation_manager
+from pokerapp.keyboard_utils import (
+    rehydrate_keyboard_layout,
+    serialise_keyboard_layout,
+)
 
 
 @dataclass(slots=True)
@@ -741,11 +745,9 @@ class LiveMessageManager:
             options = self._compute_raise_options(game, current_player)
 
             if cached_layout:
-                reply_markup = InlineKeyboardMarkup(
-                    [
-                        [InlineKeyboardButton(**btn) for btn in row]
-                        for row in cached_layout
-                    ]
+                reply_markup = rehydrate_keyboard_layout(
+                    cached_layout,
+                    version=version,
                 )
             else:
                 reply_markup, options = self._build_action_inline_keyboard(
@@ -795,13 +797,10 @@ class LiveMessageManager:
         if use_cache and current_player is not None:
             layout_to_cache: Optional[List[List[Dict[str, str]]]] = None
             if reply_markup is not None and getattr(reply_markup, "inline_keyboard", None):
-                layout_to_cache = [
-                    [
-                        {"text": btn.text, "callback_data": btn.callback_data}
-                        for btn in row
-                    ]
-                    for row in reply_markup.inline_keyboard
-                ]
+                layout_to_cache = serialise_keyboard_layout(
+                    reply_markup.inline_keyboard,
+                    version=version,
+                )
             self._render_cache.cache_render_result(
                 game,
                 current_player,
@@ -1740,11 +1739,9 @@ class LiveMessageManager:
                 variant=cache_variant,
             )
             if cached and cached.keyboard_layout:
-                markup = InlineKeyboardMarkup(
-                    [
-                        [InlineKeyboardButton(**btn) for btn in row]
-                        for row in cached.keyboard_layout
-                    ]
+                markup = rehydrate_keyboard_layout(
+                    cached.keyboard_layout,
+                    version=version,
                 )
                 options = self._compute_raise_options(game, player)
                 return markup, options
@@ -1953,17 +1950,13 @@ class LiveMessageManager:
         markup = InlineKeyboardMarkup(buttons)
 
         if cache_allowed and buttons:
-            layout = [
-                [
-                    {"text": btn.text, "callback_data": btn.callback_data}
-                    for btn in row
-                ]
-                for row in buttons
-            ]
             self._render_cache.cache_render_result(
                 game,
                 player,
-                keyboard_layout=layout,
+                keyboard_layout=serialise_keyboard_layout(
+                    markup.inline_keyboard,
+                    version=version,
+                ),
                 variant=cache_variant,
             )
 
