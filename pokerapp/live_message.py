@@ -255,7 +255,13 @@ class LiveMessageManager:
             self._chat_locks[chat_key] = lock
 
         async with lock:
-            await self._apply_debounce(chat_key, state)
+            pending_snapshot = self._capture_game_snapshot(game)
+            skip_debounce = self._should_skip_debounce(
+                state.last_game_snapshot,
+                pending_snapshot,
+            )
+
+            await self._apply_debounce(chat_key, state, skip=skip_debounce)
             loop = asyncio.get_running_loop()
             try:
                 return await self._send_or_update_locked(
@@ -264,6 +270,7 @@ class LiveMessageManager:
                     game=game,
                     current_player=current_player,
                     state=state,
+                    new_snapshot=pending_snapshot,
                 )
             finally:
                 self._last_update_at[chat_key] = loop.time()
@@ -504,9 +511,16 @@ class LiveMessageManager:
         return profile
 
     async def _apply_debounce(
-        self, chat_key: str, state: ChatRenderState
+        self, chat_key: str, state: ChatRenderState, *, skip: bool = False
     ) -> None:
         """Sleep briefly if the last update happened too recently."""
+
+        if skip:
+            self._logger.debug(
+                "Debounce skipped for chat %s due to high-priority update",
+                chat_key,
+            )
+            return
 
         window = self._get_debounce_delay(state)
         if window <= 0:
@@ -521,6 +535,30 @@ class LiveMessageManager:
         if elapsed < window:
             await asyncio.sleep(window - elapsed)
 
+    def _should_skip_debounce(
+        self,
+        previous_snapshot: Optional[dict],
+        new_snapshot: dict,
+    ) -> bool:
+        """Return True when a critical change should bypass debounce."""
+
+        if not previous_snapshot:
+            return True
+
+        prev_state = previous_snapshot.get("state")
+        new_state = new_snapshot.get("state")
+
+        if prev_state != new_state:
+            return True
+
+        prev_board = previous_snapshot.get("board", [])
+        new_board = new_snapshot.get("board", [])
+
+        if len(new_board) > len(prev_board):
+            return True
+
+        return False
+
     async def _send_or_update_locked(
         self,
         chat_id: int,
@@ -528,6 +566,8 @@ class LiveMessageManager:
         game: Game,
         current_player: Player,
         state: ChatRenderState,
+        *,
+        new_snapshot: dict,
     ) -> Optional[int]:
         """Internal helper executing the actual message update."""
 
@@ -536,7 +576,6 @@ class LiveMessageManager:
             next_version = game.next_live_message_version()
 
         old_snapshot = state.last_game_snapshot
-        new_snapshot = self._capture_game_snapshot(game)
         state_diff = self._calculate_state_diff(old_snapshot, new_snapshot)
         if state_diff.get("type") == "incremental":
             changed_keys = [key for key in state_diff.keys() if key != "type"]
