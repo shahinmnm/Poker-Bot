@@ -309,7 +309,12 @@
         "create_game": "🎰 Create Private Game",
         "help": "❓ Help",
         "language": "🌐 Language",
-        "main_title": "🎴 Poker Bot - Private Menu",
+        "main_title": "🎴 Poker Bot - Personal Hub",
+        "sections": {
+          "gameplay": "🎮 Manage your private games",
+          "invitations": "📨 Review your invitations",
+          "support": "🛠 Configure settings & support"
+        },
         "manage_game": "⚙️ Manage Game",
         "statistics": "📊 Statistics",
         "title": "⚙️ Settings & Profile",
