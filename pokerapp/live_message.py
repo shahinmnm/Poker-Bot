@@ -33,6 +33,117 @@ from pokerapp.keyboard_utils import (
 )
 
 
+class UnicodeTextFormatter:
+    """Format text using Unicode characters and emojis - no HTML/Markdown."""
+
+    BOLD_MAP = {
+        "A": "𝗔",
+        "B": "𝗕",
+        "C": "𝗖",
+        "D": "𝗗",
+        "E": "𝗘",
+        "F": "𝗙",
+        "G": "𝗚",
+        "H": "𝗛",
+        "I": "𝗜",
+        "J": "𝗝",
+        "K": "𝗞",
+        "L": "𝗟",
+        "M": "𝗠",
+        "N": "𝗡",
+        "O": "𝗢",
+        "P": "𝗣",
+        "Q": "𝗤",
+        "R": "𝗥",
+        "S": "𝗦",
+        "T": "𝗧",
+        "U": "𝗨",
+        "V": "𝗩",
+        "W": "𝗪",
+        "X": "𝗫",
+        "Y": "𝗬",
+        "Z": "𝗭",
+        "a": "𝗮",
+        "b": "𝗯",
+        "c": "𝗰",
+        "d": "𝗱",
+        "e": "𝗲",
+        "f": "𝗳",
+        "g": "𝗴",
+        "h": "𝗵",
+        "i": "𝗶",
+        "j": "𝗷",
+        "k": "𝗸",
+        "l": "𝗹",
+        "m": "𝗺",
+        "n": "𝗻",
+        "o": "𝗼",
+        "p": "𝗽",
+        "q": "𝗾",
+        "r": "𝗿",
+        "s": "𝘀",
+        "t": "𝘁",
+        "u": "𝘂",
+        "v": "𝘃",
+        "w": "𝘄",
+        "x": "𝘅",
+        "y": "𝘆",
+        "z": "𝘇",
+        "0": "𝟬",
+        "1": "𝟭",
+        "2": "𝟮",
+        "3": "𝟯",
+        "4": "𝟰",
+        "5": "𝟱",
+        "6": "𝟲",
+        "7": "𝟳",
+        "8": "𝟴",
+        "9": "𝟵",
+    }
+
+    PERSIAN_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+    ARABIC_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
+
+    @staticmethod
+    def make_bold(text: str) -> str:
+        """Convert text to Unicode bold characters."""
+
+        return "".join(UnicodeTextFormatter.BOLD_MAP.get(c, c) for c in text)
+
+    @staticmethod
+    def strip_all_html(text: str) -> str:
+        """Remove ALL HTML tags and convert to plain text with Unicode styling."""
+
+        import re
+
+        text = re.sub(
+            r"<b>(.*?)</b>",
+            lambda m: UnicodeTextFormatter.make_bold(m.group(1)),
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        text = re.sub(
+            r"<i>(.*?)</i>",
+            lambda m: f"{m.group(1)}",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        text = re.sub(r"<code>(.*?)</code>", r"\1", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<pre>(.*?)</pre>", r"\1", text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"<[^>]+>", "", text)
+        text = html.unescape(text)
+        return text
+
+    @staticmethod
+    def localize_digits(text: str, language_code: str) -> str:
+        """Convert Western digits to localized digits based on language."""
+
+        if language_code == "fa":
+            return text.translate(UnicodeTextFormatter.PERSIAN_DIGITS)
+        if language_code == "ar":
+            return text.translate(UnicodeTextFormatter.ARABIC_DIGITS)
+        return text
+
 @dataclass(slots=True)
 class RaiseOptionMeta:
     """Metadata describing a single raise selection option."""
@@ -107,8 +218,6 @@ class LiveMessageManager:
         4: "🔁",
         5: "🧊",
     }
-
-    PARSE_MODE = "HTML"
     # Minimum spacing between consecutive updates per chat (seconds)
     DEBOUNCE_WINDOW = 0.35
     # Seconds before the transient banner is cleared
@@ -158,6 +267,22 @@ class LiveMessageManager:
         self._language_code = "en"
         self._language_direction = "ltr"
         self._language_font = "system"
+
+    def _prepare_plain_text(self, text: str) -> str:
+        """Convert any formatted text to plain Unicode text for all languages."""
+
+        if not text:
+            return ""
+
+        clean_text = UnicodeTextFormatter.strip_all_html(text)
+        clean_text = UnicodeTextFormatter.localize_digits(
+            clean_text, self._language_code
+        )
+
+        if self._language_code in ("fa", "ar", "he", "ur"):
+            clean_text = f"\u200F{clean_text}\u200E"
+
+        return clean_text
 
     def set_language_metadata(self, *, code: str, direction: str, font: str) -> None:
         """Update active language metadata for renders."""
@@ -382,12 +507,13 @@ class LiveMessageManager:
                 return False
 
             try:
+                plain_text = self._prepare_plain_text(bundle.stable_text)
                 await self._bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=message_id,
-                    text=bundle.stable_text,
+                    text=plain_text,
                     reply_markup=bundle.reply_markup,
-                    parse_mode=self.PARSE_MODE,
+                    parse_mode=None,
                     disable_web_page_preview=True,
                 )
             except TelegramError as exc:
@@ -446,12 +572,13 @@ class LiveMessageManager:
             )
 
             try:
+                plain_text = self._prepare_plain_text(bundle.stable_text)
                 await self._bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=message_id,
-                    text=bundle.stable_text,
+                    text=plain_text,
                     reply_markup=bundle.reply_markup,
-                    parse_mode=self.PARSE_MODE,
+                    parse_mode=None,
                     disable_web_page_preview=True,
                 )
             except TelegramError as exc:
@@ -2285,12 +2412,13 @@ class LiveMessageManager:
                 )
                 return
             try:
+                plain_text = self._prepare_plain_text(state.stable_text)
                 await self._bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=message_id,
-                    text=state.stable_text,
+                    text=plain_text,
                     reply_markup=state.stable_markup,
-                    parse_mode=self.PARSE_MODE,
+                    parse_mode=None,
                     disable_web_page_preview=True,
                 )
             except TelegramError as exc:
@@ -2358,12 +2486,13 @@ class LiveMessageManager:
             start_time = time.perf_counter()
             old_message_id = game.group_message_id
             try:
+                plain_text = self._prepare_plain_text(bundle.message_text)
                 message = await self._bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=old_message_id,
-                    text=bundle.message_text,
+                    text=plain_text,
                     reply_markup=bundle.reply_markup,
-                    parse_mode=self.PARSE_MODE,
+                    parse_mode=None,
                     disable_web_page_preview=True,
                 )
                 latency_ms = (time.perf_counter() - start_time) * 1000
@@ -2421,11 +2550,12 @@ class LiveMessageManager:
         try:
             self._logger.debug("Sending new live message to chat %s", chat_id)
             start_time = time.perf_counter()
+            plain_text = self._prepare_plain_text(bundle.message_text)
             message = await self._bot.send_message(
                 chat_id=chat_id,
-                text=bundle.message_text,
+                text=plain_text,
                 reply_markup=bundle.reply_markup,
-                parse_mode=self.PARSE_MODE,
+                parse_mode=None,
                 disable_notification=True,
                 disable_web_page_preview=True,
             )
