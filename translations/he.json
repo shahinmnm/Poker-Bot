@@ -273,6 +273,25 @@
       "waiting": "⏳ ממתינים שהמארח יתחיל...",
       "waiting_players": "⏳ ממתינים לשחקנים..."
     },
+    "group_lobby": {
+      "title": "🎰 לובי משחק הפוקר 🎰",
+      "players_header": "👥 שחקנים שיושבים",
+      "player_entry": "✅ {name}",
+      "no_players": "⛔ עדיין אין שחקנים",
+      "total_players": "📊 סך הכול: {count} שחקנים",
+      "status": {
+        "ready": "✅ מוכן להתחיל! (מינימום {min_players})",
+        "waiting": "⏳ ממתינים לעוד שחקנים (מינימום {min_players})"
+      },
+      "footer": {
+        "manage": "⬇️ השתמשו בכפתורים למטה לניהול ⬇️"
+      },
+      "buttons": {
+        "sit": "🪑 שב לשולחן",
+        "leave": "🚶 עזוב את השולחן",
+        "start": "🎮 התחל משחק"
+      }
+    },
     "nav": {
       "back": "חזרה",
       "home": "תפריט ראשי"
@@ -297,6 +316,7 @@
         "admin_panel": "⚙️ לוח ניהול קבוצה",
         "join_game": "🎴 הצטרפות למשחק",
         "leave_game": "🚪 יציאה מהמשחק",
+        "language": "🌐 שפת הקבוצה",
         "main_title": "🎲 פוקר בוט - תפריט קבוצה",
         "new_game": "🆕 משחק חדש",
         "rules": "📖 חוקים",
@@ -321,6 +341,17 @@
         "view_game": "👀 צפייה במשחק הנוכחי",
         "view_invites": "📨 צפייה בהזמנות",
         "wallet": "💰 ארנק"
+      },
+      "settings": {
+        "title": "⚙️ העדפות שפה",
+        "descriptions": {
+          "private": "קבעו את השפה לצ'אטים פרטיים.",
+          "group": "קבעו את שפת ברירת המחדל של הקבוצה."
+        },
+        "buttons": {
+          "private_language": "🙋‍♂️ שפה פרטית",
+          "group_language": "👥 שפת הקבוצה"
+        }
       }
     },
     "language": {
@@ -349,8 +380,20 @@
       }
     },
     "settings": {
+      "title": "⚙️ העדפות שפה",
+      "descriptions": {
+        "private": "בחרו כיצד הבוט מדבר אליכם בצ'אטים פרטיים.",
+        "group": "קבעו את שפת ברירת המחדל עבור כל חברי הקבוצה."
+      },
+      "buttons": {
+        "private_language": "🙋‍♂️ שפה פרטית",
+        "group_language": "👥 שפת הקבוצה"
+      },
       "language_changed": "✅ השפה הוחלפה לעברית",
+      "group_language_changed": "✅ שפת הקבוצה הוחלפה לעברית",
       "language_select": "🌐 בחרו שפה:",
+      "choose_private_language": "🌍 בחרו את שפת הצ'אט הפרטי",
+      "choose_group_language": "🌍 בחרו את שפת הקבוצה",
       "wallet_balance": "💰 יתרה: ${amount}",
       "wallet_empty": "הארנק שלכם ריק. פנו למנהל להוספת ז'יטונים.",
       "choose_language": "🌍 בחר את השפה שלך"

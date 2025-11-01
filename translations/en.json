@@ -273,6 +273,25 @@
       "waiting": "⏳ Waiting for host to start...",
       "waiting_players": "⏳ Waiting for players..."
     },
+    "group_lobby": {
+      "title": "🎰 Poker Game Lobby 🎰",
+      "players_header": "👥 Seated Players",
+      "player_entry": "✅ {name}",
+      "no_players": "⛔ No players seated yet",
+      "total_players": "📊 Total: {count} player(s)",
+      "status": {
+        "ready": "✅ Ready to start! (minimum {min_players} players)",
+        "waiting": "⏳ Waiting for more players (minimum {min_players})"
+      },
+      "footer": {
+        "manage": "⬇️ Use buttons below to manage ⬇️"
+      },
+      "buttons": {
+        "sit": "🪑 Sit at Table",
+        "leave": "🚶 Leave Table",
+        "start": "🎮 Start Game"
+      }
+    },
     "nav": {
       "back": "Back",
       "home": "Home"
@@ -297,6 +316,7 @@
         "admin_panel": "⚙️ Group Admin",
         "join_game": "🎴 Join Game",
         "leave_game": "🚪 Leave Game",
+        "language": "🌐 Group Language",
         "main_title": "🎲 Poker Bot - Group Menu",
         "new_game": "🆕 New Game",
         "rules": "📖 Rules",
@@ -321,6 +341,17 @@
         "view_game": "👀 View Current Game",
         "view_invites": "📨 View Invites",
         "wallet": "💰 Wallet"
+      },
+      "settings": {
+        "title": "⚙️ Language Preferences",
+        "descriptions": {
+          "private": "Choose how the bot speaks to you in private chats.",
+          "group": "Set the default language for everyone in this group."
+        },
+        "buttons": {
+          "private_language": "🙋‍♂️ Private language",
+          "group_language": "👥 Group language"
+        }
       }
     },
     "language": {
@@ -349,8 +380,20 @@
       }
     },
     "settings": {
+      "title": "⚙️ Language Preferences",
+      "descriptions": {
+        "private": "Choose how the bot speaks to you in private chats.",
+        "group": "Set the default language for everyone in this group."
+      },
+      "buttons": {
+        "private_language": "🙋‍♂️ Private language",
+        "group_language": "👥 Group language"
+      },
       "language_changed": "✅ Language changed to English",
+      "group_language_changed": "✅ Group language changed to English",
       "language_select": "🌐 Select your language:",
+      "choose_private_language": "🌍 Choose your private chat language",
+      "choose_group_language": "🌍 Choose the group language",
       "wallet_balance": "💰 Balance: ${amount}",
       "wallet_empty": "Your wallet is empty. Contact admin to add chips.",
       "choose_language": "🌍 Choose Your Language"
