@@ -308,6 +308,14 @@ class LiveMessageManager:
         return f"\u202B{text}\u202C"
 
     @staticmethod
+    def _sanitize_text(value: Any, *, default: str = "") -> str:
+        """Return plain-text representation with all markup removed."""
+
+        if value is None:
+            value = default
+        return UnicodeTextFormatter.strip_all_html(str(value))
+
+    @staticmethod
     def _format_chips(amount: int, width: int = 6) -> str:
         """Format chip amounts with right-aligned monospace layout.
 
@@ -513,7 +521,6 @@ class LiveMessageManager:
                     message_id=message_id,
                     text=plain_text,
                     reply_markup=bundle.reply_markup,
-                    parse_mode=None,
                     disable_web_page_preview=True,
                 )
             except TelegramError as exc:
@@ -578,7 +585,6 @@ class LiveMessageManager:
                     message_id=message_id,
                     text=plain_text,
                     reply_markup=bundle.reply_markup,
-                    parse_mode=None,
                     disable_web_page_preview=True,
                 )
             except TelegramError as exc:
@@ -1165,12 +1171,12 @@ class LiveMessageManager:
         display["street"] = self._format_diff_value(
             previous.get("street_display_raw"),
             context.get("street_display_raw"),
-            formatter=lambda value: html.escape(value or "—"),
+            formatter=lambda value: self._sanitize_text(value, default="—"),
         )
         display["to_act"] = self._format_diff_value(
             previous.get("to_act_display_raw"),
             context.get("to_act_display_raw"),
-            formatter=lambda value: html.escape(value or "Waiting…"),
+            formatter=lambda value: self._sanitize_text(value, default="Waiting…"),
         )
         display["pot"] = self._format_currency_diff(
             previous.get("pot_value"),
@@ -1191,10 +1197,18 @@ class LiveMessageManager:
             ),
             formatter=lambda value: self._format_board_display(*value),
         )
-        display["timer"] = html.escape(context.get("timer_label", "—"))
-        display["stacks"] = html.escape(context.get("stack_line", "—"))
-        display["table"] = html.escape(f"#{context.get('table_code', '----')}")
-        display["seats"] = html.escape(context.get("seat_label", "—"))
+        display["timer"] = self._sanitize_text(
+            context.get("timer_label"), default="—"
+        )
+        display["stacks"] = self._sanitize_text(
+            context.get("stack_line"), default="—"
+        )
+        display["table"] = self._sanitize_text(
+            f"#{context.get('table_code', '----')}"
+        )
+        display["seats"] = self._sanitize_text(
+            context.get("seat_label"), default="—"
+        )
 
         return display
 
@@ -1281,19 +1295,19 @@ class LiveMessageManager:
         if compact:
             board_label = UnicodeTextFormatter.make_bold("BOARD")
             lines.append(f"🃏 {board_label}")
-            lines.append(html.escape(board_text))
+            lines.append(self._sanitize_text(board_text))
         else:
             stage_name = self._get_stage_name(len(board_cards))
             stage_icon = self.STAGE_ICONS.get(len(board_cards), "♠️")
             stage_label = UnicodeTextFormatter.make_bold(
-                f"{stage_icon} {html.escape(stage_name)}"
+                f"{stage_icon} {self._sanitize_text(stage_name)}"
             )
             lines.append(f"🃏 {stage_label}")
             board_display = board_text or "—"
             max_chars = getattr(device_profile, "max_line_length", 0) or 0
             if max_chars and len(board_display) > max_chars:
                 board_display = board_display[: max_chars - 1] + "…"
-            lines.append(html.escape(board_display))
+            lines.append(self._sanitize_text(board_display))
 
         side_pots = getattr(game, "side_pots", None)
         if side_pots:
@@ -1309,7 +1323,7 @@ class LiveMessageManager:
             pot_label = UnicodeTextFormatter.make_bold("Pot:")
             pot_line = (
                 f"💰 {pot_label} "
-                f"{html.escape(self._format_chips(getattr(game, 'pot', 0)))}"
+                f"{self._sanitize_text(self._format_chips(getattr(game, 'pot', 0)))}"
             )
 
         lines.append("")
@@ -1327,19 +1341,21 @@ class LiveMessageManager:
                     player,
                     show_cards=show_cards,
                 )
-                lines.append(html.escape(player_line))
+                lines.append(self._sanitize_text(player_line))
 
         actor_name = self._get_player_name(current_player)
         if compact and actor_name not in {"", "—"}:
             lines.append("")
-            lines.append(f"🎯 To act: {html.escape(actor_name)}")
+            lines.append(f"🎯 To act: {self._sanitize_text(actor_name)}")
 
         recent_actions = getattr(game, "recent_actions", []) or []
         if recent_actions and not compact:
             lines.append("")
             recent_label = UnicodeTextFormatter.make_bold("Recent")
             lines.append(f"📝 {recent_label}")
-            lines.extend(f"• {html.escape(action)}" for action in recent_actions[-3:])
+            lines.extend(
+                f"• {self._sanitize_text(action)}" for action in recent_actions[-3:]
+            )
 
         body = "\n".join(lines)
         size_bytes = self._calculate_message_bytes(body)
@@ -1510,12 +1526,14 @@ class LiveMessageManager:
             "game.state.initial",
             lang=self._language_code,
         )
-        stage_name = html.escape(context.get("stage_name", default_stage))
+        stage_name = self._sanitize_text(
+            context.get("stage_name"), default=default_stage
+        )
 
         if board_raw.strip() in {"—", "🂠 🂠 🂠"}:
             return "🔒 Cards will be revealed during betting"
 
-        board_display = html.escape(board_raw)
+        board_display = self._sanitize_text(board_raw)
         max_chars = max(device_profile.max_line_length, 10)
         if len(board_display) > max_chars:
             board_display = board_display[: max_chars - 1] + "…"
@@ -1533,16 +1551,16 @@ class LiveMessageManager:
         rows: List[str] = []
 
         for idx, player in enumerate(players, start=1):
-            name = html.escape(self._get_player_name(player))
+            name = self._sanitize_text(self._get_player_name(player))
             balance = max(player.wallet.value(), 0)
             bet = max(player.round_rate, 0)
 
-            stack_text = html.escape(self._format_chips(balance))
+            stack_text = self._sanitize_text(self._format_chips(balance))
 
             bet_text = ""
             if bet:
                 minimum_width = len(f"{bet:,}") + 2
-                bet_text = html.escape(
+                bet_text = self._sanitize_text(
                     self._format_chips(bet, width=minimum_width)
                 )
 
@@ -1600,7 +1618,7 @@ class LiveMessageManager:
             raw_name = self._get_player_name(player)
             if len(raw_name) > max_length:
                 raw_name = raw_name[: max_length - 3] + "..."
-            safe_name = html.escape(raw_name)
+            safe_name = self._sanitize_text(raw_name)
 
             is_current = player.user_id == actor_user_id
             status_icon = "▶️" if is_current else "⏸"
@@ -1608,8 +1626,8 @@ class LiveMessageManager:
 
             stack_value = max(player.wallet.value(), 0)
             bet_value = max(player.round_rate, 0)
-            stack_text = html.escape(self._format_chips(stack_value))
-            bet_text = html.escape(self._format_chips(bet_value))
+            stack_text = self._sanitize_text(self._format_chips(stack_value))
+            bet_text = self._sanitize_text(self._format_chips(bet_value))
 
             if getattr(player, "state", None) == PlayerState.ALL_IN:
                 state_label = "All-In"
@@ -1652,7 +1670,7 @@ class LiveMessageManager:
 
     def _format_recent_actions(self, game: Game) -> List[str]:
         recent = getattr(game, "recent_actions", []) or []
-        return [html.escape(action) for action in recent[-3:]]
+        return [self._sanitize_text(action) for action in recent[-3:]]
 
     def _format_stack_line(self, players: List[Player]) -> str:
         if not players:
@@ -1837,7 +1855,7 @@ class LiveMessageManager:
     def _format_board_display(self, board_text: Optional[str], icon: Optional[str]) -> str:
         text = board_text or "—"
         symbol = icon or "♠️"
-        return f"{symbol} {html.escape(text)}"
+        return f"{symbol} {self._sanitize_text(text)}"
 
     def _timer_bucket(self, game: Game) -> Optional[int]:
         last_turn = getattr(game, "last_turn_time", None)
@@ -1880,7 +1898,7 @@ class LiveMessageManager:
     ) -> str:
         def formatter(value: Optional[int]) -> str:
             amount = value or 0
-            return html.escape(self._format_chips(amount))
+            return self._sanitize_text(self._format_chips(amount))
 
         return self._format_diff_value(previous, current, formatter=formatter)
 
@@ -1912,14 +1930,15 @@ class LiveMessageManager:
 
         if actor_changed:
             to_act = context.get("to_act_display_raw", "Your move")
-            return f"🔔 {UnicodeTextFormatter.make_bold(html.escape(to_act))}"
+            sanitized = self._sanitize_text(to_act, default="Your move")
+            return f"🔔 {UnicodeTextFormatter.make_bold(sanitized)}"
 
         if pot_changed:
             old_pot = previous.get("pot_value", 0)
             new_pot = context.get("pot_value", 0)
             pot_text = (
-                f"Pot {html.escape(self._format_chips(old_pot))}"
-                f" → {html.escape(self._format_chips(new_pot))}"
+                f"Pot {self._sanitize_text(self._format_chips(old_pot))}"
+                f" → {self._sanitize_text(self._format_chips(new_pot))}"
             )
             return f"🔔 {UnicodeTextFormatter.make_bold(pot_text)}"
 
@@ -2371,13 +2390,13 @@ class LiveMessageManager:
             option = state_options.get(selected_key)
             if option is not None:
                 return UnicodeTextFormatter.make_bold(
-                    html.escape(option.preview_label)
+                    self._sanitize_text(option.preview_label)
                 )
         if context_options is not None:
             option = context_options.get(selected_key)
             if option is not None:
                 return UnicodeTextFormatter.make_bold(
-                    html.escape(option.preview_label)
+                    self._sanitize_text(option.preview_label)
                 )
         return "—"
 
@@ -2448,7 +2467,6 @@ class LiveMessageManager:
                     message_id=message_id,
                     text=plain_text,
                     reply_markup=state.stable_markup,
-                    parse_mode=None,
                     disable_web_page_preview=True,
                 )
             except TelegramError as exc:
@@ -2522,7 +2540,6 @@ class LiveMessageManager:
                     message_id=old_message_id,
                     text=plain_text,
                     reply_markup=bundle.reply_markup,
-                    parse_mode=None,
                     disable_web_page_preview=True,
                 )
                 latency_ms = (time.perf_counter() - start_time) * 1000
@@ -2585,7 +2602,6 @@ class LiveMessageManager:
                 chat_id=chat_id,
                 text=plain_text,
                 reply_markup=bundle.reply_markup,
-                parse_mode=None,
                 disable_notification=True,
                 disable_web_page_preview=True,
             )

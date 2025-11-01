@@ -608,7 +608,6 @@ class PokerBotModel:
                 await self._bot.send_message(
                     chat_id=int(chat_id),
                     text="🎲 Game ended with no winners (all folded).",
-                    parse_mode=None,
                 )
                 return
 
@@ -658,11 +657,9 @@ class PokerBotModel:
             lines.append(f"💰 {total_pot}")
 
             result_text = "\n".join(lines).strip()
-
             await self._bot.send_message(
                 chat_id=int(chat_id),
                 text=result_text,
-                parse_mode=None,
             )
 
             logger.info(
@@ -681,7 +678,6 @@ class PokerBotModel:
             await self._bot.send_message(
                 chat_id=int(chat_id),
                 text="❌ Error displaying results. Check logs.",
-                parse_mode=None,
             )
 
         finally:
@@ -1845,7 +1841,6 @@ class PokerBotModel:
         plain_message = UnicodeTextFormatter.strip_all_html(message)
         await query.edit_message_text(
             text=plain_message,
-            parse_mode=None,
         )
 
     async def accept_private_game_invite(
@@ -1970,7 +1965,6 @@ class PokerBotModel:
         )
         await query.edit_message_text(
             text=message,
-            parse_mode=None,
         )
 
         # Notify host
@@ -2056,7 +2050,6 @@ class PokerBotModel:
         )
         await query.edit_message_text(
             text=message,
-            parse_mode=None,
         )
 
         # Notify host
