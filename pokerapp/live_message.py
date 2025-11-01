@@ -942,7 +942,12 @@ class LiveMessageManager:
         else:
             self._cancel_banner_task(state)
 
-        await self._ping_player_if_needed(state, bundle.context)
+        await self._ping_player_if_needed(
+            state,
+            bundle.context,
+            chat_id=chat_id,
+            game=game,
+        )
 
         return message_id
 
@@ -2629,7 +2634,12 @@ class LiveMessageManager:
             return None
 
     async def _ping_player_if_needed(
-        self, state: ChatRenderState, context: Dict[str, Any]
+        self,
+        state: ChatRenderState,
+        context: Dict[str, Any],
+        *,
+        chat_id: int,
+        game: Game,
     ) -> None:
         actor_id = context.get("actor_user_id")
         if not actor_id or actor_id == state.last_actor_user_id:
@@ -2637,14 +2647,25 @@ class LiveMessageManager:
             return
 
         try:
-            message = await self._bot.send_message(
-                actor_id,
-                "🎯 Your turn — check the table message.",
-            )
+            turn_text = context.get("to_act_display_raw") or "Your move"
+            sanitized_text = self._sanitize_text(turn_text, default="Your move")
+            message_text = f"✅ {sanitized_text}"
+
+            send_kwargs: Dict[str, Any] = {
+                "chat_id": chat_id,
+                "text": message_text,
+                "disable_notification": True,
+            }
+
+            group_message_id = getattr(game, "group_message_id", None)
+            if group_message_id:
+                send_kwargs["reply_to_message_id"] = group_message_id
+
+            message = await self._bot.send_message(**send_kwargs)
         except TelegramError as exc:
             self._logger.debug(
-                "Unable to send turn ping to %s: %s",
-                actor_id,
+                "Unable to send turn popup to chat %s: %s",
+                chat_id,
                 exc,
             )
             state.last_actor_user_id = actor_id
