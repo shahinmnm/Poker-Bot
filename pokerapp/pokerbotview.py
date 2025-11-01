@@ -987,6 +987,71 @@ class PokerBotViewer:
 
         self._get_location_label_cached.cache_clear()
 
+    def _build_private_menu_keyboard(
+        self, context: MenuContext, language_context: LanguageContext
+    ) -> List[List[InlineKeyboardButton]]:
+        """Return the inline keyboard layout for the private menu."""
+
+        keyboard: List[List[InlineKeyboardButton]] = []
+
+        gameplay_row: List[InlineKeyboardButton] = []
+        if context.active_private_game_code:
+            gameplay_row.append(
+                InlineKeyboardButton(
+                    self._t("menu.private.view_game", context=language_context),
+                    callback_data="private_view_game",
+                )
+            )
+
+            if context.is_game_host:
+                gameplay_row.append(
+                    InlineKeyboardButton(
+                        self._t(
+                            "menu.private.manage_game",
+                            context=language_context,
+                        ),
+                        callback_data="private_manage",
+                    )
+                )
+        else:
+            gameplay_row.append(
+                InlineKeyboardButton(
+                    self._t("menu.private.create_game", context=language_context),
+                    callback_data="private_create",
+                )
+            )
+
+        if gameplay_row:
+            keyboard.append(gameplay_row)
+
+        if context.has_pending_invite:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t("menu.private.view_invites", context=language_context),
+                        callback_data="view_invites",
+                    )
+                ]
+            )
+
+        support_row = [
+            InlineKeyboardButton(
+                self._t("menu.common.settings", context=language_context),
+                callback_data="settings",
+            ),
+            InlineKeyboardButton(
+                self._t("menu.common.help", context=language_context),
+                callback_data="help",
+            ),
+        ]
+        keyboard.append(support_row)
+
+        nav_row = self._build_navigation_row(context, language_context)
+        if nav_row:
+            keyboard.append(nav_row)
+
+        return keyboard
+
     async def _send_private_menu(
         self,
         chat_id: int,
@@ -1000,83 +1065,30 @@ class PokerBotViewer:
 
         title = self._t("menu.private.main_title", context=language_context)
 
-        keyboard: List[List[InlineKeyboardButton]] = []
-
-        if context.active_private_game_code:
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        self._t(
-                            "menu.private.view_game",
-                            context=language_context,
-                        ),
-                        callback_data="private_view_game",
-                    )
-                ]
-            )
-
-            if context.is_game_host:
-                keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            self._t(
-                                "menu.private.manage_game",
-                                context=language_context,
-                            ),
-                            callback_data="private_manage",
-                        )
-                    ]
-                )
-        else:
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        self._t(
-                            "menu.private.create_game",
-                            context=language_context,
-                        ),
-                        callback_data="private_create",
-                    )
-                ]
-            )
+        section_lines: List[str] = []
+        section_lines.append(
+            self._t("menu.private.sections.gameplay", context=language_context)
+        )
 
         if context.has_pending_invite:
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        self._t(
-                            "menu.private.view_invites",
-                            context=language_context,
-                        ),
-                        callback_data="view_invites",
-                    )
-                ]
+            section_lines.append(
+                self._t("menu.private.sections.invitations", context=language_context)
             )
 
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    self._t("menu.common.settings", context=language_context),
-                    callback_data="settings",
-                )
-            ]
+        section_lines.append(
+            self._t("menu.private.sections.support", context=language_context)
         )
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    self._t("menu.common.help", context=language_context),
-                    callback_data="help",
-                )
-            ]
-        )
+
+        if section_lines:
+            bullet_prefix = "• "
+            sections_text = "\n".join(f"{bullet_prefix}{line}" for line in section_lines)
+            title = f"{title}\n\n{sections_text}"
 
         breadcrumb = self._render_breadcrumb(context, language_context)
         if breadcrumb:
             title = f"{breadcrumb}\n\n{title}"
 
-        nav_row = self._build_navigation_row(context, language_context)
-        if nav_row:
-            keyboard.append(nav_row)
+        keyboard = self._build_private_menu_keyboard(context, language_context)
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 

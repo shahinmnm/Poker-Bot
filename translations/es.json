@@ -309,7 +309,12 @@
         "create_game": "🎰 Crear partida privada",
         "help": "❓ Ayuda",
         "language": "🌐 Idioma",
-        "main_title": "🎴 Bot de Póker - Menú Privado",
+        "main_title": "🎴 Bot de Póker - Centro Personal",
+        "sections": {
+          "gameplay": "🎮 Gestiona tus partidas privadas",
+          "invitations": "📨 Revisa tus invitaciones",
+          "support": "🛠 Configura ajustes y soporte"
+        },
         "manage_game": "⚙️ Administrar partida",
         "statistics": "📊 Estadísticas",
         "title": "⚙️ Configuración y perfil",
