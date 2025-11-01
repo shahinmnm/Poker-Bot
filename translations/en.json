@@ -65,7 +65,8 @@
       "betting_rounds": "**Betting Rounds:**\n1️⃣ Pre-flop (2 cards dealt)\n2️⃣ Flop (3 community cards)\n3️⃣ Turn (1 community card)\n4️⃣ River (1 community card)",
       "objective": "**Objective:** Make the best 5-card hand from your 2 cards + 5 community cards.",
       "title": "📖 Texas Hold'em Rules"
-    }
+    },
+    "full_text": "🎴 Texas Hold’em Poker Bot\n\n📖 How to Play:\n• Use /start to open the main menu\n• Use /private to create or join private games\n• Use /help to see this message\n• Use /language to change your language\n\n🎮 Game Rules:\n• 2-10 players per game\n• Standard Texas Hold’em rules\n• Betting rounds: Pre-flop, Flop, Turn, River\n\n💰 Actions:\n• Fold - Give up your hand\n• Check - Pass without betting\n• Call - Match current bet\n• Raise - Increase the bet\n• All-in - Bet everything\n\n🏆 Hand Rankings (High to Low):\n1. Royal Flush\n2. Straight Flush\n3. Four of a Kind\n4. Full House\n5. Flush\n6. Straight\n7. Three of a Kind\n8. Two Pair\n9. One Pair\n10. High Card\n\nGood luck! 🍀"
   },
   "meta": {
     "font": "system",
@@ -161,9 +162,9 @@
     },
     "controller": {
       "commands": {
-        "start": "Start Poker Bot and show the menu",
-        "ready": "Mark yourself ready in the current game",
-        "private": "Manage or create private games",
+        "start": "🎮 Start the bot and show main menu",
+        "ready": "✅ Mark yourself as ready to play",
+        "private": "🔒 Create or manage private poker games",
         "join": "Join an existing private game",
         "invite": "Invite a player to your private game",
         "accept": "Accept a pending private game invite",
@@ -171,9 +172,16 @@
         "leave": "Leave the current private game or lobby",
         "money": "Check your chip balance",
         "cards": "Show your current hand",
-        "ban": "Ban a disruptive player from the game",
-        "stop": "Stop the Poker Bot",
-        "help": "Show help information"
+        "ban": "🚫 Ban a player from the current game (admin only)",
+        "stop": "🛑 Stop the current game (admin only)",
+        "help": "❓ Show help and game rules",
+        "language": "🌍 Change bot language",
+        "stats": "📊 View your poker statistics",
+        "leaderboard": "🏆 View global leaderboard",
+        "wallet": "💰 Check your wallet balance",
+        "daily": "🎁 Claim daily bonus chips",
+        "settings": "⚙️ Manage bot settings",
+        "about": "ℹ️ About this bot"
       },
       "toast": {
         "action_recorded": "✅ Action recorded",
@@ -325,5 +333,8 @@
         "title": "⚠️ Confirm Fold"
       }
     }
+  },
+  "settings": {
+    "choose_language": "🌍 Choose Your Language"
   }
 }
