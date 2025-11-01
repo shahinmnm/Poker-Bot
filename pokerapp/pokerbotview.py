@@ -27,6 +27,10 @@ from pokerapp.device_detector import DeviceProfile, DeviceType
 from pokerapp.i18n import LanguageContext, translation_manager
 from pokerapp.kvstore import RedisKVStore, ensure_kv
 from pokerapp.live_message import LiveMessageManager
+from pokerapp.keyboard_utils import (
+    rehydrate_keyboard_layout,
+    serialise_keyboard_layout,
+)
 from pokerapp.render_cache import RenderCache
 from .menu_state import MenuLocation, get_breadcrumb_path, MENU_HIERARCHY
 
@@ -395,11 +399,10 @@ class PokerBotViewer:
                 variant=cache_variant,
             )
             if cached and cached.keyboard_layout:
-                keyboard = [
-                    [InlineKeyboardButton(**btn) for btn in row]
-                    for row in cached.keyboard_layout
-                ]
-                return InlineKeyboardMarkup(keyboard)
+                return rehydrate_keyboard_layout(
+                    cached.keyboard_layout,
+                    version=version,
+                )
 
         current_bet = max(game.max_round_rate, 0)
         player_bet = max(current_player.round_rate, 0)
@@ -632,17 +635,13 @@ class PokerBotViewer:
         markup = InlineKeyboardMarkup(buttons)
 
         if cache_enabled and buttons:
-            layout = [
-                [
-                    {"text": btn.text, "callback_data": btn.callback_data}
-                    for btn in row
-                ]
-                for row in buttons
-            ]
             self._render_cache.cache_render_result(
                 game,
                 current_player,
-                keyboard_layout=layout,
+                keyboard_layout=serialise_keyboard_layout(
+                    markup.inline_keyboard,
+                    version=version,
+                ),
                 variant=cache_variant,
             )
 
