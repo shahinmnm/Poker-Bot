@@ -65,7 +65,8 @@
       "betting_rounds": "**Rondas de apuesta:**\n1️⃣ Pre-flop (se reparten 2 cartas)\n2️⃣ Flop (3 cartas comunitarias)\n3️⃣ Turn (1 carta comunitaria)\n4️⃣ River (1 carta comunitaria)",
       "objective": "**Objetivo:** Forma la mejor mano de 5 cartas con tus 2 cartas y las 5 comunitarias.",
       "title": "📖 Reglas de Texas Hold'em"
-    }
+    },
+    "full_text": "🎴 Bot de Póker Texas Hold’em\n\n📖 Cómo Jugar:\n• Usa /start para abrir el menú principal\n• Usa /private para crear o unirte a juegos privados\n• Usa /help para ver este mensaje\n• Usa /language para cambiar tu idioma\n\n🎮 Reglas del Juego:\n• 2-10 jugadores por juego\n• Reglas estándar de Texas Hold’em\n• Rondas de apuestas: Pre-flop, Flop, Turn, River\n\n💰 Acciones:\n• Fold - Abandonar tu mano\n• Check - Pasar sin apostar\n• Call - Igualar la apuesta actual\n• Raise - Aumentar la apuesta\n• All-in - Apostar todo\n\n🏆 Clasificación de Manos (de mayor a menor):\n1. Escalera Real\n2. Escalera de Color\n3. Póker\n4. Full House\n5. Color\n6. Escalera\n7. Trío\n8. Doble Pareja\n9. Pareja\n10. Carta Alta\n\n¡Buena suerte! 🍀"
   },
   "meta": {
     "font": "system",
@@ -161,9 +162,9 @@
     },
     "controller": {
       "commands": {
-        "start": "Inicia Poker Bot y muestra el menú",
-        "ready": "Marcarte como listo en la partida actual",
-        "private": "Administrar o crear partidas privadas",
+        "start": "🎮 Iniciar el bot y mostrar menú principal",
+        "ready": "✅ Marcarte como listo para jugar",
+        "private": "🔒 Crear o gestionar juegos de póker privados",
         "join": "Unirte a una partida privada existente",
         "invite": "Invitar a un jugador a tu partida privada",
         "accept": "Aceptar una invitación privada pendiente",
@@ -171,9 +172,16 @@
         "leave": "Salir de la partida o sala privada actual",
         "money": "Consultar tu saldo de fichas",
         "cards": "Mostrar tu mano actual",
-        "ban": "Bloquear a un jugador problemático de la partida",
-        "stop": "Detener Poker Bot",
-        "help": "Mostrar información de ayuda"
+        "ban": "🚫 Banear jugador del juego actual (solo admin)",
+        "stop": "🛑 Detener el juego actual (solo admin)",
+        "help": "❓ Mostrar ayuda y reglas del juego",
+        "language": "🌍 Cambiar idioma del bot",
+        "stats": "📊 Ver tus estadísticas de póker",
+        "leaderboard": "🏆 Ver tabla de clasificación global",
+        "wallet": "💰 Consultar saldo de billetera",
+        "daily": "🎁 Reclamar fichas diarias",
+        "settings": "⚙️ Gestionar configuración del bot",
+        "about": "ℹ️ Acerca de este bot"
       },
       "toast": {
         "action_recorded": "✅ Acción registrada",
@@ -325,5 +333,8 @@
         "title": "⚠️ Confirmar retiro"
       }
     }
+  },
+  "settings": {
+    "choose_language": "🌍 Elige Tu Idioma"
   }
 }
