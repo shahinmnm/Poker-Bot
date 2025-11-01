@@ -273,6 +273,25 @@
       "waiting": "⏳ Esperando a que el anfitrión inicie...",
       "waiting_players": "⏳ Esperando jugadores..."
     },
+    "group_lobby": {
+      "title": "🎰 SALA DE PÓKER 🎰",
+      "players_header": "👥 JUGADORES SENTADOS",
+      "player_entry": "✅ {name}",
+      "no_players": "⛔ Todavía no hay jugadores sentados",
+      "total_players": "📊 Total: {count} jugador(es)",
+      "status": {
+        "ready": "✅ ¡Listo para empezar! (mínimo {min_players})",
+        "waiting": "⏳ Esperando más jugadores (mínimo {min_players})"
+      },
+      "footer": {
+        "manage": "⬇️ Usa los botones de abajo para gestionar ⬇️"
+      },
+      "buttons": {
+        "sit": "🪑 Sentarse a la mesa",
+        "leave": "🚶 Salir de la mesa",
+        "start": "🎮 Iniciar partida"
+      }
+    },
     "nav": {
       "back": "Atrás",
       "home": "Menú Principal"
@@ -297,6 +316,7 @@
         "admin_panel": "⚙️ Panel de administradores",
         "join_game": "🎴 Unirse a la partida",
         "leave_game": "🚪 Salir de la partida",
+        "language": "🌐 Idioma del grupo",
         "main_title": "🎲 Bot de Póker - Menú de Grupo",
         "new_game": "🆕 Nuevo juego",
         "rules": "📖 Reglas",
@@ -321,6 +341,17 @@
         "view_game": "👀 Ver partida actual",
         "view_invites": "📨 Ver invitaciones",
         "wallet": "💰 Cartera"
+      },
+      "settings": {
+        "title": "⚙️ Preferencias de idioma",
+        "descriptions": {
+          "private": "Configura el idioma de tus chats privados.",
+          "group": "Define el idioma predeterminado del grupo."
+        },
+        "buttons": {
+          "private_language": "🙋‍♂️ Idioma privado",
+          "group_language": "👥 Idioma del grupo"
+        }
       }
     },
     "language": {
@@ -349,8 +380,20 @@
       }
     },
     "settings": {
+      "title": "⚙️ Preferencias de idioma",
+      "descriptions": {
+        "private": "Elige cómo te habla el bot en chats privados.",
+        "group": "Define el idioma predeterminado para todos en este grupo."
+      },
+      "buttons": {
+        "private_language": "🙋‍♂️ Idioma privado",
+        "group_language": "👥 Idioma del grupo"
+      },
       "language_changed": "✅ Idioma cambiado a español",
+      "group_language_changed": "✅ Idioma del grupo cambiado a español",
       "language_select": "🌐 Selecciona tu idioma:",
+      "choose_private_language": "🌍 Elige el idioma de tu chat privado",
+      "choose_group_language": "🌍 Elige el idioma del grupo",
       "wallet_balance": "💰 Saldo: ${amount}",
       "wallet_empty": "Tu cartera está vacía. Contacta al administrador.",
       "choose_language": "🌍 Elige Tu Idioma"

@@ -1165,6 +1165,18 @@ class PokerBotViewer:
                 ]
             )
 
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    self._t(
+                        "menu.group.language",
+                        context=language_context,
+                    ),
+                    callback_data="lang:open:group_menu",
+                )
+            ]
+        )
+
         if context.user_is_group_admin:
             keyboard.append(
                 [
@@ -1241,8 +1253,14 @@ class PokerBotViewer:
                 )
             rows.append(row)
 
+        header_key = "settings.choose_language"
+        if origin in {"group_settings", "group_menu"}:
+            header_key = "settings.choose_group_language"
+        elif origin == "private_settings":
+            header_key = "settings.choose_private_language"
+
         header = self._t(
-            "settings.choose_language",
+            header_key,
             context=language_context,
         )
 
@@ -1277,6 +1295,95 @@ class PokerBotViewer:
             context=language_context,
             reply_markup=markup,
             reply_to_message_id=reply_to_message_id,
+            disable_notification=True,
+            disable_web_page_preview=True,
+        )
+
+    async def send_settings_menu(
+        self,
+        *,
+        chat_id: ChatId,
+        context: MenuContext,
+    ) -> None:
+        """Render settings menu allowing language preferences."""
+
+        language_context = translation_manager.get_language_context(
+            context.language_code
+        )
+
+        title = self._t("menu.settings.title", context=language_context)
+
+        bullet_points: List[str] = [
+            self._t(
+                "menu.settings.descriptions.private",
+                context=language_context,
+            )
+        ]
+
+        if context.is_group_chat():
+            bullet_points.append(
+                self._t(
+                    "menu.settings.descriptions.group",
+                    context=language_context,
+                )
+            )
+
+        if bullet_points:
+            title = "\n".join(
+                [
+                    title,
+                    "",
+                    *(
+                        f"• {line}" for line in bullet_points
+                    ),
+                ]
+            )
+
+        keyboard: List[List[InlineKeyboardButton]] = [
+            [
+                InlineKeyboardButton(
+                    self._t(
+                        "menu.settings.buttons.private_language",
+                        context=language_context,
+                    ),
+                    callback_data="lang:open:private_settings",
+                )
+            ]
+        ]
+
+        if context.is_group_chat():
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        self._t(
+                            "menu.settings.buttons.group_language",
+                            context=language_context,
+                        ),
+                        callback_data="lang:open:group_settings",
+                    )
+                ]
+            )
+
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    self._t("menu.common.help", context=language_context),
+                    callback_data="help",
+                )
+            ]
+        )
+
+        nav_row = self._build_navigation_row(context, language_context)
+        if nav_row:
+            keyboard.append(nav_row)
+
+        markup = InlineKeyboardMarkup(keyboard)
+
+        await self._send_localized_message(
+            chat_id=chat_id,
+            text=title,
+            context=language_context,
+            reply_markup=markup,
             disable_notification=True,
             disable_web_page_preview=True,
         )
