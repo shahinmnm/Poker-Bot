@@ -3924,9 +3924,18 @@ class PokerBotModel:
                 len(game.players),
                 getattr(game, "id", "unknown"),
             )
-            raise ValueError(
-                f"Player index {game.current_player_index} out of range "
-                f"(0-{len(game.players) - 1})"
+
+            try:
+                error_user_id = int(user_id_str)
+            except (TypeError, ValueError):
+                error_user_id = None
+
+            return PlayerActionValidation(
+                success=False,
+                message=self._translate(
+                    "model.error.invalid_action",
+                    user_id=error_user_id,
+                ),
             )
 
         current_player = game.players[game.current_player_index]
