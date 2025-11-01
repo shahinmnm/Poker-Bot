@@ -144,6 +144,7 @@ class UnicodeTextFormatter:
             return text.translate(UnicodeTextFormatter.ARABIC_DIGITS)
         return text
 
+
 @dataclass(slots=True)
 class RaiseOptionMeta:
     """Metadata describing a single raise selection option."""
