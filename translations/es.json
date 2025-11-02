@@ -114,7 +114,7 @@
         "waiting": "⏳ Esperando más jugadores (mínimo {min_players})..."
       },
       "stake_menu": {
-        "body": "🇪🇸 {title}\\n\\n{subtitle}\\n\\n{options}\\n\\n{footer}",
+        "body": "🇪🇸 {title}\n\n{subtitle}\n\n{options}\n\n{footer}",
         "footer": "ℹ️ La compra mínima depende del nivel de apuestas",
         "option_high": "💎 Alto ($5K/$10K)",
         "option_low": "💰 Bajo ($250/$500)",
@@ -129,7 +129,7 @@
         "already_active": "🇪🇸 ⚠️ Ya tienes una partida privada activa. Termínala o ciérrala antes de crear otra.",
         "invalid_stake": "🇪🇸 ⚠️ Nivel de apuestas '{level}' desconocido. Elige otra opción."
       },
-      "created": "🇪🇸 🎉 ¡Mesa privada creada!\\nAnfitrión: {host}\\nApuestas: {stake}\\nCompra: ${min_buyin} - ${max_buyin}\\nCódigo: {code}\\nMáximo de jugadores: {max_players}\\n\\nComparte el código con tus amigos para invitarlos."
+      "created": "🇪🇸 🎉 ¡Mesa privada creada!\nAnfitrión: {host}\nApuestas: {stake}\nCompra: ${min_buyin} - ${max_buyin}\nCódigo: {code}\nMáximo de jugadores: {max_players}\n\nComparte el código con tus amigos para invitarlos."
     },
     "showdown": "🎭 ¡Showdown!",
     "tie": "🤝 ¡Empate! El bote se reparte entre: {players}",
@@ -155,7 +155,7 @@
       "pot": "Bote: ${amount}",
       "title": "⚠️ Confirmar retiro",
       "your_cards": "Tus cartas: {cards}",
-      "body": "🇪🇸 ⚠️ ¿Confirmas que quieres retirarte?\\nBote: {pot}\\nInvertiste: {investment} ({percentage}% del bote)",
+      "body": "🇪🇸 ⚠️ ¿Confirmas que quieres retirarte?\nBote: {pot}\nInvertiste: {investment} ({percentage}% del bote)",
       "confirm_button": "🇪🇸 ✅ Retirarse",
       "cancel_button": "🇪🇸 ↩️ Seguir jugando"
     },
