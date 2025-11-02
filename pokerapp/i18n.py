@@ -230,7 +230,7 @@ class TranslationManager:
     ) -> tuple[Dict[str, str], Dict[str, Any]]:
         """Validate payload sections and flatten into lookup dictionary."""
 
-        required_sections = {"ui", "msg", "help", "game", "popup"}
+        required_sections = {"ui", "msg", "help", "game", "popup", "viewer"}
         missing = required_sections.difference(payload)
         if missing:
             raise ValueError(
@@ -278,6 +278,9 @@ class TranslationManager:
         # Popup namespace
         _flatten("popup", payload["popup"])
 
+        # Viewer namespace
+        _flatten("viewer", payload["viewer"])
+
         return flattened, {"rtl": rtl, "font": font}
 
     @staticmethod
@@ -291,6 +294,7 @@ class TranslationManager:
             "help": {},
             "game": {},
             "popup": {},
+            "viewer": {},
         }
 
         prefix_section_map: Dict[str, tuple[str, bool]] = {
@@ -303,7 +307,7 @@ class TranslationManager:
             "lobby": ("ui", False),
             "model": ("ui", False),
             "controller": ("ui", False),
-            "viewer": ("ui", False),
+            "viewer": ("viewer", True),
             "card": ("game", False),
             "hand": ("game", False),
             "settings": ("ui", False),
