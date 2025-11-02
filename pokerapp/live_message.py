@@ -1002,12 +1002,22 @@ class LiveMessageManager:
         """Unified compact message for all devices."""
 
         lines: List[str] = []
+        language_code = (
+            self._language_code or translation_manager.DEFAULT_LANGUAGE
+        )
 
         # Header: Table #ID • Seats • Stage
         table_id = self._sanitize_text(context.get("table_code", "----"))
         seat_label = self._sanitize_text(context.get("seat_label", "—"))
         stage_icon = context.get("stage_icon", "🎴")
-        stage_name = self._sanitize_text(context.get("stage_name", "Pre-Flop"))
+        stage_name = self._sanitize_text(
+            context.get(
+                "stage_name",
+                translation_manager.t(
+                    "game.round.pre_flop", lang=language_code
+                ),
+            )
+        )
 
         header = f"🎴 #{table_id} • {seat_label} • {stage_icon} {stage_name}"
         lines.append(UnicodeTextFormatter.make_bold(header))
@@ -1020,8 +1030,10 @@ class LiveMessageManager:
             safe_board = self._sanitize_text(board_text)
             lines.append(f"🃏 {safe_board}")
         else:
-            locked_msg = context.get("t_cards_locked", "Cards locked")
-            lines.append(f"🃏 {locked_msg}")
+            locked_msg = context.get("t_cards_locked") or translation_manager.t(
+                "viewer.board.cards_locked", lang=language_code
+            )
+            lines.append(f"🃏 {self._sanitize_text(locked_msg)}")
 
         # Pot + Bet (single line)
         pot = getattr(game, "pot", 0)
@@ -1032,9 +1044,16 @@ class LiveMessageManager:
             if last_bet > 0
             else "—"
         )
-        pot_label = context.get("t_pot_label", "Pot")
-        bet_label = context.get("t_bet_label", "Bet")
-        lines.append(f"💰 {pot_label}: {pot_str} • {bet_label}: {bet_str}")
+        pot_label = context.get("t_pot_label") or translation_manager.t(
+            "viewer.game.pot", lang=language_code
+        )
+        bet_label = context.get("t_bet_label") or translation_manager.t(
+            "viewer.game.bet", lang=language_code
+        )
+        lines.append(
+            f"💰 {self._sanitize_text(pot_label)}: {pot_str} • "
+            f"{self._sanitize_text(bet_label)}: {bet_str}"
+        )
 
         # Side pots (compact)
         side_pots = getattr(game, "side_pots", None)
@@ -1051,18 +1070,23 @@ class LiveMessageManager:
         actor_name = self._get_player_name(current_player)
         timer_display = self._sanitize_text(context.get("timer_label", ""))
 
-        if current_player and actor_name not in {"", "—", "Waiting…"}:
+        if current_player and actor_name not in {"", "—"}:
             actor_display = self._sanitize_text(actor_name)
-            turn_label = context.get("t_turn_label", "TURN")
+            turn_label = context.get("t_turn_label") or translation_manager.t(
+                "viewer.game.turn", lang=language_code
+            )
+            safe_turn_label = self._sanitize_text(turn_label)
             turn_line = (
-                f"⏰ {UnicodeTextFormatter.make_bold(turn_label + ':')} {actor_display}"
+                f"⏰ {UnicodeTextFormatter.make_bold(safe_turn_label + ':')} {actor_display}"
             )
             if timer_display and timer_display != "—":
                 turn_line += f" ({timer_display})"
             lines.append(turn_line)
         else:
-            waiting_msg = context.get("t_waiting", "Waiting for players…")
-            lines.append(f"⏸️ {waiting_msg}")
+            waiting_msg = context.get("t_waiting") or translation_manager.t(
+                "viewer.game.waiting_players", lang=language_code
+            )
+            lines.append(f"⏸️ {self._sanitize_text(waiting_msg)}")
 
         lines.append("━" * 35)
 
@@ -1073,15 +1097,27 @@ class LiveMessageManager:
             for p in players
             if getattr(p, "state", None) not in {PlayerState.FOLD, None}
         )
-        active_label = context.get(
-            "t_active_count", "{active}/{total} Active"
+        active_label = context.get("t_active_count") or translation_manager.t(
+            "viewer.game.active_players", lang=language_code
         )
         active_text = active_label.format(active=active_count, total=len(players))
-        lines.append(f"👥 {UnicodeTextFormatter.make_bold(active_text)}")
+        lines.append(
+            f"👥 {UnicodeTextFormatter.make_bold(self._sanitize_text(active_text))}"
+        )
 
         actor_id = getattr(current_player, "user_id", None) if current_player else None
 
         max_name = 20 if compact else 32
+        fold_label = translation_manager.t(
+            "viewer.game.player_state.fold", lang=language_code
+        )
+        all_in_label = translation_manager.t(
+            "viewer.game.player_state.all_in", lang=language_code
+        )
+        waiting_label = translation_manager.t(
+            "viewer.game.player_state.waiting", lang=language_code
+        )
+
         for idx, player in enumerate(players, 1):
             state = getattr(player, "state", None)
             name = self._get_player_name(player)
@@ -1095,27 +1131,19 @@ class LiveMessageManager:
 
             # Icon + status
             if state == PlayerState.FOLD:
-                icon, status = "❌", "Fold"
+                icon, status = "❌", fold_label
             elif state == PlayerState.ALL_IN:
-                icon, status = "🔥", "All-In"
+                icon, status = "🔥", all_in_label
             elif bet > 0:
                 bet_icon = self._format_chips(bet)
                 icon, status = "💚", bet_icon
             else:
-                icon, status = "⏸️", "Wait"
+                icon, status = "⏸️", waiting_label
 
             prefix = "▶️" if player.user_id == actor_id else "  "
             stack_str = self._sanitize_text(self._format_chips(stack))
             if compact:
-                if icon == "💚":
-                    bet_display = status
-                elif icon == "🔥":
-                    bet_display = "All-In"
-                elif icon == "❌":
-                    bet_display = "Fold"
-                else:
-                    bet_display = "Wait"
-                bet_display = self._sanitize_text(bet_display)
+                bet_display = self._sanitize_text(status)
                 line = (
                     f"{prefix}P{idx} {safe_name} {icon} {stack_str}/{bet_display}"
                 )
@@ -1128,26 +1156,30 @@ class LiveMessageManager:
             lines.append(line)
 
         if not players:
-            no_players_msg = context.get(
-                "t_no_players", "No players seated yet"
+            no_players_msg = context.get("t_no_players") or translation_manager.t(
+                "viewer.lobby.no_players", lang=language_code
             )
-            lines.append(f"👥 {no_players_msg}")
+            lines.append(f"👥 {self._sanitize_text(no_players_msg)}")
 
         # Raise preview
         if preview_raise:
             lines.append("━" * 35)
-            selected_label = context.get("t_selected_label", "Selected")
+            selected_label = context.get("t_selected_label") or translation_manager.t(
+                "viewer.game.selected_raise", lang=language_code
+            )
             lines.append(
-                f"💰 {selected_label}: {self._sanitize_text(preview_raise)}"
+                f"💰 {self._sanitize_text(selected_label)}: {self._sanitize_text(preview_raise)}"
             )
 
         # Recent actions (last 2 only)
         recent = context.get("recent_actions", [])
         if recent:
             lines.append("━" * 35)
-            recent_label = context.get("t_recent_label", "Recent")
+            recent_label = context.get("t_recent_label") or translation_manager.t(
+                "viewer.game.recent_actions", lang=language_code
+            )
             lines.append(
-                f"📝 {UnicodeTextFormatter.make_bold(recent_label)}"
+                f"📝 {UnicodeTextFormatter.make_bold(self._sanitize_text(recent_label))}"
             )
             for action in recent[-2:]:
                 lines.append(f"  • {self._sanitize_text(action)}")

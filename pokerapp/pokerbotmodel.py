@@ -1865,6 +1865,15 @@ class PokerBotModel:
         user = query.from_user
 
         self._track_user(user.id, getattr(user, "username", None))
+        player_handle = getattr(user, "username", None)
+        if player_handle:
+            player_display = f"@{player_handle}"
+        else:
+            player_display = getattr(user, "full_name", None) or getattr(
+                user, "first_name", None
+            )
+            if not player_display:
+                player_display = str(user.id)
 
         # Load game from Redis
         lobby_key = ":".join(["private_game", game_code])
@@ -1872,16 +1881,20 @@ class PokerBotModel:
 
         if not game_data:
             try:
+                message = self._translate(
+                    "msg.private.error.game_not_found",
+                    user_id=user.id,
+                )
                 await NotificationManager.popup(
                     query,
-                    text="❌ Game not found!",
+                    text=message,
                     show_alert=True,
                     event="ModelPopup",
                 )
                 logger.info(
                     "💬 Popup sent to user %s: %s",
                     getattr(user, "id", "?"),
-                    "❌ Game not found!",
+                    message,
                 )
             except TelegramError as exc:
                 logger.warning(
@@ -1899,7 +1912,10 @@ class PokerBotModel:
         # Check if user is invited
         if user.id not in private_game.invited_players:
             await query.edit_message_text(
-                "❌ You are not invited to this game."
+                self._translate(
+                    "msg.private.error.not_invited",
+                    user_id=user.id,
+                )
             )
             return
 
@@ -1907,14 +1923,20 @@ class PokerBotModel:
         invite = private_game.invited_players[user.id]
         if invite.accepted:
             await query.edit_message_text(
-                "✅ You already accepted this invitation!"
+                self._translate(
+                    "msg.private.invite.already_accepted",
+                    user_id=user.id,
+                )
             )
             return
 
         # Check if game is still accepting players
         if private_game.state != PrivateGameState.LOBBY:
             await query.edit_message_text(
-                "❌ This game has already started or finished."
+                self._translate(
+                    "msg.private.error.already_started",
+                    user_id=user.id,
+                )
             )
             return
 
@@ -1922,7 +1944,10 @@ class PokerBotModel:
         stake_config = self._cfg.PRIVATE_STAKES.get(private_game.stake_level)
         if not stake_config:
             await query.edit_message_text(
-                "❌ Stake configuration missing for this game."
+                self._translate(
+                    "msg.private.error.stake_missing",
+                    user_id=user.id,
+                )
             )
             return
         wallet = self._get_wallet(user.id)
@@ -1956,21 +1981,38 @@ class PokerBotModel:
         )
 
         # Update invitation message
-        message = (
-            "✅ Invitation accepted!\n\n"
-            f"🎯 {UnicodeTextFormatter.make_bold('Game Code')}: {game_code}\n"
-            f"💰 {UnicodeTextFormatter.make_bold('Stakes')}: {stake_config['name']}\n\n"
-            "You have joined the game lobby.\n\n"
-            "Waiting for host to start the game..."
+        acceptance_text = self._translate(
+            "msg.private.invite.accepted",
+            user_id=user.id,
+            code=game_code,
+            stake=stake_config["name"],
         )
+        waiting_text = self._translate(
+            "msg.lobby.waiting",
+            user_id=user.id,
+        )
+
         await query.edit_message_text(
-            text=message,
+            text=f"{acceptance_text}\n\n{waiting_text}",
         )
 
         # Notify host
+        player_handle = getattr(user, "username", None)
+        if player_handle:
+            player_display = f"@{player_handle}"
+        else:
+            player_display = getattr(user, "full_name", None) or getattr(
+                user, "first_name", None
+            )
+            if not player_display:
+                player_display = str(user.id)
         await context.bot.send_message(
             chat_id=private_game.host_user_id,
-            text=f"✅ {user.full_name} accepted your invitation!"
+            text=self._translate(
+                "msg.private.invite.accepted_host",
+                user_id=private_game.host_user_id,
+                player=player_display,
+            )
         )
 
     async def decline_private_game_invite(
@@ -2002,16 +2044,20 @@ class PokerBotModel:
 
         if not game_data:
             try:
+                message = self._translate(
+                    "msg.private.error.game_not_found",
+                    user_id=user.id,
+                )
                 await NotificationManager.popup(
                     query,
-                    text="❌ Game not found!",
+                    text=message,
                     show_alert=True,
                     event="ModelPopup",
                 )
                 logger.info(
                     "💬 Popup sent to user %s: %s",
                     getattr(user, "id", "?"),
-                    "❌ Game not found!",
+                    message,
                 )
             except TelegramError as exc:
                 logger.warning(
@@ -2029,7 +2075,10 @@ class PokerBotModel:
         # Check if user is invited
         if user.id not in private_game.invited_players:
             await query.edit_message_text(
-                "❌ You are not invited to this game."
+                self._translate(
+                    "msg.private.error.not_invited",
+                    user_id=user.id,
+                )
             )
             return
 
@@ -2044,9 +2093,10 @@ class PokerBotModel:
         )
 
         # Update invitation message
-        message = (
-            "❌ Invitation declined.\n\n"
-            f"You can still join later with /join {game_code}"
+        message = self._translate(
+            "msg.private.invite.declined_with_hint",
+            user_id=user.id,
+            code=game_code,
         )
         await query.edit_message_text(
             text=message,
@@ -2055,7 +2105,11 @@ class PokerBotModel:
         # Notify host
         await context.bot.send_message(
             chat_id=private_game.host_user_id,
-            text=f"❌ {user.full_name} declined your invitation."
+            text=self._translate(
+                "msg.private.invite.declined_host",
+                user_id=private_game.host_user_id,
+                player=player_display,
+            )
         )
 
     async def _get_user_balance(self, user_id: int) -> int:
@@ -2296,6 +2350,7 @@ class PokerBotModel:
         self._apply_user_language(update)
 
         user = update.effective_user
+        user_id = getattr(user, "id", None)
         self._track_user(user.id, getattr(user, "username", None))
 
         # Check if user has active private game
@@ -2308,9 +2363,9 @@ class PokerBotModel:
         if not game_code:
             await self._send_response(
                 update,
-                (
-                    "❌ You don't have an active private game.\n\n"
-                    "Create one with /private"
+                self._translate(
+                    "msg.private.error.no_active_game",
+                    user_id=user_id,
                 ),
             )
             return
@@ -2319,7 +2374,10 @@ class PokerBotModel:
         if not context.args:
             await self._send_response(
                 update,
-                "❌ Please specify a player:\n\n/invite @username",
+                self._translate(
+                    "msg.private.error.missing_player",
+                    user_id=user_id,
+                ),
             )
             return
 
@@ -2328,7 +2386,10 @@ class PokerBotModel:
         if not target_username:
             await self._send_response(
                 update,
-                "❌ Please specify a player:\n\n/invite @username",
+                self._translate(
+                    "msg.private.error.missing_player",
+                    user_id=user_id,
+                ),
             )
             return
 
@@ -2337,9 +2398,10 @@ class PokerBotModel:
         if not target_user_id:
             await self._send_response(
                 update,
-                (
-                    f"❌ User @{target_username} not found.\n\n"
-                    "Players must have used the bot before being invited."
+                self._translate(
+                    "msg.private.error.user_not_found",
+                    user_id=user_id,
+                    username=f"@{target_username}",
                 ),
             )
             return
@@ -2365,7 +2427,13 @@ class PokerBotModel:
             game_json = game_json.decode("utf-8")
 
         if not game_json:
-            await self._send_response(update, "❌ Game not found.")
+            await self._send_response(
+                update,
+                self._translate(
+                    "msg.private.error.game_not_found",
+                    user_id=user_id,
+                ),
+            )
             return
 
         game_data = json.loads(game_json)
@@ -2376,7 +2444,10 @@ class PokerBotModel:
         except KeyError:
             await self._send_response(
                 update,
-                "❌ Game stakes are misconfigured.",
+                self._translate(
+                    "msg.private.error.game_misconfigured",
+                    user_id=user_id,
+                ),
             )
             return
 
@@ -2424,15 +2495,20 @@ class PokerBotModel:
             )
             await self._send_response(
                 update,
-                f"✅ Invitation sent to @{target_username}!",
+                self._translate(
+                    "msg.private.invite.sent",
+                    user_id=user_id,
+                    username=f"@{target_username}",
+                ),
             )
         except Exception as exc:
             logger.error("Failed to send invitation: %s", exc)
             await self._send_response(
                 update,
-                (
-                    f"❌ Couldn't send invitation to @{target_username}.\n"
-                    "They may have blocked the bot."
+                self._translate(
+                    "msg.private.invite.send_failed",
+                    user_id=user_id,
+                    username=f"@{target_username}",
                 ),
             )
 
@@ -2454,6 +2530,9 @@ class PokerBotModel:
             return
 
         user = update.effective_user
+        user_id = getattr(user, "id", None)
+        message = update.effective_message
+        reply_to_id = getattr(message, "message_id", None)
         chat_id = update.effective_chat.id
 
         # Get game code from user's active game
@@ -2463,9 +2542,11 @@ class PokerBotModel:
         if not game_code:
             await self._send_response(
                 update,
-                "❌ You don't have an active private game.\n\n"
-                "Create one with /private",
-                reply_to_message_id=update.effective_message.message_id,
+                self._translate(
+                    "msg.private.error.no_active_game",
+                    user_id=user_id,
+                ),
+                reply_to_message_id=reply_to_id,
             )
             return _log_and_return()
 
@@ -2482,8 +2563,12 @@ class PokerBotModel:
         if not game_json:
             await self._send_response(
                 update,
-                f"❌ Game {game_code} not found or expired.",
-                reply_to_message_id=update.effective_message.message_id,
+                self._translate(
+                    "msg.private.error.game_expired",
+                    user_id=user_id,
+                    code=game_code,
+                ),
+                reply_to_message_id=reply_to_id,
             )
             return _log_and_return()
 
@@ -2493,8 +2578,11 @@ class PokerBotModel:
         if user.id != private_game.host_user_id:
             await self._send_response(
                 update,
-                "❌ Only the host can start the game!",
-                reply_to_message_id=update.effective_message.message_id,
+                self._translate(
+                    "msg.private.error.host_only_start",
+                    user_id=user_id,
+                ),
+                reply_to_message_id=reply_to_id,
             )
             return _log_and_return()
 
@@ -2502,8 +2590,11 @@ class PokerBotModel:
         if private_game.state != PrivateGameState.LOBBY:
             await self._send_response(
                 update,
-                "❌ Game has already started or finished!",
-                reply_to_message_id=update.effective_message.message_id,
+                self._translate(
+                    "msg.private.error.already_started",
+                    user_id=user_id,
+                ),
+                reply_to_message_id=reply_to_id,
             )
             return _log_and_return()
 
@@ -2522,12 +2613,13 @@ class PokerBotModel:
         if len(accepted_players) < self._cfg.PRIVATE_MIN_PLAYERS:
             await self._send_response(
                 update,
-                (
-                    "❌ Need at least "
-                    f"{self._cfg.PRIVATE_MIN_PLAYERS} players to start!\n\n"
-                    f"Current: {len(accepted_players)} player(s)"
+                self._translate(
+                    "msg.private.error.min_players",
+                    user_id=user_id,
+                    min_players=self._cfg.PRIVATE_MIN_PLAYERS,
+                    current=len(accepted_players),
                 ),
-                reply_to_message_id=update.effective_message.message_id,
+                reply_to_message_id=reply_to_id,
             )
             return _log_and_return()
 
@@ -2535,13 +2627,13 @@ class PokerBotModel:
         if len(accepted_players) > self._cfg.PRIVATE_MAX_PLAYERS:
             await self._send_response(
                 update,
-                (
-                    f"❌ Too many players to start!\n\n"
-                    f"Maximum: {self._cfg.PRIVATE_MAX_PLAYERS} players\n"
-                    f"Current: {len(accepted_players)} players\n\n"
-                    "Some players must /leave before starting."
+                self._translate(
+                    "msg.private.error.too_many_players",
+                    user_id=user_id,
+                    max_players=self._cfg.PRIVATE_MAX_PLAYERS,
+                    current=len(accepted_players),
                 ),
-                reply_to_message_id=update.effective_message.message_id,
+                reply_to_message_id=reply_to_id,
             )
             return _log_and_return()
 
@@ -2551,8 +2643,11 @@ class PokerBotModel:
         if not stake_config:
             await self._send_response(
                 update,
-                "❌ Stake configuration missing for this game!",
-                reply_to_message_id=update.effective_message.message_id,
+                self._translate(
+                    "msg.private.error.stake_missing",
+                    user_id=user_id,
+                ),
+                reply_to_message_id=reply_to_id,
             )
             return _log_and_return()
 
@@ -2597,21 +2692,38 @@ class PokerBotModel:
 
         # If any player lacks funds, reject start
         if insufficient_players:
-            error_lines = ["❌ Cannot start game - insufficient funds:\n"]
+            required_display = format(minimum_required, ",")
+            error_lines = [
+                self._translate(
+                    "msg.private.error.insufficient_funds_header",
+                    user_id=user_id,
+                )
+            ]
 
             for player_id, name, balance in insufficient_players:
+                balance_display = format(balance, ",")
                 error_lines.append(
-                    f"• {name}: {balance}$ (need {minimum_required}$)"
+                    self._translate(
+                        "msg.private.error.insufficient_funds_line",
+                        user_id=user_id,
+                        player=name,
+                        balance=balance_display,
+                        required=required_display,
+                    )
                 )
 
             error_lines.append(
-                f"\nAll players need at least {minimum_required}$ to play."
+                self._translate(
+                    "msg.private.error.insufficient_funds_footer",
+                    user_id=user_id,
+                    required=required_display,
+                )
             )
 
             await self._send_response(
                 update,
                 "\n".join(error_lines),
-                reply_to_message_id=update.effective_message.message_id,
+                reply_to_message_id=reply_to_id,
             )
 
             # Clean up lobby immediately (don't wait for TTL)
@@ -2666,9 +2778,9 @@ class PokerBotModel:
             )
             await self._view.send_message(
                 chat_id=chat_id,
-                text=(
-                    "⚠️ Lobby state changed during game start. "
-                    "Please try /start again."
+                text=self._translate(
+                    "msg.private.error.lobby_changed",
+                    user_id=user_id,
                 ),
             )
             return _log_and_return()
@@ -3238,6 +3350,7 @@ class PokerBotModel:
             return
 
         user = query.from_user
+        user_id = getattr(user, "id", None)
         self._track_user(user.id, getattr(user, "username", None))
 
         # Extract game code from callback data
@@ -3245,7 +3358,10 @@ class PokerBotModel:
             game_code = query.data.split(":", 1)[1]
         except IndexError:
             await query.edit_message_text(
-                "❌ This invitation has expired or is invalid.",
+                self._translate(
+                    "msg.private.error.invite_invalid",
+                    user_id=user_id,
+                )
             )
             return
 
@@ -3258,7 +3374,10 @@ class PokerBotModel:
 
         if not invite_json:
             await query.edit_message_text(
-                "❌ This invitation has expired or is invalid.",
+                self._translate(
+                    "msg.private.error.invite_invalid",
+                    user_id=user_id,
+                )
             )
             return
 
@@ -3267,7 +3386,11 @@ class PokerBotModel:
 
         if status != "pending":
             await query.edit_message_text(
-                f"❌ You already {status} this invitation.",
+                self._translate(
+                    "msg.private.error.invite_already_responded",
+                    user_id=user_id,
+                    status=status,
+                )
             )
             return
 
@@ -3277,7 +3400,12 @@ class PokerBotModel:
         try:
             stake_config = self._cfg.PRIVATE_STAKES[stake_level]
         except KeyError:
-            await query.edit_message_text("❌ Game stakes are misconfigured.")
+            await query.edit_message_text(
+                self._translate(
+                    "msg.private.error.game_misconfigured",
+                    user_id=user_id,
+                )
+            )
             return
 
         wallet = self._get_wallet(user.id)
@@ -3309,7 +3437,12 @@ class PokerBotModel:
             game_json = game_json.decode("utf-8")
 
         if not game_json:
-            await query.edit_message_text("❌ Game no longer exists.")
+            await query.edit_message_text(
+                self._translate(
+                    "msg.private.error.game_missing",
+                    user_id=user_id,
+                )
+            )
             return
 
         from pokerapp.private_game import PrivateGame
@@ -3361,20 +3494,34 @@ class PokerBotModel:
             pass
 
         # Update player's message
+        stake_name = stake_config.get("name") or str(stake_level).title()
         await query.edit_message_text(
-            "✅ Joined Game!\n\n"
-            f"Game Code: {game_code}\n"
-            f"Stakes: {stake_config['name']}\n\n"
-            "Use /leave to exit the lobby.",
+            self._translate(
+                "msg.private.invite.accepted",
+                user_id=user_id,
+                code=game_code,
+                stake=stake_name,
+            )
         )
 
         # Notify host
         try:
+            host_id = invite_data["host_id"]
+            player_handle = getattr(user, "username", None)
+            if player_handle:
+                player_display = f"@{player_handle}"
+            else:
+                player_display = getattr(user, "full_name", None) or getattr(
+                    user, "first_name", None
+                )
+                if not player_display:
+                    player_display = str(user.id)
             await self._bot.send_message(
-                chat_id=invite_data["host_id"],
-                text=(
-                    f"✅ @{user.username or user.first_name} "
-                    "accepted your invitation!"
+                chat_id=host_id,
+                text=self._translate(
+                    "msg.private.invite.accepted_host",
+                    user_id=host_id,
+                    player=player_display,
                 ),
             )
         except Exception:
@@ -3395,6 +3542,7 @@ class PokerBotModel:
             return
 
         user = query.from_user
+        user_id = getattr(user, "id", None)
         self._track_user(user.id, getattr(user, "username", None))
 
         # Extract game code
@@ -3402,7 +3550,10 @@ class PokerBotModel:
             game_code = query.data.split(":", 1)[1]
         except IndexError:
             await query.edit_message_text(
-                "❌ This invitation has expired or is invalid.",
+                self._translate(
+                    "msg.private.error.invite_invalid",
+                    user_id=user_id,
+                )
             )
             return
 
@@ -3415,7 +3566,10 @@ class PokerBotModel:
 
         if not invite_json:
             await query.edit_message_text(
-                "❌ This invitation has expired or is invalid.",
+                self._translate(
+                    "msg.private.error.invite_invalid",
+                    user_id=user_id,
+                )
             )
             return
 
@@ -3438,17 +3592,29 @@ class PokerBotModel:
 
         # Update message
         await query.edit_message_text(
-            "❌ Invitation Declined\n\n"
-            "You declined the game invitation.",
+            self._translate(
+                "msg.private.invite.declined",
+                user_id=user_id,
+            )
         )
 
         # Notify host
         try:
+            player_handle = getattr(user, "username", None)
+            if player_handle:
+                player_display = f"@{player_handle}"
+            else:
+                player_display = getattr(user, "full_name", None) or getattr(
+                    user, "first_name", None
+                )
+                if not player_display:
+                    player_display = str(user.id)
             await self._bot.send_message(
                 chat_id=invite_data["host_id"],
-                text=(
-                    f"❌ @{user.username or user.first_name} "
-                    "declined your invitation."
+                text=self._translate(
+                    "msg.private.invite.declined_host",
+                    user_id=invite_data["host_id"],
+                    player=player_display,
                 ),
             )
         except Exception:
@@ -3477,7 +3643,10 @@ class PokerBotModel:
         if not game_chat_id:
             await self._send_response(
                 update,
-                "❌ You're not in any private game.",
+                self._translate(
+                    "msg.private.error.not_in_game",
+                    user_id=user_id,
+                ),
                 reply_to_message_id=reply_to_id,
             )
             return
@@ -3493,7 +3662,10 @@ class PokerBotModel:
             self._kv.delete(user_game_key)
             await self._send_response(
                 update,
-                "❌ Game session not found.",
+                self._translate(
+                    "msg.private.error.session_missing",
+                    user_id=user_id,
+                ),
                 reply_to_message_id=reply_to_id,
             )
             return
@@ -3511,7 +3683,10 @@ class PokerBotModel:
             self._kv.delete(user_game_key)
             await self._send_response(
                 update,
-                "❌ Game session not found.",
+                self._translate(
+                    "msg.private.error.session_missing",
+                    user_id=user_id,
+                ),
                 reply_to_message_id=reply_to_id,
             )
             return
@@ -3519,7 +3694,10 @@ class PokerBotModel:
         if game.state != GameState.INITIAL:
             await self._send_response(
                 update,
-                "❌ Cannot leave started game. Use buttons to fold.",
+                self._translate(
+                    "msg.private.error.cannot_leave_started",
+                    user_id=user_id,
+                ),
                 reply_to_message_id=reply_to_id,
             )
             return
@@ -3537,7 +3715,10 @@ class PokerBotModel:
             self._kv.delete(user_game_key)
             await self._send_response(
                 update,
-                "❌ You're not in any private game.",
+                self._translate(
+                    "msg.private.error.not_in_game",
+                    user_id=user_id,
+                ),
                 reply_to_message_id=reply_to_id,
             )
             return
@@ -3573,11 +3754,9 @@ class PokerBotModel:
 
             await self._send_response(
                 update,
-                "\n".join(
-                    [
-                        "🚪 You left the private game.",
-                        "Your seat is now available for others.",
-                    ]
+                self._translate(
+                    "msg.private.lobby.leave_confirmation",
+                    user_id=user_id,
                 ),
                 reply_to_message_id=reply_to_id,
             )
@@ -3598,32 +3777,58 @@ class PokerBotModel:
 
         await self._send_response(
             update,
-            "\n".join(
-                [
-                    "🚪 You left the private game.",
-                    "Your seat is now available for others.",
-                ]
+            self._translate(
+                "msg.private.lobby.leave_confirmation",
+                user_id=user_id,
             ),
             reply_to_message_id=reply_to_id,
         )
 
-        lobby_text = f"👋 {player_mention} left the game.\n"
+        lobby_lines = [
+            self._translate(
+                "msg.private.lobby.player_left",
+                user_id=user_id,
+                player=player_mention,
+            )
+        ]
 
         if new_host is not None:
-            lobby_text += f"👑 {new_host.mention_markdown} is now the host!\n\n"
-        else:
-            lobby_text += "\n"
+            lobby_lines.append(
+                self._translate(
+                    "msg.private.lobby.new_host",
+                    user_id=user_id,
+                    player=new_host.mention_markdown,
+                )
+            )
 
-        lobby_text += (
-            f"👥 Current players ({len(game.players)}/{MAX_PLAYERS})"
-            ":\n"
+        lobby_lines.append("")
+        lobby_lines.append(
+            self._translate(
+                "msg.private.lobby.current_players",
+                user_id=user_id,
+                current=len(game.players),
+                max=MAX_PLAYERS,
+            )
+        )
+
+        host_marker = self._translate(
+            "msg.private.lobby.host_marker",
+            user_id=user_id,
         )
 
         for idx, player in enumerate(game.players, 1):
-            lobby_text += f"{idx}. {player.mention_markdown}"
-            if idx == 1:
-                lobby_text += " 👑 (Host)"
-            lobby_text += "\n"
+            marker = host_marker if idx == 1 else ""
+            lobby_lines.append(
+                self._translate(
+                    "msg.private.lobby.player_entry",
+                    user_id=user_id,
+                    index=idx,
+                    player=player.mention_markdown,
+                    host_marker=marker,
+                )
+            )
+
+        lobby_text = "\n".join(lobby_lines)
 
         try:
             await self._view.send_message(
@@ -3681,7 +3886,10 @@ class PokerBotModel:
             await self._view.send_message_reply(
                 chat_id=chat.id,
                 message_id=reply_to_id,
-                text="⚠️ This private game is no longer available.",
+                text=self._translate(
+                    "msg.private.error.status_unavailable",
+                    user_id=user_id,
+                ),
             )
             return
 
@@ -3698,7 +3906,10 @@ class PokerBotModel:
             await self._view.send_message_reply(
                 chat_id=chat.id,
                 message_id=reply_to_id,
-                text="⚠️ Unable to load private game details.",
+                text=self._translate(
+                    "msg.private.error.status_failed",
+                    user_id=user_id,
+                ),
             )
             return
 
@@ -3815,11 +4026,19 @@ class PokerBotModel:
             await self._view.send_message_reply(
                 chat_id=chat.id,
                 message_id=reply_to_id,
-                text="📭 You have no pending invitations.",
+                text=self._translate(
+                    "msg.private.invite.summary.empty",
+                    user_id=user_id,
+                ),
             )
             return
 
-        lines = ["📨 Pending invitations:"]
+        lines = [
+            self._translate(
+                "msg.private.invite.summary.header",
+                user_id=user_id,
+            )
+        ]
 
         for code in sorted(codes):
             invite_key = ":".join(["invite", str(code), str(user_id)])
@@ -3849,11 +4068,30 @@ class PokerBotModel:
                 details.append(escape_markdown(host_name, version=1))
 
             if details:
-                lines.append(f"• {code} — {' · '.join(details)}")
+                joined = " · ".join(details)
+                lines.append(
+                    self._translate(
+                        "msg.private.invite.summary.entry_with_details",
+                        user_id=user_id,
+                        code=code,
+                        details=joined,
+                    )
+                )
             else:
-                lines.append(f"• {code}")
+                lines.append(
+                    self._translate(
+                        "msg.private.invite.summary.entry_simple",
+                        user_id=user_id,
+                        code=code,
+                    )
+                )
 
-        lines.append("Use /accept CODE to join or /decline CODE to refuse.")
+        lines.append(
+            self._translate(
+                "msg.private.invite.summary.footer",
+                user_id=user_id,
+            )
+        )
 
         await self._view.send_message_reply(
             chat_id=chat.id,
@@ -3886,7 +4124,10 @@ class PokerBotModel:
             )
             return PlayerActionValidation(
                 success=False,
-                message="❌ Cannot determine chat context",
+                message=self._translate(
+                    "model.error.chat_context_missing",
+                    user_id=user_id,
+                ),
             )
 
         chat_data = self._application.chat_data.get(chat_id_int, {})
@@ -3906,7 +4147,10 @@ class PokerBotModel:
             )
             return PlayerActionValidation(
                 success=False,
-                message="❌ No active game in this chat",
+                message=self._translate(
+                    "model.error.no_active_game_chat",
+                    user_id=user_id,
+                ),
             )
 
         if message_version is not None:
@@ -3922,8 +4166,9 @@ class PokerBotModel:
                 )
                 return PlayerActionValidation(
                     success=False,
-                    message=(
-                        "♻️ Action expired. Please use the latest buttons."
+                    message=self._translate(
+                        "model.error.action_expired",
+                        user_id=user_id,
                     ),
                 )
 
@@ -4004,7 +4249,10 @@ class PokerBotModel:
             )
             return PlayerActionValidation(
                 success=False,
-                message="🛑 Game is not accepting actions right now.",
+                message=self._translate(
+                    "model.error.game_inactive",
+                    user_id=user_id,
+                ),
             )
 
         if current_player.state not in (
@@ -4017,9 +4265,15 @@ class PokerBotModel:
                 current_player.state,
             )
             if current_player.state == PlayerState.FOLD:
-                message = "❌ You already folded!"
+                message = self._translate(
+                    "model.error.already_folded",
+                    user_id=user_id,
+                )
             else:
-                message = "❌ You cannot act right now"
+                message = self._translate(
+                    "model.error.cannot_act_now",
+                    user_id=user_id,
+                )
             return PlayerActionValidation(
                 success=False,
                 message=message,
@@ -4034,7 +4288,10 @@ class PokerBotModel:
                 )
                 return PlayerActionValidation(
                     success=False,
-                    message="❌ You must call or raise",
+                    message=self._translate(
+                        "model.error.call_or_raise",
+                        user_id=user_id,
+                    ),
                 )
 
         elif action_type == "raise":
@@ -4045,7 +4302,10 @@ class PokerBotModel:
                 )
                 return PlayerActionValidation(
                     success=False,
-                    message="❌ Invalid raise amount",
+                    message=self._translate(
+                        "model.error.invalid_raise_amount",
+                        user_id=user_id,
+                    ),
                 )
 
             min_raise = game.max_round_rate * 2
@@ -4059,7 +4319,11 @@ class PokerBotModel:
                 )
                 return PlayerActionValidation(
                     success=False,
-                    message=f"❌ Minimum raise is ${min_raise}",
+                    message=self._translate(
+                        "model.error.min_raise",
+                        user_id=user_id,
+                        amount=min_raise,
+                    ),
                 )
 
         elif action_type in {"fold", "call", "all_in"}:
@@ -4068,7 +4332,10 @@ class PokerBotModel:
             logger.warning("Unknown action_type: %s", action_type)
             return PlayerActionValidation(
                 success=False,
-                message="❌ Unknown action",
+                message=self._translate(
+                    "model.error.unknown_action",
+                    user_id=user_id,
+                ),
             )
 
         prepared = PreparedPlayerAction(
@@ -4129,16 +4396,29 @@ class PokerBotModel:
         try:
             if action_type == "fold":
                 current_player.state = PlayerState.FOLD
-                action_text = f"{player_name} folded"
+                action_text = self._translate(
+                    "msg.player_folded",
+                    user_id=current_player.user_id,
+                    player=player_name,
+                )
 
             elif action_type == "check":
-                action_text = f"{player_name} checked"
+                action_text = self._translate(
+                    "msg.player_checked",
+                    user_id=current_player.user_id,
+                    player=player_name,
+                )
 
             elif action_type == "call":
                 call_amount = self._coordinator.player_call_or_check(
                     game, current_player
                 )
-                action_text = f"{player_name} called ${call_amount}"
+                action_text = self._translate(
+                    "msg.player_called",
+                    user_id=current_player.user_id,
+                    player=player_name,
+                    amount=call_amount,
+                )
 
             elif action_type == "raise":
                 raise_amount = prepared.raise_amount
@@ -4155,15 +4435,23 @@ class PokerBotModel:
                     raise_amount,
                 )
                 target_amount = current_player.round_rate
-                action_text = f"{player_name} raised to ${target_amount}"
+                action_text = self._translate(
+                    "msg.player_raised",
+                    user_id=current_player.user_id,
+                    player=player_name,
+                    amount=target_amount,
+                )
 
             elif action_type == "all_in":
                 all_in_amount = self._coordinator.player_all_in(
                     game, current_player
                 )
                 current_player.state = PlayerState.ALL_IN
-                action_text = (
-                    f"{player_name} went ALL-IN (${all_in_amount})"
+                action_text = self._translate(
+                    "msg.player_all_in",
+                    user_id=current_player.user_id,
+                    player=player_name,
+                    amount=all_in_amount,
                 )
 
             else:

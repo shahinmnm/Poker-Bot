@@ -87,7 +87,8 @@
       "insufficient_funds_detail": "🇸🇦 ❌ لا توجد رقائق كافية. لديك {balance} لكنك تحتاج {required}.",
       "not_enough_players_ready": "🇸🇦 ⚠️ ننتظر مزيداً من اللاعبين الجاهزين قبل بدء اللعبة.",
       "players_insufficient_funds": "🇸🇦 ⚠️ هؤلاء اللاعبون يحتاجون إلى مزيد من الرقائق: {players}",
-      "wallet_not_enough": "🇸🇦 ❌ ليس لديك ما يكفي من الرقائق لتنفيذ هذا الإجراء."
+      "wallet_not_enough": "🇸🇦 ❌ ليس لديك ما يكفي من الرقائق لتنفيذ هذا الإجراء.",
+      "rate_limited": "[ar] ⚠️ Too many requests. Please slow down and try again later."
     },
     "game_started": "🎮 بدأت الجولة! بالتوفيق!",
     "new_round": "🔄 جولة جديدة تبدأ...",
@@ -103,7 +104,22 @@
     "private": {
       "invite": {
         "body": "🎰 دعوة للعبة خاصة\n\n{inviter} يدعوك للانضمام!\n\n🎲 الرهانات: {stake}\n🔑 الرمز: {code}\n\nهل تنضم؟",
-        "detailed_body": "🎴 دعوة للعبة\n\n{host} يدعوك للعب!\n\n🎯 رمز اللعبة: {code}\n\n💰 الرهانات: {stake_name}\n• الرهان الصغير: ${small_blind}\n• الرهان الكبير: ${big_blind}\n💵 الحد الأدنى للشراء: ${min_buyin}\n\nهل ترغب بالانضمام؟"
+        "detailed_body": "🎴 دعوة للعبة\n\n{host} يدعوك للعب!\n\n🎯 رمز اللعبة: {code}\n\n💰 الرهانات: {stake_name}\n• الرهان الصغير: ${small_blind}\n• الرهان الكبير: ${big_blind}\n💵 الحد الأدنى للشراء: ${min_buyin}\n\nهل ترغب بالانضمام؟",
+        "sent": "[ar] ✅ Invitation sent to {username}!",
+        "send_failed": "[ar] ❌ Couldn't send invitation to {username}.\nThey may have blocked the bot.",
+        "accepted": "[ar] ✅ Joined Game!\n\nGame Code: {code}\nStakes: {stake}\n\nUse /leave to exit the lobby.",
+        "accepted_host": "[ar] ✅ {player} accepted your invitation!",
+        "declined": "[ar] ❌ Invitation Declined\n\nYou declined the game invitation.",
+        "declined_host": "[ar] ❌ {player} declined your invitation.",
+        "summary": {
+          "empty": "[ar] 📭 You have no pending invitations.",
+          "header": "[ar] 📨 Pending invitations:",
+          "entry_with_details": "[ar] • {code} — {details}",
+          "entry_simple": "[ar] • {code}",
+          "footer": "[ar] Use /accept CODE to join or /decline CODE to refuse."
+        },
+        "already_accepted": "[ar] ✅ You already accepted this invitation!",
+        "declined_with_hint": "[ar] ❌ Invitation declined.\n\nYou can still join later with /join {code}"
       },
       "lobby": {
         "body": "{title}\n\n🎯 المضيف: {host}\n🎲 الرهانات: {stake}\n🔑 الرمز: {code}\n\n{player_status}\n\n{players}\n\n{readiness}",
@@ -111,7 +127,13 @@
         "player_status": "{status_icon} اللاعبون: {current}/{max} {min_indicator}",
         "ready": "✅ جاهزون للبدء!",
         "title": "🔒 صالة اللعبة الخاصة",
-        "waiting": "⏳ ننتظر المزيد من اللاعبين (الحد الأدنى {min_players})..."
+        "waiting": "⏳ ننتظر المزيد من اللاعبين (الحد الأدنى {min_players})...",
+        "leave_confirmation": "[ar] 🚪 You left the private game.\nYour seat is now available for others.",
+        "player_left": "[ar] 👋 {player} left the game.",
+        "new_host": "[ar] 👑 {player} is now the host!",
+        "current_players": "[ar] 👥 Current players ({current}/{max}):",
+        "player_entry": "[ar] {index}. {player}{host_marker}",
+        "host_marker": "[ar]  👑 (Host)"
       },
       "stake_menu": {
         "body": "🇸🇦 {title}\\n\\n{subtitle}\\n\\n{options}\\n\\n{footer}",
@@ -127,7 +149,31 @@
       },
       "error": {
         "already_active": "🇸🇦 ⚠️ لديك بالفعل لعبة خاصة نشطة. أنهها أو أغلقها قبل إنشاء أخرى.",
-        "invalid_stake": "🇸🇦 ⚠️ مستوى الرهانات '{level}' غير معروف. اختر خياراً آخر."
+        "invalid_stake": "🇸🇦 ⚠️ مستوى الرهانات '{level}' غير معروف. اختر خياراً آخر.",
+        "no_active_game": "[ar] ❌ You don't have an active private game.\n\nCreate one with /private",
+        "missing_player": "[ar] ❌ Please specify a player:\n\n/invite @username",
+        "user_not_found": "[ar] ❌ User {username} not found.\n\nPlayers must have used the bot before being invited.",
+        "game_not_found": "[ar] ❌ Game not found.",
+        "game_misconfigured": "[ar] ❌ Game stakes are misconfigured.",
+        "game_expired": "[ar] ❌ Game {code} not found or expired.",
+        "host_only_start": "[ar] ❌ Only the host can start the game!",
+        "already_started": "[ar] ❌ Game has already started or finished!",
+        "min_players": "[ar] ❌ Need at least {min_players} players to start!\n\nCurrent: {current} player(s)",
+        "too_many_players": "[ar] ❌ Too many players to start!\n\nMaximum: {max_players} players\nCurrent: {current} players\n\nSome players must /leave before starting.",
+        "stake_missing": "[ar] ❌ Stake configuration missing for this game!",
+        "insufficient_funds_header": "[ar] ❌ Cannot start game - insufficient funds:\n",
+        "insufficient_funds_line": "[ar] • {player}: ${balance} (need ${required})",
+        "insufficient_funds_footer": "[ar] \nAll players need at least ${required} to play.",
+        "lobby_changed": "[ar] ⚠️ Lobby state changed during game start. Please try /start again.",
+        "invite_invalid": "[ar] ❌ This invitation has expired or is invalid.",
+        "invite_already_responded": "[ar] ❌ You already {status} this invitation.",
+        "game_missing": "[ar] ❌ Game no longer exists.",
+        "not_in_game": "[ar] ❌ You're not in any private game.",
+        "session_missing": "[ar] ❌ Game session not found.",
+        "cannot_leave_started": "[ar] ❌ Cannot leave started game. Use buttons to fold.",
+        "status_unavailable": "[ar] ⚠️ This private game is no longer available.",
+        "status_failed": "[ar] ⚠️ Unable to load private game details.",
+        "not_invited": "[ar] ❌ You are not invited to this game."
       },
       "created": "🇸🇦 🎉 تم إنشاء طاولة خاصة!\\nالمضيف: {host}\\nالرهانات: {stake}\\nالشراء: ${min_buyin} - ${max_buyin}\\nالرمز: {code}\\nالحد الأقصى للاعبين: {max_players}\\n\\nشارك الرمز مع أصدقائك لدعوتهم."
     },
@@ -147,6 +193,22 @@
       "game_in_progress": "🇸🇦 🎮 هناك لعبة قيد التشغيل بالفعل.",
       "insufficient_funds": "🇸🇦 💰 لا تملك ما يكفي من الرقائق لهذه الطاولة.",
       "room_full": "🇸🇦 🚫 الصالة ممتلئة (الحد الأقصى {max_players} لاعبين)."
+    },
+    "player_action": {
+      "generic": "[ar] {player} {action} ${amount}"
+    },
+    "model": {
+      "error": {
+        "chat_context_missing": "[ar] ❌ Cannot determine chat context",
+        "no_active_game_chat": "[ar] ❌ No active game in this chat",
+        "action_expired": "[ar] ♻️ Action expired. Please use the latest buttons.",
+        "game_inactive": "[ar] 🛑 Game is not accepting actions right now.",
+        "already_folded": "[ar] ❌ You already folded!",
+        "cannot_act_now": "[ar] ❌ You cannot act right now",
+        "call_or_raise": "[ar] ❌ You must call or raise",
+        "invalid_raise_amount": "[ar] ❌ Invalid raise amount",
+        "unknown_action": "[ar] ❌ Unknown action"
+      }
     }
   },
   "popup": {
@@ -470,7 +532,12 @@
       "waiting_players": "في انتظار اللاعبين…",
       "active_players": "{active}/{total} نشط",
       "recent_actions": "الإجراءات الأخيرة",
-      "selected_raise": "المبلغ المحدد"
+      "selected_raise": "المبلغ المحدد",
+      "player_state": {
+        "fold": "انسحب",
+        "all_in": "آل-إن",
+        "waiting": "ينتظر"
+      }
     },
     "lobby": {
       "no_players": "لا يوجد لاعبون بعد"

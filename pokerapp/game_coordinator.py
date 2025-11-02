@@ -17,6 +17,7 @@ from pokerapp.entities import (
     Money,
 )
 from pokerapp.notify_utils import LoggerHelper
+from pokerapp.i18n import translation_manager
 from pokerapp.winnerdetermination import WinnerDetermination
 
 logger = logging.getLogger(__name__)
@@ -362,16 +363,46 @@ class GameCoordinator:
         """
 
         name = player.first_name
+        user_id = getattr(player, "user_id", None)
 
         if action == "fold":
-            return f"{name} folded"
-        elif action == "check":
-            return f"{name} checked"
-        elif action == "call":
-            return f"{name} called ${amount}"
-        elif action == "raise":
-            return f"{name} raised to ${amount}"
-        elif action == "all-in":
-            return f"{name} went ALL-IN (${amount})"
-        else:
-            return f"{name} {action} ${amount}"
+            return translation_manager.t(
+                "msg.player_folded",
+                user_id=user_id,
+                player=name,
+            )
+        if action == "check":
+            return translation_manager.t(
+                "msg.player_checked",
+                user_id=user_id,
+                player=name,
+            )
+        if action == "call":
+            return translation_manager.t(
+                "msg.player_called",
+                user_id=user_id,
+                player=name,
+                amount=amount,
+            )
+        if action == "raise":
+            return translation_manager.t(
+                "msg.player_raised",
+                user_id=user_id,
+                player=name,
+                amount=amount,
+            )
+        if action == "all-in":
+            return translation_manager.t(
+                "msg.player_all_in",
+                user_id=user_id,
+                player=name,
+                amount=amount,
+            )
+
+        return translation_manager.t(
+            "msg.player_action.generic",
+            user_id=user_id,
+            player=name,
+            action=action,
+            amount=amount,
+        )

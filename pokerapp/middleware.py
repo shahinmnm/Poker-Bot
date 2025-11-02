@@ -163,11 +163,12 @@ class UserRateLimiter:
             )
 
             if update.effective_message:
+                rate_limit_message = translation_manager.t(
+                    "msg.error.rate_limited",
+                    user_id=user_id,
+                )
                 await update.effective_message.reply_text(
-                    (
-                        "⚠️ Too many requests. Please slow down and "
-                        "try again later."
-                    ),
+                    rate_limit_message,
                     disable_notification=True,
                 )
 
