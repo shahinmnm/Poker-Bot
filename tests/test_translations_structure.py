@@ -11,7 +11,7 @@ from pokerapp.i18n import SupportedLanguage, TranslationManager
 
 
 TRANSLATIONS_DIR = Path(__file__).resolve().parent.parent / "translations"
-REQUIRED_SECTIONS = {"ui", "msg", "help", "game", "popup"}
+REQUIRED_SECTIONS = {"ui", "msg", "help", "game", "popup", "viewer"}
 RTL_LANGS = {"ar", "fa", "he"}
 
 
