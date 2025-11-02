@@ -88,7 +88,7 @@
       "not_enough_players_ready": "🇮🇷 ⚠️ در انتظار آماده شدن بازیکنان بیشتر پیش از شروع بازی.",
       "players_insufficient_funds": "🇮🇷 ⚠️ این بازیکنان به ژتون بیشتری نیاز دارند: {players}",
       "wallet_not_enough": "🇮🇷 ❌ برای این حرکت ژتون کافی نداری.",
-      "rate_limited": "[fa] ⚠️ Too many requests. Please slow down and try again later."
+      "rate_limited": "🇮🇷 ⚠️ درخواست‌های زیادی ثبت شد. کمی صبر کن و دوباره امتحان کن."
     },
     "game_started": "🎮 بازی شروع شد! موفق باشید!",
     "new_round": "🔄 دور جدید آغاز می‌شود...",
@@ -105,21 +105,21 @@
       "invite": {
         "body": "🎰 دعوت به بازی خصوصی\n\n{inviter} شما را دعوت می‌کند!\n\n🎲 شرط‌ها: {stake}\n🔑 کد: {code}\n\nآیا می‌پیوندید؟",
         "detailed_body": "🎴 دعوتنامه بازی\n\n{host} شما را به بازی دعوت کرده است!\n\n🎯 کد بازی: {code}\n\n💰 شرط‌ها: {stake_name}\n• بلایند کوچک: ${small_blind}\n• بلایند بزرگ: ${big_blind}\n💵 حداقل خرید: ${min_buyin}\n\nمایل به پیوستن هستید؟",
-        "sent": "[fa] ✅ Invitation sent to {username}!",
-        "send_failed": "[fa] ❌ Couldn't send invitation to {username}.\nThey may have blocked the bot.",
-        "accepted": "[fa] ✅ Joined Game!\n\nGame Code: {code}\nStakes: {stake}\n\nUse /leave to exit the lobby.",
-        "accepted_host": "[fa] ✅ {player} accepted your invitation!",
-        "declined": "[fa] ❌ Invitation Declined\n\nYou declined the game invitation.",
-        "declined_host": "[fa] ❌ {player} declined your invitation.",
+        "sent": "🇮🇷 ✅ دعوت‌نامه برای {username} ارسال شد!",
+        "send_failed": "🇮🇷 ❌ دعوت‌نامه برای {username} ارسال نشد.\nممکن است ربات را مسدود کرده باشد.",
+        "accepted": "🇮🇷 ✅ به بازی پیوستی!\n\nکد بازی: {code}\nشرط‌ها: {stake}\n\nبرای خروج از لابی از ‎/leave استفاده کن.",
+        "accepted_host": "🇮🇷 ✅ {player} دعوتت را پذیرفت!",
+        "declined": "🇮🇷 ❌ دعوت را رد کردی.\n\nهر زمان خواستی می‌توانی دوباره بپیوندی.",
+        "declined_host": "🇮🇷 ❌ {player} دعوتت را رد کرد.",
         "summary": {
-          "empty": "[fa] 📭 You have no pending invitations.",
-          "header": "[fa] 📨 Pending invitations:",
-          "entry_with_details": "[fa] • {code} — {details}",
-          "entry_simple": "[fa] • {code}",
-          "footer": "[fa] Use /accept CODE to join or /decline CODE to refuse."
+          "empty": "🇮🇷 📭 هیچ دعوت در انتظاری نداری.",
+          "header": "🇮🇷 📨 دعوت‌های در انتظار:",
+          "entry_with_details": "🇮🇷 • {code} — {details}",
+          "entry_simple": "🇮🇷 • {code}",
+          "footer": "🇮🇷 با ‎/accept CODE بپیوند یا با ‎/decline CODE رد کن."
         },
-        "already_accepted": "[fa] ✅ You already accepted this invitation!",
-        "declined_with_hint": "[fa] ❌ Invitation declined.\n\nYou can still join later with /join {code}"
+        "already_accepted": "🇮🇷 ✅ این دعوت را قبلاً پذیرفته‌ای!",
+        "declined_with_hint": "🇮🇷 ❌ دعوت رد شد.\n\nهنوز هم می‌توانی بعداً با ‎/join {code} وارد شوی."
       },
       "lobby": {
         "body": "{title}\n\n🎯 میزبان: {host}\n🎲 شرط‌ها: {stake}\n🔑 کد: {code}\n\n{player_status}\n\n{players}\n\n{readiness}",
@@ -128,12 +128,12 @@
         "ready": "✅ آماده شروع!",
         "title": "🔒 لابی بازی خصوصی",
         "waiting": "⏳ در انتظار بازیکنان بیشتر (حداقل {min_players})...",
-        "leave_confirmation": "[fa] 🚪 You left the private game.\nYour seat is now available for others.",
-        "player_left": "[fa] 👋 {player} left the game.",
-        "new_host": "[fa] 👑 {player} is now the host!",
-        "current_players": "[fa] 👥 Current players ({current}/{max}):",
-        "player_entry": "[fa] {index}. {player}{host_marker}",
-        "host_marker": "[fa]  👑 (Host)"
+        "leave_confirmation": "🇮🇷 🚪 از بازی خصوصی خارج شدی.\nصندلی‌ات برای دیگران آزاد است.",
+        "player_left": "🇮🇷 👋 {player} از بازی خارج شد.",
+        "new_host": "🇮🇷 👑 {player} حالا میزبان است!",
+        "current_players": "🇮🇷 👥 بازیکنان فعلی ({current}/{max}):",
+        "player_entry": "🇮🇷 {index}. {player}{host_marker}",
+        "host_marker": "🇮🇷 👑 (میزبان)"
       },
       "stake_menu": {
         "body": "🇮🇷 {title}\\n\\n{subtitle}\\n\\n{options}\\n\\n{footer}",
@@ -150,30 +150,30 @@
       "error": {
         "already_active": "🇮🇷 ⚠️ از قبل یک بازی خصوصی فعال داری. قبل از ساخت بازی جدید آن را تمام یا ببند.",
         "invalid_stake": "🇮🇷 ⚠️ سطح شرط '{level}' شناخته‌شده نیست. لطفاً گزینه دیگری انتخاب کن.",
-        "no_active_game": "[fa] ❌ You don't have an active private game.\n\nCreate one with /private",
-        "missing_player": "[fa] ❌ Please specify a player:\n\n/invite @username",
-        "user_not_found": "[fa] ❌ User {username} not found.\n\nPlayers must have used the bot before being invited.",
-        "game_not_found": "[fa] ❌ Game not found.",
-        "game_misconfigured": "[fa] ❌ Game stakes are misconfigured.",
-        "game_expired": "[fa] ❌ Game {code} not found or expired.",
-        "host_only_start": "[fa] ❌ Only the host can start the game!",
-        "already_started": "[fa] ❌ Game has already started or finished!",
-        "min_players": "[fa] ❌ Need at least {min_players} players to start!\n\nCurrent: {current} player(s)",
-        "too_many_players": "[fa] ❌ Too many players to start!\n\nMaximum: {max_players} players\nCurrent: {current} players\n\nSome players must /leave before starting.",
-        "stake_missing": "[fa] ❌ Stake configuration missing for this game!",
-        "insufficient_funds_header": "[fa] ❌ Cannot start game - insufficient funds:\n",
-        "insufficient_funds_line": "[fa] • {player}: ${balance} (need ${required})",
-        "insufficient_funds_footer": "[fa] \nAll players need at least ${required} to play.",
-        "lobby_changed": "[fa] ⚠️ Lobby state changed during game start. Please try /start again.",
-        "invite_invalid": "[fa] ❌ This invitation has expired or is invalid.",
-        "invite_already_responded": "[fa] ❌ You already {status} this invitation.",
-        "game_missing": "[fa] ❌ Game no longer exists.",
-        "not_in_game": "[fa] ❌ You're not in any private game.",
-        "session_missing": "[fa] ❌ Game session not found.",
-        "cannot_leave_started": "[fa] ❌ Cannot leave started game. Use buttons to fold.",
-        "status_unavailable": "[fa] ⚠️ This private game is no longer available.",
-        "status_failed": "[fa] ⚠️ Unable to load private game details.",
-        "not_invited": "[fa] ❌ You are not invited to this game."
+        "no_active_game": "🇮🇷 ❌ هیچ بازی خصوصی فعالی نداری.\n\nبا ‎/private یکی بساز.",
+        "missing_player": "🇮🇷 ❌ لطفاً بازیکنی را مشخص کن:\n\n/invite @username",
+        "user_not_found": "🇮🇷 ❌ کاربر {username} پیدا نشد.\n\nبازیکن باید قبلاً از ربات استفاده کرده باشد.",
+        "game_not_found": "🇮🇷 ❌ بازی پیدا نشد.",
+        "game_misconfigured": "🇮🇷 ❌ شرط‌های بازی به‌درستی تنظیم نشده‌اند.",
+        "game_expired": "🇮🇷 ❌ بازی {code} پیدا نشد یا منقضی شده است.",
+        "host_only_start": "🇮🇷 ❌ فقط میزبان می‌تواند بازی را شروع کند!",
+        "already_started": "🇮🇷 ❌ بازی قبلاً شروع شده یا پایان یافته است!",
+        "min_players": "🇮🇷 ❌ برای شروع حداقل به {min_players} بازیکن نیاز است!\n\nاکنون: {current} بازیکن",
+        "too_many_players": "🇮🇷 ❌ تعداد بازیکنان برای شروع زیاد است!\n\nحداکثر: {max_players} بازیکن\nاکنون: {current} بازیکن\n\nبرخی باید با ‎/leave خارج شوند.",
+        "stake_missing": "🇮🇷 ❌ تنظیم شرط برای این بازی موجود نیست!",
+        "insufficient_funds_header": "🇮🇷 ❌ نمی‌توان بازی را شروع کرد - موجودی ناکافی:\n",
+        "insufficient_funds_line": "🇮🇷 • {player}: ${balance} (نیاز به ${required})",
+        "insufficient_funds_footer": "🇮🇷 \nهمه بازیکنان باید حداقل ${required} داشته باشند.",
+        "lobby_changed": "🇮🇷 ⚠️ هنگام شروع بازی وضعیت لابی تغییر کرد. دوباره ‎/start را امتحان کن.",
+        "invite_invalid": "🇮🇷 ❌ این دعوت منقضی شده یا نامعتبر است.",
+        "invite_already_responded": "🇮🇷 ❌ قبلاً به این دعوت پاسخ {status} داده‌ای.",
+        "game_missing": "🇮🇷 ❌ بازی دیگر وجود ندارد.",
+        "not_in_game": "🇮🇷 ❌ در هیچ بازی خصوصی نیستی.",
+        "session_missing": "🇮🇷 ❌ نشست بازی پیدا نشد.",
+        "cannot_leave_started": "🇮🇷 ❌ نمی‌توانی پس از شروع بازی خارج شوی. برای فولد از دکمه‌ها استفاده کن.",
+        "status_unavailable": "🇮🇷 ⚠️ این بازی خصوصی دیگر در دسترس نیست.",
+        "status_failed": "🇮🇷 ⚠️ امکان بارگذاری جزئیات بازی خصوصی وجود ندارد.",
+        "not_invited": "🇮🇷 ❌ به این بازی دعوت نشده‌ای."
       },
       "created": "🇮🇷 🎉 میز خصوصی ساخته شد!\\nمیزبان: {host}\\nشرط‌ها: {stake}\\nبای‌این: ${min_buyin} - ${max_buyin}\\nکد: {code}\\nحداکثر بازیکن: {max_players}\\n\\nبرای دعوت دوستان، کد را به اشتراک بگذار."
     },
@@ -195,19 +195,19 @@
       "room_full": "🇮🇷 🚫 لابی پر است (حداکثر {max_players} بازیکن)."
     },
     "player_action": {
-      "generic": "[fa] {player} {action} ${amount}"
+      "generic": "🇮🇷 {player} {action} مبلغ ${amount} را شرط کرد"
     },
     "model": {
       "error": {
-        "chat_context_missing": "[fa] ❌ Cannot determine chat context",
-        "no_active_game_chat": "[fa] ❌ No active game in this chat",
-        "action_expired": "[fa] ♻️ Action expired. Please use the latest buttons.",
-        "game_inactive": "[fa] 🛑 Game is not accepting actions right now.",
-        "already_folded": "[fa] ❌ You already folded!",
-        "cannot_act_now": "[fa] ❌ You cannot act right now",
-        "call_or_raise": "[fa] ❌ You must call or raise",
-        "invalid_raise_amount": "[fa] ❌ Invalid raise amount",
-        "unknown_action": "[fa] ❌ Unknown action"
+        "chat_context_missing": "🇮🇷 ❌ گفتگو مشخص نیست.",
+        "no_active_game_chat": "🇮🇷 ❌ در این گفتگو بازی فعالی وجود ندارد.",
+        "action_expired": "🇮🇷 ♻️ مهلت این اقدام تمام شده است. از دکمه‌های جدید استفاده کن.",
+        "game_inactive": "🇮🇷 🛑 بازی در حال حاضر اقدامی نمی‌پذیرد.",
+        "already_folded": "🇮🇷 ❌ پیش‌تر فولد کرده‌ای!",
+        "cannot_act_now": "🇮🇷 ❌ اکنون نوبت تو نیست.",
+        "call_or_raise": "🇮🇷 ❌ باید کال یا رِیز کنی.",
+        "invalid_raise_amount": "🇮🇷 ❌ مبلغ رِیز نامعتبر است.",
+        "unknown_action": "🇮🇷 ❌ حرکت نامشخص است."
       }
     }
   },
