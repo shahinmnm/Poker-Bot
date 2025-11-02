@@ -20,11 +20,9 @@ from pokerapp.entities import Game, GameState, Player, PlayerAction, PlayerState
 from pokerapp.device_detector import (
     DeviceDetector,
     DeviceProfile,
-    DeviceType,
 )
 from pokerapp.kvstore import ensure_kv
 from pokerapp.render_cache import RenderCache, RenderResult
-from pokerapp.compact_formatter import CompactFormatter
 from pokerapp.i18n import translation_manager
 from pokerapp.keyboard_utils import (
     rehydrate_keyboard_layout,
@@ -195,13 +193,6 @@ class LiveMessageManager:
     """Manage the single live game message shown in group chats."""
 
     # Stage emojis for card reveals
-    STAGE_EMOJIS = {
-        0: "🔒",  # Pre-flop
-        3: "🌄",  # Flop
-        4: "🌇",  # Turn
-        5: "🌃",  # River
-    }
-
     STAGE_NAME_KEYS = {
         0: "game.round.pre_flop",
         3: "game.round.flop",
@@ -210,10 +201,10 @@ class LiveMessageManager:
     }
 
     STAGE_ICONS = {
-        0: "♠️",
-        3: "🌼",
-        4: "🔁",
-        5: "🧊",
+        0: "🎴",
+        3: "🃏",
+        4: "🃏",
+        5: "🃏",
     }
     # Minimum spacing between consecutive updates per chat (seconds)
     DEBOUNCE_WINDOW = 0.0
@@ -224,15 +215,14 @@ class LiveMessageManager:
     DEFAULT_TURN_SECONDS = 120
 
     STATE_CONTEXT_KEYS: Tuple[str, ...] = (
-        "street_display_raw",
+        "table_code",
+        "seat_label",
         "stage_name",
         "stage_icon",
-        "to_act_display_raw",
-        "actor_user_id",
-        "pot_value",
         "last_bet_value",
-        "board_display_raw",
-        "timer_bucket",
+        "timer_label",
+        "actor_user_id",
+        "recent_actions",
     )
 
 
@@ -806,7 +796,6 @@ class LiveMessageManager:
         context = self._build_render_context(
             game,
             current_player,
-            device_profile=device_profile,
         )
         context["language_code"] = self._language_code
         context["layout_direction"] = self._language_direction
@@ -816,8 +805,6 @@ class LiveMessageManager:
         stable_text: Optional[str] = None
         reply_markup: Optional[InlineKeyboardMarkup] = None
         options: List[RaiseOptionMeta] = []
-        compact_mode = self._should_use_compact_mode(device_profile, state)
-
         cache_variant = f"{getattr(device_profile.device_type, 'value', 'default')}:{self._language_code}"
         use_cache = (
             mode == "actions"
@@ -838,15 +825,12 @@ class LiveMessageManager:
 
         if mode == "actions":
             if stable_text is None:
-                display = self._build_display_strings(context, state.last_context)
                 stable_text = self._compose_message_body(
                     game=game,
                     current_player=current_player,
                     context=context,
-                    display=display,
                     preview_raise=None,
-                    device_profile=device_profile,
-                    compact=compact_mode,
+                    compact=False,
                 )
 
             options = self._compute_raise_options(game, current_player)
@@ -865,7 +849,6 @@ class LiveMessageManager:
                     device_profile=device_profile,
                 )
         else:
-            display = self._build_display_strings(context, state.last_context)
             options = self._compute_raise_options(game, current_player)
             reply_markup = self._build_raise_selection_keyboard(
                 game=game,
@@ -884,11 +867,24 @@ class LiveMessageManager:
                 game=game,
                 current_player=current_player,
                 context=context,
-                display=display,
                 preview_raise=preview_text,
-                device_profile=device_profile,
-                compact=compact_mode,
+                compact=False,
             )
+
+        message_bytes = self._calculate_message_bytes(stable_text or "")
+        if self._needs_compact_mode(
+            message_bytes=message_bytes,
+            device_profile=device_profile,
+            render_state=state,
+        ):
+            stable_text = self._compose_message_body(
+                game=game,
+                current_player=current_player,
+                context=context,
+                preview_raise=preview_text,
+                compact=True,
+            )
+            message_bytes = self._calculate_message_bytes(stable_text)
 
         stable_text_value = self._apply_direction(stable_text) or ""
 
@@ -946,108 +942,26 @@ class LiveMessageManager:
         self,
         game: Game,
         current_player: Optional[Player],
-        *,
-        device_profile: DeviceProfile,
     ) -> Dict[str, Any]:
         players = list(getattr(game, "players", []) or [])
-        active_count = sum(1 for p in players if p.state != PlayerState.FOLD)
         num_cards = len(game.cards_table or [])
         stage_name = self._get_stage_name(num_cards)
-        stage_icon = self.STAGE_ICONS.get(num_cards, "♠️")
-        board_line = self._format_board_cards(list(game.cards_table or []))
+        stage_icon = self.STAGE_ICONS.get(num_cards, "🎴")
 
         actor_user_id = getattr(current_player, "user_id", None)
-        to_act_name = self._get_player_name(current_player) if current_player else None
-        if to_act_name:
-            to_act_display = f"{to_act_name} · YOUR TURN"
-        else:
-            to_act_display = "Waiting…"
-
         timer_bucket = self._timer_bucket(game)
         timer_label = "—" if timer_bucket is None else f"{timer_bucket}s"
 
-        context = {
-            "stage_name": stage_name,
-            "stage_icon": stage_icon,
-            "stage_emoji": self.STAGE_EMOJIS.get(num_cards, "🔒"),
-            "street_display_raw": f"{stage_icon} {stage_name}",
-            "board_display_raw": board_line or "—",
-            "pot_value": getattr(game, "pot", 0),
-            "last_bet_value": getattr(game, "max_round_rate", 0),
-            "actor_user_id": actor_user_id,
-            "to_act_display_raw": to_act_display,
-            "timer_bucket": timer_bucket,
-            "timer_label": timer_label,
-            "stack_line": self._format_stack_line(players),
-            "active_count": active_count,
-            "player_rows": self._format_players(
-                players,
-                actor_user_id,
-                timer_seconds=getattr(game, "time_remaining", None),
-            ),
-            "recent_actions": self._format_recent_actions(game),
+        return {
             "table_code": str(getattr(game, "id", "----"))[:4].upper(),
             "seat_label": f"{len(players)}-max",
+            "stage_name": stage_name,
+            "stage_icon": stage_icon,
+            "last_bet_value": max(getattr(game, "max_round_rate", 0), 0),
+            "timer_label": timer_label,
+            "actor_user_id": actor_user_id,
+            "recent_actions": self._format_recent_actions(game),
         }
-
-        context["device_profile"] = device_profile
-        context["player_rows_mobile"] = self._format_players_mobile(
-            players,
-            actor_user_id,
-            timer_seconds=getattr(game, "time_remaining", None),
-            device_profile=device_profile,
-        )
-
-        return context
-
-    def _build_display_strings(
-        self, context: Dict[str, Any], previous: Dict[str, Any]
-    ) -> Dict[str, str]:
-        display: Dict[str, str] = {}
-
-        display["street"] = self._format_diff_value(
-            previous.get("street_display_raw"),
-            context.get("street_display_raw"),
-            formatter=lambda value: self._sanitize_text(value, default="—"),
-        )
-        display["to_act"] = self._format_diff_value(
-            previous.get("to_act_display_raw"),
-            context.get("to_act_display_raw"),
-            formatter=lambda value: self._sanitize_text(value, default="Waiting…"),
-        )
-        display["pot"] = self._format_currency_diff(
-            previous.get("pot_value"),
-            context.get("pot_value", 0),
-        )
-        display["last_bet"] = self._format_currency_diff(
-            previous.get("last_bet_value"),
-            context.get("last_bet_value", 0),
-        )
-        display["board"] = self._format_diff_value(
-            (
-                previous.get("board_display_raw"),
-                previous.get("stage_icon"),
-            ),
-            (
-                context.get("board_display_raw"),
-                context.get("stage_icon"),
-            ),
-            formatter=lambda value: self._format_board_display(*value),
-        )
-        display["timer"] = self._sanitize_text(
-            context.get("timer_label"), default="—"
-        )
-        display["stacks"] = self._sanitize_text(
-            context.get("stack_line"), default="—"
-        )
-        display["table"] = self._sanitize_text(
-            f"#{context.get('table_code', '----')}"
-        )
-        display["seats"] = self._sanitize_text(
-            context.get("seat_label"), default="—"
-        )
-
-        return display
 
     def _compose_message_body(
         self,
@@ -1055,9 +969,7 @@ class LiveMessageManager:
         game: Game,
         current_player: Optional[Player],
         context: Dict[str, Any],
-        display: Dict[str, str],
         preview_raise: Optional[str],
-        device_profile: DeviceProfile,
         compact: bool,
     ) -> str:
         """Unified compact message for all devices."""
@@ -1065,10 +977,10 @@ class LiveMessageManager:
         lines: List[str] = []
 
         # Header: Table #ID • Seats • Stage
-        table_id = context.get("table_code", "----")
-        seat_label = context.get("seat_label", "—")
-        stage_icon = context.get("stage_icon", "♠️")
-        stage_name = context.get("stage_name", "Pre-Flop")
+        table_id = self._sanitize_text(context.get("table_code", "----"))
+        seat_label = self._sanitize_text(context.get("seat_label", "—"))
+        stage_icon = context.get("stage_icon", "🎴")
+        stage_name = self._sanitize_text(context.get("stage_name", "Pre-Flop"))
 
         header = f"🎴 #{table_id} • {seat_label} • {stage_icon} {stage_name}"
         lines.append(UnicodeTextFormatter.make_bold(header))
@@ -1078,37 +990,45 @@ class LiveMessageManager:
         board_cards = list(getattr(game, "cards_table", []) or [])
         if board_cards:
             board_text = self._format_board_cards(board_cards)
-            lines.append(f"🃏 {board_text}")
+            safe_board = self._sanitize_text(board_text)
+            lines.append(f"🃏 {safe_board}")
         else:
-            lines.append("🃏 🔒 Cards locked")
+            lines.append("🃏 Cards locked")
 
         # Pot + Bet (single line)
         pot = getattr(game, "pot", 0)
         last_bet = context.get("last_bet_value", 0)
-        pot_str = self._format_chips(pot)
-        bet_str = self._format_chips(last_bet) if last_bet > 0 else "—"
+        pot_str = self._sanitize_text(self._format_chips(pot))
+        bet_str = (
+            self._sanitize_text(self._format_chips(last_bet))
+            if last_bet > 0
+            else "—"
+        )
         lines.append(f"💰 Pot: {pot_str} • Bet: {bet_str}")
 
         # Side pots (compact)
         side_pots = getattr(game, "side_pots", None)
         if side_pots and len(side_pots) > 0:
             side_parts = [
-                f"S{i}: {self._format_chips(getattr(sp, 'amount', sp))}"
+                self._sanitize_text(
+                    f"S{i}: {self._format_chips(getattr(sp, 'amount', sp))}"
+                )
                 for i, sp in enumerate(side_pots, 1)
             ]
             lines.append(f"   {' • '.join(side_parts)}")
 
         # Turn indicator (eye-catching)
         actor_name = self._get_player_name(current_player)
-        timer_display = context.get("timer_label", "")
+        timer_display = self._sanitize_text(context.get("timer_label", ""))
 
         if current_player and actor_name not in {"", "—", "Waiting…"}:
-            turn_line = f"⏰ {UnicodeTextFormatter.make_bold('TURN:')} {actor_name}"
+            actor_display = self._sanitize_text(actor_name)
+            turn_line = f"⏰ {UnicodeTextFormatter.make_bold('TURN:')} {actor_display}"
             if timer_display and timer_display != "—":
                 turn_line += f" ({timer_display})"
             lines.append(turn_line)
         else:
-            lines.append(f"⏸️  Waiting for players…")
+            lines.append("⏸️ Waiting for players…")
 
         lines.append("━" * 35)
 
@@ -1125,9 +1045,15 @@ class LiveMessageManager:
 
         actor_id = getattr(current_player, "user_id", None) if current_player else None
 
+        max_name = 20 if compact else 32
         for idx, player in enumerate(players, 1):
             state = getattr(player, "state", None)
             name = self._get_player_name(player)
+            if len(name) > max_name:
+                name = name[: max_name - 1] + "…"
+            safe_name = self._sanitize_text(name)
+            if player.user_id == actor_id:
+                safe_name = UnicodeTextFormatter.make_bold(safe_name)
             stack = max(getattr(player.wallet, "value", lambda: 0)(), 0)
             bet = max(getattr(player, "round_rate", 0), 0)
 
@@ -1137,23 +1063,41 @@ class LiveMessageManager:
             elif state == PlayerState.ALL_IN:
                 icon, status = "🔥", "All-In"
             elif bet > 0:
-                icon, status = "💚", f"${bet:,}"
+                bet_icon = self._format_chips(bet)
+                icon, status = "💚", bet_icon
             else:
                 icon, status = "⏸️", "Wait"
 
             prefix = "▶️" if player.user_id == actor_id else "  "
-            stack_str = self._format_chips(stack)
-            line = f"{prefix}P{idx} {name} {icon} {stack_str}"
+            stack_str = self._sanitize_text(self._format_chips(stack))
+            if compact:
+                if icon == "💚":
+                    bet_display = status
+                elif icon == "🔥":
+                    bet_display = "All-In"
+                elif icon == "❌":
+                    bet_display = "Fold"
+                else:
+                    bet_display = "Wait"
+                bet_display = self._sanitize_text(bet_display)
+                line = (
+                    f"{prefix}P{idx} {safe_name} {icon} {stack_str}/{bet_display}"
+                )
+            else:
+                line = f"{prefix}P{idx} {safe_name} {icon} {stack_str}"
 
-            if state != PlayerState.FOLD:
-                line += f" • {status}"
+                if state != PlayerState.FOLD:
+                    line += f" • {self._sanitize_text(status)}"
 
             lines.append(line)
+
+        if not players:
+            lines.append("👥 No players seated yet")
 
         # Raise preview
         if preview_raise:
             lines.append("━" * 35)
-            lines.append(f"🎯 Selected: {preview_raise}")
+            lines.append(f"💰 Selected: {self._sanitize_text(preview_raise)}")
 
         # Recent actions (last 2 only)
         recent = context.get("recent_actions", [])
@@ -1250,217 +1194,29 @@ class LiveMessageManager:
         render_state.last_update_latency_ms = latency_ms
         render_state.network_quality = "fast"
 
-    def _should_use_compact_mode(
+    def _needs_compact_mode(
         self,
+        *,
+        message_bytes: int,
         device_profile: DeviceProfile,
         render_state: ChatRenderState,
     ) -> bool:
-        """Determine if compact mode should be used."""
+        """Determine if the message should be rendered in compact form."""
 
-        if device_profile.device_type == DeviceType.MOBILE:
+        if message_bytes > 2000:
             return True
 
-        if (
-            device_profile.device_type == DeviceType.TABLET
-            and render_state.network_quality == "slow"
-        ):
+        if getattr(device_profile, "max_line_length", 70) <= 40:
             return True
 
-        if render_state.network_quality == "poor":
+        if render_state.network_quality in {"poor", "slow"}:
             return True
 
         return False
 
-    def _build_hud_block(
-        self, context: Dict[str, Any], display: Dict[str, str]
-    ) -> str:
-        hud_lines = [
-            (
-                "Table     : "
-                f"{display['table']}  {display['seats']}     Street: {display['street']}"
-            ),
-            (
-                "To Act    : "
-                f"{display['to_act']}     Timer: {display['timer']}"
-            ),
-            (
-                "Pot       : "
-                f"{display['pot']}     Last bet: {display['last_bet']}"
-            ),
-            f"Stacks    : {display['stacks']}",
-            f"Board     : {display['board']}",
-        ]
-
-        return "\n".join(hud_lines)
-
-    def _format_mobile_board(
-        self,
-        context: Dict[str, Any],
-        *,
-        device_profile: DeviceProfile,
-    ) -> str:
-        board_raw = context.get("board_display_raw") or "—"
-        stage_icon = context.get("stage_icon", "♠️")
-        default_stage = translation_manager.t(
-            "game.state.initial",
-            lang=self._language_code,
-        )
-        stage_name = self._sanitize_text(
-            context.get("stage_name"), default=default_stage
-        )
-
-        if board_raw.strip() in {"—", "🂠 🂠 🂠"}:
-            return "🔒 Cards will be revealed during betting"
-
-        board_display = self._sanitize_text(board_raw)
-        max_chars = max(device_profile.max_line_length, 10)
-        if len(board_display) > max_chars:
-            board_display = board_display[: max_chars - 1] + "…"
-
-        stage_label = UnicodeTextFormatter.make_bold(stage_name)
-        board_label = UnicodeTextFormatter.make_bold(board_display)
-        return f"{stage_icon} {stage_label}\n📋 {board_label}"
-
-    def _format_players(
-        self,
-        players: List[Player],
-        actor_user_id: Optional[int],
-        timer_seconds: Optional[int] = None,
-    ) -> List[str]:
-        rows: List[str] = []
-
-        for idx, player in enumerate(players, start=1):
-            name = self._sanitize_text(self._get_player_name(player))
-            balance = max(player.wallet.value(), 0)
-            bet = max(player.round_rate, 0)
-
-            stack_text = self._sanitize_text(self._format_chips(balance))
-
-            bet_text = ""
-            if bet:
-                minimum_width = len(f"{bet:,}") + 2
-                bet_text = self._sanitize_text(
-                    self._format_chips(bet, width=minimum_width)
-                )
-
-            if player.state == PlayerState.FOLD:
-                status_symbol = "💤"
-                status_text = "Folded"
-            elif player.state == PlayerState.ALL_IN:
-                status_symbol = "🔥"
-                status_text = f"ALL-IN {bet_text}" if bet_text else "ALL-IN"
-            elif bet > 0:
-                status_symbol = "✓"
-                status_text = f"Bet {bet_text}"
-            else:
-                status_symbol = "—"
-                status_text = "Waiting"
-
-            if player.user_id == actor_user_id:
-                name = UnicodeTextFormatter.make_bold(name)
-                status_text = f"⏳ {status_text.upper()}"
-
-                if timer_seconds is not None and timer_seconds > 0:
-                    status_text += f" ({timer_seconds}s)"
-
-            rows.append(
-                f"P{idx}: {name:<12} {stack_text} {status_symbol} {status_text}"
-            )
-
-        if not rows:
-            rows.append("ℹ️ No players seated yet")
-
-        return rows
-
-    def _format_players_mobile(
-        self,
-        players: List[Player],
-        actor_user_id: Optional[int],
-        *,
-        timer_seconds: Optional[int],
-        device_profile: DeviceProfile,
-    ) -> List[str]:
-        if device_profile.device_type != DeviceType.MOBILE:
-            return self._format_players(
-                players,
-                actor_user_id,
-                timer_seconds=timer_seconds,
-            )
-
-        if not players:
-            return ["ℹ️ No players seated yet"]
-
-        lines: List[str] = []
-        max_length = max(device_profile.max_line_length, 5)
-
-        for player in players:
-            raw_name = self._get_player_name(player)
-            if len(raw_name) > max_length:
-                raw_name = raw_name[: max_length - 3] + "..."
-            safe_name = self._sanitize_text(raw_name)
-
-            is_current = player.user_id == actor_user_id
-            status_icon = "▶️" if is_current else "⏸"
-            state_icon = self._get_player_state_icon(getattr(player, "state", None))
-
-            stack_value = max(player.wallet.value(), 0)
-            bet_value = max(player.round_rate, 0)
-            stack_text = self._sanitize_text(self._format_chips(stack_value))
-            bet_text = self._sanitize_text(self._format_chips(bet_value))
-
-            if getattr(player, "state", None) == PlayerState.ALL_IN:
-                state_label = "All-In"
-            elif getattr(player, "state", None) == PlayerState.FOLD:
-                state_label = "Folded"
-            else:
-                state_label = "Active"
-
-            bold_name = UnicodeTextFormatter.make_bold(safe_name)
-            header_line = f"{status_icon} {bold_name}"
-            if is_current:
-                header_line += " (Your turn)"
-
-            timer_suffix = ""
-            if is_current and timer_seconds is not None and timer_seconds > 0:
-                timer_suffix = f" · {timer_seconds}s"
-
-            detail_line = (
-                f"   {state_icon} {state_label} · Stack: {stack_text} | Bet: {bet_text}"
-                f"{timer_suffix}"
-            )
-
-            lines.append(f"{header_line}\n{detail_line}")
-
-        return lines
-
-    def _get_player_state_icon(
-        self, state: Optional[PlayerState]
-    ) -> str:
-        mapping = {
-            PlayerState.ACTIVE: "✅",
-            PlayerState.FOLD: "❌",
-            PlayerState.ALL_IN: "🔥",
-        }
-
-        if state is None:
-            return "❓"
-
-        return mapping.get(state, "❓")
-
     def _format_recent_actions(self, game: Game) -> List[str]:
         recent = getattr(game, "recent_actions", []) or []
         return [self._sanitize_text(action) for action in recent[-3:]]
-
-    def _format_stack_line(self, players: List[Player]) -> str:
-        if not players:
-            return "—"
-
-        entries: List[str] = []
-        for idx, player in enumerate(players, start=1):
-            stack = max(player.wallet.value(), 0)
-            entries.append(f"P{idx}: {self._format_chips(stack)}")
-
-        return " | ".join(entries)
 
     def _format_board_cards(self, cards: List) -> str:
         """Format board cards without any flash effects.
@@ -1516,11 +1272,6 @@ class LiveMessageManager:
         content = "||".join(components)
         return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
 
-    def _format_board_display(self, board_text: Optional[str], icon: Optional[str]) -> str:
-        text = board_text or "—"
-        symbol = icon or "♠️"
-        return f"{symbol} {self._sanitize_text(text)}"
-
     def _timer_bucket(self, game: Game) -> Optional[int]:
         last_turn = getattr(game, "last_turn_time", None)
         if not isinstance(last_turn, _dt.datetime):
@@ -1538,34 +1289,6 @@ class LiveMessageManager:
         bucket = (remaining // 5) * 5
         return max(bucket, 5)
 
-    def _format_diff_value(
-        self,
-        previous: Any,
-        current: Any,
-        *,
-        formatter,
-    ) -> str:
-        if current is None:
-            current_text = formatter(current)
-        else:
-            current_text = formatter(current)
-
-        if previous is None or previous == current:
-            return current_text
-
-        previous_text = formatter(previous)
-        diff_text = f"{previous_text} → {current_text}"
-        return UnicodeTextFormatter.make_bold(diff_text)
-
-    def _format_currency_diff(
-        self, previous: Optional[int], current: int
-    ) -> str:
-        def formatter(value: Optional[int]) -> str:
-            amount = value or 0
-            return self._sanitize_text(self._format_chips(amount))
-
-        return self._format_diff_value(previous, current, formatter=formatter)
-
     def _select_banner(
         self, context: Dict[str, Any], previous: Dict[str, Any]
     ) -> Optional[str]:
@@ -1577,34 +1300,26 @@ class LiveMessageManager:
             context.get("actor_user_id") is not None
             and context.get("actor_user_id") != previous.get("actor_user_id")
         )
-        pot_changed = context.get("pot_value") != previous.get("pot_value")
+        bet_changed = (
+            context.get("last_bet_value") != previous.get("last_bet_value")
+        )
 
         if stage_changed:
             stage_name = context.get("stage_name", "Stage").upper()
-            icon = context.get("stage_icon", "♠️")
-            base_notice = UnicodeTextFormatter.make_bold(
-                f"{icon} {stage_name} dealt"
-            )
+            icon = context.get("stage_icon", "🎴")
+            base_notice = UnicodeTextFormatter.make_bold(f"{icon} {stage_name}")
             if actor_changed:
-                move_notice = UnicodeTextFormatter.make_bold(
-                    f"{icon} {stage_name} dealt — your move!"
-                )
-                return f"🔔 {move_notice}"
+                return f"🔔 {base_notice} — your move!"
             return f"🔔 {base_notice}"
 
         if actor_changed:
-            to_act = context.get("to_act_display_raw", "Your move")
-            sanitized = self._sanitize_text(to_act, default="Your move")
-            return f"🔔 {UnicodeTextFormatter.make_bold(sanitized)}"
+            return f"🔔 {UnicodeTextFormatter.make_bold('Your move!')}"
 
-        if pot_changed:
-            old_pot = previous.get("pot_value", 0)
-            new_pot = context.get("pot_value", 0)
-            pot_text = (
-                f"Pot {self._sanitize_text(self._format_chips(old_pot))}"
-                f" → {self._sanitize_text(self._format_chips(new_pot))}"
-            )
-            return f"🔔 {UnicodeTextFormatter.make_bold(pot_text)}"
+        if bet_changed:
+            old_bet = self._format_chips(previous.get("last_bet_value", 0))
+            new_bet = self._format_chips(context.get("last_bet_value", 0))
+            bet_text = f"Bet {old_bet} → {new_bet}"
+            return f"🔔 {UnicodeTextFormatter.make_bold(bet_text)}"
 
         return None
 
@@ -1744,15 +1459,16 @@ class LiveMessageManager:
         if player is None:
             return None, []
 
-        profile = device_profile or DeviceDetector.get_profile(DeviceType.DESKTOP)
-        is_mobile = profile.device_type == DeviceType.MOBILE
+        profile = device_profile or self._device_detector.detect_device()
         emoji_scale = getattr(profile, "emoji_size_multiplier", 1.0)
-        cache_variant = f"{getattr(profile.device_type, 'value', 'default')}:{self._language_code}"
+        is_mobile = getattr(profile, "max_line_length", 0) <= 40
+        variant_key = getattr(getattr(profile, "device_type", None), "value", "default")
+        cache_variant = f"{variant_key}:{self._language_code}"
 
         cache_allowed = (
             use_cache
             and getattr(self, "_render_cache", None) is not None
-            and not is_mobile
+            and getattr(profile, "max_line_length", 0) >= 50
         )
 
         if cache_allowed:
