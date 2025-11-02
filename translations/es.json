@@ -209,6 +209,9 @@
         "invalid_raise_amount": "[es] ❌ Invalid raise amount",
         "unknown_action": "[es] ❌ Unknown action"
       }
+    },
+    "info": {
+      "side_pot_repr": "SidePot(monto={amount}, jugadores={players})"
     }
   },
   "popup": {

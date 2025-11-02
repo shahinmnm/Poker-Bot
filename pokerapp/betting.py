@@ -8,6 +8,7 @@ import logging
 from typing import Dict, List, Tuple
 from pokerapp.entities import Game, Money, Player, Score
 from pokerapp.cards import Cards
+from pokerapp.i18n import translation_manager
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,11 @@ class SidePot:
 
     def __repr__(self):
         player_ids = [p.user_id for p in self.eligible_players]
-        return f"SidePot(amount={self.amount}, players={player_ids})"
+        return translation_manager.t(
+            "msg.info.side_pot_repr",
+            amount=self.amount,
+            players=player_ids,
+        )
 
 
 class SidePotCalculator:

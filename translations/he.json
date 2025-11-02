@@ -209,6 +209,9 @@
         "invalid_raise_amount": "[he] ❌ Invalid raise amount",
         "unknown_action": "[he] ❌ Unknown action"
       }
+    },
+    "info": {
+      "side_pot_repr": "סייד פוט(סכום={amount}, שחקנים={players})"
     }
   },
   "popup": {
