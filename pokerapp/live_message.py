@@ -467,6 +467,8 @@ class LiveMessageManager:
                 if message_version is not None
                 else game.get_live_message_version()
             )
+            if selection_key is None:
+                selection_key = state.raise_selections.get(user_id)
             device_profile = self._resolve_device_profile(
                 chat_id,
                 state,
@@ -1660,59 +1662,112 @@ class LiveMessageManager:
 
         big_blind = max((getattr(game, "table_stake", 0) or 0) * 2, 1)
         min_raise = max(current_bet * 2, big_blind)
+        if min_raise > total_stack:
+            return []
 
-        options: List[RaiseOptionMeta] = []
-        amounts: List[int] = []
+        language_code = getattr(self, "_language_code", translation_manager.DEFAULT_LANGUAGE)
 
-        if min_raise <= total_stack:
-            amounts.append(min_raise)
-            for multiplier in (3, 4, 5, 6, 8):
-                candidate = big_blind * multiplier
-                if candidate >= min_raise and candidate <= total_stack:
-                    amounts.append(candidate)
-            candidate = current_bet + big_blind
-            if candidate >= min_raise and candidate <= total_stack:
-                amounts.append(candidate)
+        def _format_amount(value: int) -> str:
+            return translation_manager.format_currency(value, language=language_code)
 
-        unique_amounts = sorted({amount for amount in amounts if amount >= min_raise})
-        for amount in unique_amounts:
-            options.append(
+        def _snap(value: Optional[int]) -> Optional[int]:
+            if value is None:
+                return None
+            snapped = int(value)
+            if snapped < min_raise:
+                snapped = min_raise
+            if snapped > total_stack:
+                return None
+            if big_blind > 0:
+                remainder = snapped % big_blind
+                if remainder:
+                    snapped += big_blind - remainder
+            if snapped > total_stack:
+                return None
+            return snapped
+
+        amount_options: List[RaiseOptionMeta] = []
+        pot_options: List[RaiseOptionMeta] = []
+        seen_amounts: Set[int] = set()
+
+        def _add_amount_option(candidate: Optional[int]) -> None:
+            snapped = _snap(candidate)
+            if snapped is None or snapped in seen_amounts or snapped == total_stack:
+                return
+            seen_amounts.add(snapped)
+            formatted = _format_amount(snapped)
+            amount_options.append(
                 RaiseOptionMeta(
-                    key=str(amount),
-                    button_label=f"${amount}",
-                    preview_label=f"Raise to ${amount}",
-                    amount=amount,
+                    key=str(snapped),
+                    button_label=formatted,
+                    preview_label=f"Raise to {formatted}",
+                    amount=snapped,
                     kind="amount",
                 )
             )
 
-        pot_amount = getattr(game, "pot", 0)
-        if (
-            pot_amount
-            and pot_amount >= min_raise
-            and pot_amount <= total_stack
-            and pot_amount not in unique_amounts
-        ):
-            options.append(
+        def _add_pot_option(suffix: str, candidate: Optional[int], label: str) -> None:
+            snapped = _snap(candidate)
+            if snapped is None or snapped in seen_amounts or snapped == total_stack:
+                return
+            seen_amounts.add(snapped)
+            formatted = _format_amount(snapped)
+            pot_options.append(
                 RaiseOptionMeta(
-                    "POT",
-                    f"Pot (${pot_amount})",
-                    f"Pot (${pot_amount})",
-                    pot_amount,
-                    "pot",
+                    key=f"POT_{suffix}",
+                    button_label=f"{label} {formatted}",
+                    preview_label=f"{label} ({formatted})",
+                    amount=snapped,
+                    kind="pot",
                 )
             )
 
-        if total_stack > current_bet:
-            options.append(
-                RaiseOptionMeta(
-                    "ALLIN",
-                    f"All-in (${total_stack})",
-                    f"All-in (${total_stack})",
-                    total_stack,
-                    "all_in",
+        _add_amount_option(min_raise)
+
+        max_raise = total_stack
+        span = max(max_raise - min_raise, 0)
+        if span > 0:
+            step = max(big_blind, span // 5 or big_blind)
+            for idx in range(1, 6):
+                _add_amount_option(min_raise + step * idx)
+
+        if len(amount_options) < 4:
+            for offset in range(1, 6):
+                _add_amount_option(min_raise + big_blind * offset)
+                if len(amount_options) >= 4:
+                    break
+
+        pot_amount = max(getattr(game, "pot", 0), 0)
+        if pot_amount > 0:
+            for ratio, suffix, label in (
+                (0.5, "HALF", "½ Pot"),
+                (2 / 3, "TWO_THIRDS", "⅔ Pot"),
+                (0.75, "THREE_QUARTERS", "¾ Pot"),
+                (1.0, "FULL", "Pot"),
+                (1.5, "ONE_HALF", "1½ Pot"),
+                (2.0, "DOUBLE", "2× Pot"),
+            ):
+                _add_pot_option(
+                    suffix,
+                    int(round(pot_amount * ratio)),
+                    label,
                 )
+
+        amount_options.sort(key=lambda option: option.amount or 0)
+        pot_options.sort(key=lambda option: option.amount or 0)
+
+        options: List[RaiseOptionMeta] = [*amount_options, *pot_options]
+
+        formatted_stack = _format_amount(total_stack)
+        options.append(
+            RaiseOptionMeta(
+                key="ALLIN",
+                button_label=f"All-in {formatted_stack}",
+                preview_label=f"All-in ({formatted_stack})",
+                amount=total_stack,
+                kind="all_in",
             )
+        )
 
         return options
 
@@ -1988,91 +2043,85 @@ class LiveMessageManager:
         game_id = str(getattr(game, "id", ""))
         rows: List[List[InlineKeyboardButton]] = []
 
+        option_map = {opt.key: opt for opt in options}
+        selected_option = option_map.get(selected_key) if selected_key else None
+
+        def _callback(action: str, *payload: str) -> str:
+            return ":".join(
+                ["action", action, *payload, *version_segment, game_id]
+            )
+
+        def _button_text(opt: RaiseOptionMeta) -> str:
+            text = opt.button_label
+            if selected_key == opt.key:
+                text = f"✅ {text}"
+            return text
+
         regular = [opt for opt in options if opt.kind == "amount"]
         specials = [opt for opt in options if opt.kind == "pot"]
         all_in_opts = [opt for opt in options if opt.kind == "all_in"]
 
-        row: List[InlineKeyboardButton] = []
-        for opt in regular:
-            text = opt.button_label
-            if selected_key == opt.key:
-                text = f"✅ {text}"
-            row.append(
-                InlineKeyboardButton(
-                    text,
-                    callback_data=":".join(
-                        [
-                            "raise_amt",
-                            opt.key,
-                            *version_segment,
-                            game_id,
-                        ]
-                    ),
-                )
-            )
-            if len(row) == 3:
-                rows.append(row)
-                row = []
-        if row:
-            rows.append(row)
-
-        if specials:
-            special_row: List[InlineKeyboardButton] = []
-            for opt in specials:
-                text = opt.button_label
-                if selected_key == opt.key:
-                    text = f"✅ {text}"
-                special_row.append(
-                    InlineKeyboardButton(
-                        text,
-                        callback_data=":".join(
-                            [
-                                "raise_amt",
-                                opt.key,
-                                *version_segment,
-                                game_id,
-                            ]
-                        ),
-                    )
-                )
-            rows.append(special_row)
-
-        if all_in_opts:
-            opt = all_in_opts[0]
-            text = opt.button_label
-            if selected_key == opt.key:
-                text = f"✅ {text}"
+        for index in range(0, len(regular), 2):
+            chunk = regular[index : index + 2]
+            if not chunk:
+                continue
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text,
-                        callback_data=":".join(
-                            [
-                                "raise_amt",
-                                opt.key,
-                                *version_segment,
-                                game_id,
-                            ]
-                        ),
+                        _button_text(opt),
+                        callback_data=_callback("raise_amt", opt.key),
+                    )
+                    for opt in chunk
+                ]
+            )
+
+        for index in range(0, len(specials), 2):
+            chunk = specials[index : index + 2]
+            if not chunk:
+                continue
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        _button_text(opt),
+                        callback_data=_callback("raise_amt", opt.key),
+                    )
+                    for opt in chunk
+                ]
+            )
+
+        for opt in all_in_opts:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        _button_text(opt),
+                        callback_data=_callback("raise_amt", opt.key),
                     )
                 ]
             )
 
-        control_row = [
-            InlineKeyboardButton(
-                "⬅ Back",
-                callback_data=":".join(
-                    ["raise_back", *version_segment, game_id]
+        confirm_label = "✅ Confirm Raise"
+        if selected_option is not None:
+            if selected_option.kind == "all_in":
+                confirm_label = "✅ Confirm All-in"
+            elif selected_option.amount is not None:
+                amount_display = translation_manager.format_currency(
+                    selected_option.amount,
+                    language=self._language_code,
+                )
+                confirm_label = f"✅ Confirm {amount_display}"
+
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    "🔙 Back",
+                    callback_data=_callback("raise_back"),
                 ),
-            ),
-            InlineKeyboardButton(
-                "✔ Confirm",
-                callback_data=":".join(
-                    ["raise_confirm", *version_segment, game_id]
+                InlineKeyboardButton(
+                    confirm_label,
+                    callback_data=_callback("raise_confirm"),
                 ),
-            ),
-        ]
-        rows.append(control_row)
+            ]
+        )
 
         return InlineKeyboardMarkup(rows)
 
