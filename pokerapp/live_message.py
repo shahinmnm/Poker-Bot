@@ -1060,51 +1060,108 @@ class LiveMessageManager:
         device_profile: DeviceProfile,
         compact: bool,
     ) -> str:
-        if device_profile.device_type == DeviceType.MOBILE:
-            body = self._compose_mobile_body(
-                game,
-                current_player,
-                device_profile,
-                compact=compact,
-            )
-
-            extra_lines: List[str] = []
-            if preview_raise is not None:
-                selected_label = UnicodeTextFormatter.make_bold("Selected raise:")
-                extra_lines.extend(["", f"🎯 {selected_label} {preview_raise}"])
-
-            recent = context.get("recent_actions", [])
-            if recent:
-                recent_label = UnicodeTextFormatter.make_bold("Recent")
-                extra_lines.extend(["", f"📝 {recent_label}"])
-                extra_lines.extend(f"• {action}" for action in recent)
-
-            if extra_lines:
-                body = body + "\n" + "\n".join(extra_lines)
-
-            return body
+        """Unified compact message for all devices."""
 
         lines: List[str] = []
-        lines.append(self._build_hud_block(context, display))
-        lines.append("")
 
-        if preview_raise is not None:
-            selected_label = UnicodeTextFormatter.make_bold("Selected raise:")
-            lines.append(f"🎯 {selected_label} {preview_raise}")
-            lines.append("")
+        # Header: Table #ID • Seats • Stage
+        table_id = context.get("table_code", "----")
+        seat_label = context.get("seat_label", "—")
+        stage_icon = context.get("stage_icon", "♠️")
+        stage_name = context.get("stage_name", "Pre-Flop")
 
-        players_label = UnicodeTextFormatter.make_bold(
-            f"Players ({context.get('active_count', 0)} active)"
+        header = f"🎴 #{table_id} • {seat_label} • {stage_icon} {stage_name}"
+        lines.append(UnicodeTextFormatter.make_bold(header))
+        lines.append("━" * 35)
+
+        # Board cards
+        board_cards = list(getattr(game, "cards_table", []) or [])
+        if board_cards:
+            board_text = self._format_board_cards(board_cards)
+            lines.append(f"🃏 {board_text}")
+        else:
+            lines.append("🃏 🔒 Cards locked")
+
+        # Pot + Bet (single line)
+        pot = getattr(game, "pot", 0)
+        last_bet = context.get("last_bet_value", 0)
+        pot_str = self._format_chips(pot)
+        bet_str = self._format_chips(last_bet) if last_bet > 0 else "—"
+        lines.append(f"💰 Pot: {pot_str} • Bet: {bet_str}")
+
+        # Side pots (compact)
+        side_pots = getattr(game, "side_pots", None)
+        if side_pots and len(side_pots) > 0:
+            side_parts = [
+                f"S{i}: {self._format_chips(getattr(sp, 'amount', sp))}"
+                for i, sp in enumerate(side_pots, 1)
+            ]
+            lines.append(f"   {' • '.join(side_parts)}")
+
+        # Turn indicator (eye-catching)
+        actor_name = self._get_player_name(current_player)
+        timer_display = context.get("timer_label", "")
+
+        if current_player and actor_name not in {"", "—", "Waiting…"}:
+            turn_line = f"⏰ {UnicodeTextFormatter.make_bold('TURN:')} {actor_name}"
+            if timer_display and timer_display != "—":
+                turn_line += f" ({timer_display})"
+            lines.append(turn_line)
+        else:
+            lines.append(f"⏸️  Waiting for players…")
+
+        lines.append("━" * 35)
+
+        # Players (compact, 1 line each)
+        players = list(getattr(game, "players", []) or [])
+        active_count = sum(
+            1
+            for p in players
+            if getattr(p, "state", None) not in {PlayerState.FOLD, None}
         )
-        lines.append(f"👥 {players_label}")
-        lines.extend(context.get("player_rows", []))
+        lines.append(
+            f"👥 {UnicodeTextFormatter.make_bold(f'{active_count}/{len(players)} Active')}"
+        )
 
+        actor_id = getattr(current_player, "user_id", None) if current_player else None
+
+        for idx, player in enumerate(players, 1):
+            state = getattr(player, "state", None)
+            name = self._get_player_name(player)
+            stack = max(getattr(player.wallet, "value", lambda: 0)(), 0)
+            bet = max(getattr(player, "round_rate", 0), 0)
+
+            # Icon + status
+            if state == PlayerState.FOLD:
+                icon, status = "❌", "Fold"
+            elif state == PlayerState.ALL_IN:
+                icon, status = "🔥", "All-In"
+            elif bet > 0:
+                icon, status = "💚", f"${bet:,}"
+            else:
+                icon, status = "⏸️", "Wait"
+
+            prefix = "▶️" if player.user_id == actor_id else "  "
+            stack_str = self._format_chips(stack)
+            line = f"{prefix}P{idx} {name} {icon} {stack_str}"
+
+            if state != PlayerState.FOLD:
+                line += f" • {status}"
+
+            lines.append(line)
+
+        # Raise preview
+        if preview_raise:
+            lines.append("━" * 35)
+            lines.append(f"🎯 Selected: {preview_raise}")
+
+        # Recent actions (last 2 only)
         recent = context.get("recent_actions", [])
         if recent:
-            lines.append("")
-            recent_label = UnicodeTextFormatter.make_bold("Recent")
-            lines.append(f"📝 {recent_label}")
-            lines.extend(f"• {action}" for action in recent)
+            lines.append("━" * 35)
+            lines.append(f"📝 {UnicodeTextFormatter.make_bold('Recent')}")
+            for action in recent[-2:]:
+                lines.append(f"  • {self._sanitize_text(action)}")
 
         return "\n".join(lines)
 
