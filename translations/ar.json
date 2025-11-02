@@ -437,5 +437,22 @@
         "waiting": "🇺🇸 Waiting for other players..."
       }
     }
+  },
+  "viewer": {
+    "board": {
+      "cards_locked": "البطاقات مقفلة"
+    },
+    "game": {
+      "pot": "الوعاء",
+      "bet": "الرهان",
+      "turn": "دورك",
+      "waiting_players": "في انتظار اللاعبين…",
+      "active_players": "{active}/{total} نشط",
+      "recent_actions": "الإجراءات الأخيرة",
+      "selected_raise": "المبلغ المحدد"
+    },
+    "lobby": {
+      "no_players": "لا يوجد لاعبون بعد"
+    }
   }
 }

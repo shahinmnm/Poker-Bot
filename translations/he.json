@@ -437,5 +437,22 @@
         "waiting": "🇺🇸 Waiting for other players..."
       }
     }
+  },
+  "viewer": {
+    "board": {
+      "cards_locked": "הקלפים נעולים"
+    },
+    "game": {
+      "pot": "קופה",
+      "bet": "הימור",
+      "turn": "תורך",
+      "waiting_players": "ממתינים לשחקנים…",
+      "active_players": "{active}/{total} פעילים",
+      "recent_actions": "פעולות אחרונות",
+      "selected_raise": "העלאה שנבחרה"
+    },
+    "lobby": {
+      "no_players": "אין שחקנים שיושבים עדיין"
+    }
   }
 }

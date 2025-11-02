@@ -961,6 +961,33 @@ class LiveMessageManager:
             "timer_label": timer_label,
             "actor_user_id": actor_user_id,
             "recent_actions": self._format_recent_actions(game),
+            "t_cards_locked": translation_manager.t(
+                "viewer.board.cards_locked", lang=self._language_code
+            ),
+            "t_pot_label": translation_manager.t(
+                "viewer.game.pot", lang=self._language_code
+            ),
+            "t_bet_label": translation_manager.t(
+                "viewer.game.bet", lang=self._language_code
+            ),
+            "t_waiting": translation_manager.t(
+                "viewer.game.waiting_players", lang=self._language_code
+            ),
+            "t_turn_label": translation_manager.t(
+                "viewer.game.turn", lang=self._language_code
+            ),
+            "t_no_players": translation_manager.t(
+                "viewer.lobby.no_players", lang=self._language_code
+            ),
+            "t_active_count": translation_manager.t(
+                "viewer.game.active_players", lang=self._language_code
+            ),
+            "t_recent_label": translation_manager.t(
+                "viewer.game.recent_actions", lang=self._language_code
+            ),
+            "t_selected_label": translation_manager.t(
+                "viewer.game.selected_raise", lang=self._language_code
+            ),
         }
 
     def _compose_message_body(
@@ -993,7 +1020,8 @@ class LiveMessageManager:
             safe_board = self._sanitize_text(board_text)
             lines.append(f"🃏 {safe_board}")
         else:
-            lines.append("🃏 Cards locked")
+            locked_msg = context.get("t_cards_locked", "Cards locked")
+            lines.append(f"🃏 {locked_msg}")
 
         # Pot + Bet (single line)
         pot = getattr(game, "pot", 0)
@@ -1004,7 +1032,9 @@ class LiveMessageManager:
             if last_bet > 0
             else "—"
         )
-        lines.append(f"💰 Pot: {pot_str} • Bet: {bet_str}")
+        pot_label = context.get("t_pot_label", "Pot")
+        bet_label = context.get("t_bet_label", "Bet")
+        lines.append(f"💰 {pot_label}: {pot_str} • {bet_label}: {bet_str}")
 
         # Side pots (compact)
         side_pots = getattr(game, "side_pots", None)
@@ -1023,12 +1053,16 @@ class LiveMessageManager:
 
         if current_player and actor_name not in {"", "—", "Waiting…"}:
             actor_display = self._sanitize_text(actor_name)
-            turn_line = f"⏰ {UnicodeTextFormatter.make_bold('TURN:')} {actor_display}"
+            turn_label = context.get("t_turn_label", "TURN")
+            turn_line = (
+                f"⏰ {UnicodeTextFormatter.make_bold(turn_label + ':')} {actor_display}"
+            )
             if timer_display and timer_display != "—":
                 turn_line += f" ({timer_display})"
             lines.append(turn_line)
         else:
-            lines.append("⏸️ Waiting for players…")
+            waiting_msg = context.get("t_waiting", "Waiting for players…")
+            lines.append(f"⏸️ {waiting_msg}")
 
         lines.append("━" * 35)
 
@@ -1039,9 +1073,11 @@ class LiveMessageManager:
             for p in players
             if getattr(p, "state", None) not in {PlayerState.FOLD, None}
         )
-        lines.append(
-            f"👥 {UnicodeTextFormatter.make_bold(f'{active_count}/{len(players)} Active')}"
+        active_label = context.get(
+            "t_active_count", "{active}/{total} Active"
         )
+        active_text = active_label.format(active=active_count, total=len(players))
+        lines.append(f"👥 {UnicodeTextFormatter.make_bold(active_text)}")
 
         actor_id = getattr(current_player, "user_id", None) if current_player else None
 
@@ -1092,18 +1128,27 @@ class LiveMessageManager:
             lines.append(line)
 
         if not players:
-            lines.append("👥 No players seated yet")
+            no_players_msg = context.get(
+                "t_no_players", "No players seated yet"
+            )
+            lines.append(f"👥 {no_players_msg}")
 
         # Raise preview
         if preview_raise:
             lines.append("━" * 35)
-            lines.append(f"💰 Selected: {self._sanitize_text(preview_raise)}")
+            selected_label = context.get("t_selected_label", "Selected")
+            lines.append(
+                f"💰 {selected_label}: {self._sanitize_text(preview_raise)}"
+            )
 
         # Recent actions (last 2 only)
         recent = context.get("recent_actions", [])
         if recent:
             lines.append("━" * 35)
-            lines.append(f"📝 {UnicodeTextFormatter.make_bold('Recent')}")
+            recent_label = context.get("t_recent_label", "Recent")
+            lines.append(
+                f"📝 {UnicodeTextFormatter.make_bold(recent_label)}"
+            )
             for action in recent[-2:]:
                 lines.append(f"  • {self._sanitize_text(action)}")
 
