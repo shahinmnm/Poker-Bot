@@ -189,6 +189,9 @@
       "stand": "🚶 Levantarse",
       "start": "🎮 Comenzar juego"
     },
+    "navigation": {
+      "already_main": "ℹ️ Ya estás en el menú principal."
+    },
     "controller": {
       "commands": {
         "start": "🎮 Iniciar el bot y mostrar menú principal",
@@ -226,7 +229,18 @@
         "fold": "🇪🇸 ❌ Se retiró",
         "raise": "🇪🇸 ⬆️ Subida en cola",
         "raise_to": "🇪🇸 ⬆️ Subió a {amount}",
-        "submitted": "🇪🇸 ✅ Acción enviada"
+        "submitted": "🇪🇸 ✅ Acción enviada",
+        "bet": "🇪🇸 💰 Apostó {amount}",
+        "confirmed": "🇪🇸 ✅ Acción confirmada",
+        "invalid_format": "🇪🇸 ❌ Formato de acción inválido",
+        "invalid_raise_format": "🇪🇸 ❌ Formato de subida inválido",
+        "invalid_raise_amount": "🇪🇸 ❌ Monto de subida inválido",
+        "invalid_version": "🇪🇸 ❌ Versión de acción inválida",
+        "missing_context": "🇪🇸 ❌ No se pudo determinar el chat",
+        "unknown": "🇪🇸 ❌ Tipo de acción desconocido",
+        "failed_state": "🇪🇸 ❌ La acción falló. Revisa el estado de la partida.",
+        "failed_generic": "🇪🇸 ❌ La acción falló: no es tu turno o es inválida",
+        "handler_unavailable": "🇪🇸 ❌ Controlador de acciones no disponible"
       },
       "fold": {
         "cancelled": "🇪🇸 ↩️ Retiro cancelado",
@@ -250,7 +264,14 @@
         "error_selection": "🇪🇸 ⚠️ No se pudo determinar tu selección de subida.",
         "error_unavailable": "🇪🇸 ⚠️ Los controles de subida no están disponibles ahora.",
         "error_unknown": "🇪🇸 ⚠️ Ocurrió un error al procesar tu subida.",
-        "error_user": "🇪🇸 ⚠️ Solo el jugador en turno puede usar este control."
+        "error_user": "🇪🇸 ⚠️ Solo el jugador en turno puede usar este control.",
+        "picker_unavailable": "🇪🇸 ❌ Selector de subida no disponible",
+        "pick_amount": "🇪🇸 📈 Elige un monto de subida"
+      },
+      "group_admin": {
+        "ban": "/ban <usuario> - Eliminar a un jugador conflictivo",
+        "stop": "/stop - Terminar la partida actual",
+        "language": "/language - Cambiar el idioma de la mesa"
       }
     },
     "error": {
