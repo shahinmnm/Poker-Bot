@@ -532,7 +532,12 @@
       "waiting_players": "Ожидание игроков…",
       "active_players": "{active}/{total} активны",
       "recent_actions": "Недавние действия",
-      "selected_raise": "Выбранная ставка"
+      "selected_raise": "Выбранная ставка",
+      "player_state": {
+        "fold": "Пас",
+        "all_in": "Ва-банк",
+        "waiting": "Ожидает"
+      }
     },
     "lobby": {
       "no_players": "Пока нет игроков за столом"

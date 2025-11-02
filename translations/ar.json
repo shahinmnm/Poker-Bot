@@ -532,7 +532,12 @@
       "waiting_players": "في انتظار اللاعبين…",
       "active_players": "{active}/{total} نشط",
       "recent_actions": "الإجراءات الأخيرة",
-      "selected_raise": "المبلغ المحدد"
+      "selected_raise": "المبلغ المحدد",
+      "player_state": {
+        "fold": "انسحب",
+        "all_in": "آل-إن",
+        "waiting": "ينتظر"
+      }
     },
     "lobby": {
       "no_players": "لا يوجد لاعبون بعد"

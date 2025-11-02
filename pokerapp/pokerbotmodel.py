@@ -1981,15 +1981,19 @@ class PokerBotModel:
         )
 
         # Update invitation message
-        message = (
-            "✅ Invitation accepted!\n\n"
-            f"🎯 {UnicodeTextFormatter.make_bold('Game Code')}: {game_code}\n"
-            f"💰 {UnicodeTextFormatter.make_bold('Stakes')}: {stake_config['name']}\n\n"
-            "You have joined the game lobby.\n\n"
-            "Waiting for host to start the game..."
+        acceptance_text = self._translate(
+            "msg.private.invite.accepted",
+            user_id=user.id,
+            code=game_code,
+            stake=stake_config["name"],
         )
+        waiting_text = self._translate(
+            "msg.lobby.waiting",
+            user_id=user.id,
+        )
+
         await query.edit_message_text(
-            text=message,
+            text=f"{acceptance_text}\n\n{waiting_text}",
         )
 
         # Notify host

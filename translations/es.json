@@ -532,7 +532,12 @@
       "waiting_players": "Esperando a los jugadores…",
       "active_players": "{active}/{total} activos",
       "recent_actions": "Acciones recientes",
-      "selected_raise": "Subida seleccionada"
+      "selected_raise": "Subida seleccionada",
+      "player_state": {
+        "fold": "Se retiró",
+        "all_in": "All-in",
+        "waiting": "Esperando"
+      }
     },
     "lobby": {
       "no_players": "No hay jugadores sentados todavía"

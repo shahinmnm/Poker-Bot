@@ -532,7 +532,12 @@
       "waiting_players": "ממתינים לשחקנים…",
       "active_players": "{active}/{total} פעילים",
       "recent_actions": "פעולות אחרונות",
-      "selected_raise": "העלאה שנבחרה"
+      "selected_raise": "העלאה שנבחרה",
+      "player_state": {
+        "fold": "פולד",
+        "all_in": "אול-אין",
+        "waiting": "ממתין"
+      }
     },
     "lobby": {
       "no_players": "אין שחקנים שיושבים עדיין"

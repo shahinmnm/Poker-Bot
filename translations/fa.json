@@ -532,7 +532,12 @@
       "waiting_players": "در انتظار بازیکنان…",
       "active_players": "{active}/{total} فعال",
       "recent_actions": "اقدامات اخیر",
-      "selected_raise": "افزایش انتخاب‌شده"
+      "selected_raise": "افزایش انتخاب‌شده",
+      "player_state": {
+        "fold": "کنار رفت",
+        "all_in": "آل-این",
+        "waiting": "در انتظار"
+      }
     },
     "lobby": {
       "no_players": "هنوز بازیکنی نشسته نیست"
