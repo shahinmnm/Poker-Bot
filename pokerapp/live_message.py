@@ -1093,13 +1093,13 @@ class LiveMessageManager:
         sections.append(header_text)
 
         board_cards = list(getattr(game, "cards_table", []) or [])
+        table_label = translation_manager.t(
+            "viewer.board.table_label",
+            lang=language_code,
+        )
         if board_cards:
             cards_display = self._format_board_cards(board_cards)
             cards_ltr = f"\u202A{cards_display}\u202C"
-            table_label = translation_manager.t(
-                "viewer.board.table_label",
-                lang=language_code,
-            )
             table_block = "\n".join([f"🪑 {table_label}:", cards_ltr])
         else:
             locked_msg = context.get("t_cards_locked") or translation_manager.t(
