@@ -546,7 +546,8 @@
   "viewer": {
     "board": {
       "cards_locked": "کارت‌ها قفل شده‌اند",
-      "table_label": "میز"
+      "table_label": "میز",
+      "waiting_flop": "در انتظار فلاپ…"
     },
     "game": {
       "pot": "پات",
