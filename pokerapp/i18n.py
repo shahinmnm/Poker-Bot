@@ -386,6 +386,8 @@ class TranslationManager:
             "msg.player_raised": "⬆️ {player} raised to ${amount}",
             "msg.player_checked": "✅ {player} checked",
             "msg.player_all_in": "🔥 {player} went all-in with ${amount}",
+            "msg.ban.unavailable": "⏱️ Please wait for {player}'s 2-minute turn to finish before banning.",
+            "msg.ban.timeout": "⏱️ Time is over for {player}! The player has been folded.",
             "msg.winner": "🏆 {player} wins ${amount}!",
             "msg.pot": "💰 Pot: ${amount}",
             "msg.current_bet": "🎯 Current bet: ${amount}",

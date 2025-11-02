@@ -100,6 +100,10 @@
     "player_left": "➖ {player} salió de la partida",
     "player_raised": "⬆️ {player} subió a ${amount}",
     "player_ready": "✋ {player} está listo",
+    "ban": {
+      "unavailable": "⏱️ Espera a que terminen los 2 minutos de turno de {player} antes de expulsarlo.",
+      "timeout": "⏱️ ¡Se acabó el tiempo de {player}! El jugador fue retirado."
+    },
     "pot": "💰 Bote: ${amount}",
     "private": {
       "invite": {
