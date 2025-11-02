@@ -278,6 +278,10 @@ class TranslationManager:
         # Popup namespace
         _flatten("popup", payload["popup"])
 
+        # Viewer overlays (legacy top-level namespace in translation files)
+        if "viewer" in payload:
+            _flatten("viewer", payload["viewer"])
+
         return flattened, {"rtl": rtl, "font": font}
 
     @staticmethod
