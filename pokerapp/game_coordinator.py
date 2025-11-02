@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""
-Game coordinator - orchestrates engine and betting logic.
-Bridges pure game logic with Telegram bot operations.
-"""
+"""Game coordinator - orchestrates engine and betting logic."""
 
+import json
 import logging
 from typing import Optional, Tuple, Union
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from telegram.error import TelegramError
 
 from pokerapp.game_engine import PokerEngine, TurnResult
 from pokerapp.betting import SidePotCalculator
@@ -18,7 +19,10 @@ from pokerapp.entities import (
 )
 from pokerapp.notify_utils import LoggerHelper
 from pokerapp.i18n import translation_manager
-from pokerapp.winnerdetermination import WinnerDetermination
+from pokerapp.winnerdetermination import (
+    WinnerDetermination,
+    determine_winner_with_rank,
+)
 
 logger = logging.getLogger(__name__)
 log_helper = LoggerHelper.for_logger(logger)
@@ -36,6 +40,12 @@ class GameCoordinator:
         self.winner_determine = WinnerDetermination()
         self._view = view  # Optional PokerBotViewer for UI updates
         self._chat_id: Optional[int] = None
+        self._bot = getattr(view, "_bot", None)
+        self._kv = getattr(view, "_kv", None)
+        if view is not None:
+            live_manager = getattr(view, "_live_manager", None)
+            if live_manager is not None:
+                setattr(live_manager, "_coordinator", self)
 
     async def _send_or_update_game_state(
         self,
@@ -406,3 +416,197 @@ class GameCoordinator:
             action=action,
             amount=amount,
         )
+
+    async def _send_winner_announcement(
+        self,
+        chat_id: int,
+        game: Game,
+    ) -> Optional[Message]:
+        """Send end-game results message with inline buttons."""
+
+        if self._bot is None:
+            logger.warning("Bot instance unavailable for winner announcement")
+            return None
+
+        winner, hand_rank_key = determine_winner_with_rank(game)
+
+        if winner is None:
+            return await self._bot.send_message(
+                chat_id=chat_id,
+                text="🏆 Game ended (no winner determined)",
+            )
+
+        language_code = "en"
+        if self._kv is not None:
+            try:
+                language = self._kv.get_chat_language(chat_id)
+                if language:
+                    language_code = language
+            except Exception:  # pragma: no cover - defensive
+                logger.debug("Failed to fetch chat language", exc_info=True)
+
+        hand_rank_localized = translation_manager.t(
+            f"poker.hand.{hand_rank_key}",
+            lang=language_code,
+        )
+
+        cards = getattr(winner, "cards", []) or []
+        cards_display = " - ".join(self._format_card(card) for card in cards) or "—"
+        cards_ltr = f"\u202A{cards_display}\u202C"
+
+        player_name = self._get_player_display_name(winner)
+        pot_amount = getattr(game, "pot", 0)
+
+        message_text = translation_manager.t(
+            "game.results.winner",
+            lang=language_code,
+            player_name=player_name,
+            amount=pot_amount,
+            hand_rank=hand_rank_localized,
+            cards=cards_ltr,
+        )
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    translation_manager.t(
+                        "game.results.btn.play_again",
+                        lang=language_code,
+                    ),
+                    callback_data="ready",
+                ),
+                InlineKeyboardButton(
+                    translation_manager.t(
+                        "game.results.btn.leave",
+                        lang=language_code,
+                    ),
+                    callback_data="leave_game",
+                ),
+            ]
+        ]
+
+        return await self._bot.send_message(
+            chat_id=chat_id,
+            text=message_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+
+    async def _track_game_message(
+        self,
+        game_id: Optional[str],
+        message_id: Optional[int],
+    ) -> None:
+        """Persist message identifiers for later cleanup."""
+
+        if not game_id or message_id is None or self._kv is None:
+            return
+
+        key = f"game:{game_id}:message_ids"
+        try:
+            raw = self._kv.get(key)
+            if raw:
+                if isinstance(raw, bytes):
+                    raw = raw.decode("utf-8")
+                message_ids = json.loads(raw)
+            else:
+                message_ids = []
+        except Exception:
+            message_ids = []
+
+        if message_id not in message_ids:
+            message_ids.append(message_id)
+            try:
+                self._kv.set(key, json.dumps(message_ids))
+            except Exception:  # pragma: no cover - defensive
+                logger.debug("Failed to store message IDs", exc_info=True)
+
+    async def _cleanup_game_messages(
+        self,
+        chat_id: int,
+        game_id: Optional[str],
+        keep_message_id: Optional[int],
+    ) -> None:
+        """Delete tracked game messages except the final results message."""
+
+        if self._kv is None or self._bot is None or not game_id:
+            return
+
+        key = f"game:{game_id}:message_ids"
+        try:
+            raw = self._kv.get(key)
+            if raw:
+                if isinstance(raw, bytes):
+                    raw = raw.decode("utf-8")
+                message_ids = json.loads(raw)
+            else:
+                message_ids = []
+        except Exception:
+            message_ids = []
+
+        for stored_id in message_ids:
+            try:
+                stored_int = int(stored_id)
+            except (TypeError, ValueError):
+                continue
+
+            if keep_message_id is not None and stored_int == keep_message_id:
+                continue
+
+            try:
+                await self._bot.delete_message(
+                    chat_id=chat_id,
+                    message_id=stored_int,
+                )
+            except TelegramError as exc:  # pragma: no cover - network
+                logger.warning(
+                    "Failed to delete game message %s: %s",
+                    stored_int,
+                    exc,
+                )
+
+        try:
+            self._kv.delete(key)
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("Failed to clear tracked message IDs", exc_info=True)
+
+    def _format_card(self, card) -> str:
+        """Format a card using rank and suit emoji."""
+
+        suit_map = {
+            "♥": "♥️",
+            "♦": "♦️",
+            "♣": "♣️",
+            "♠": "♠️",
+        }
+        rank = getattr(card, "rank", str(card))
+        suit = getattr(card, "suit", "♠")
+        return f"{rank}{suit_map.get(suit, suit)}"
+
+    def _get_player_display_name(self, player: Player) -> str:
+        mention = getattr(player, "mention_markdown", "") or ""
+        if mention.startswith("[") and "](" in mention:
+            try:
+                return mention.split("]", 1)[0][1:]
+            except (IndexError, ValueError):  # pragma: no cover - defensive
+                pass
+        username = getattr(player, "username", None)
+        if username:
+            return username
+        return str(getattr(player, "user_id", "Player"))
+
+    async def finish_game_with_cleanup(
+        self,
+        chat_id: int,
+        game: Game,
+    ) -> None:
+        """Finish game, send results, and clean up messages."""
+
+        results_message = await self._send_winner_announcement(chat_id, game)
+
+        game_id = getattr(game, "id", None)
+        message_id = getattr(results_message, "message_id", None)
+        await self._cleanup_game_messages(chat_id, game_id, message_id)
+
+        game.state = GameState.FINISHED
+        game.group_message_id = None
+

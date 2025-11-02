@@ -49,6 +49,13 @@
       "pre_flop": "Pre-flop",
       "river": "River",
       "turn": "Turn"
+    },
+    "results": {
+      "winner": "🏆 Game Ended\n\n🎴 Winner: {player_name}\n💰 Won: ${amount}\n🃏 Hand: {hand_rank}\n{cards}",
+      "btn": {
+        "play_again": "🔄 Play Again",
+        "leave": "🚪 Leave"
+      }
     }
   },
   "help": {
@@ -538,7 +545,8 @@
   },
   "viewer": {
     "board": {
-      "cards_locked": "Cards locked"
+      "cards_locked": "Cards locked",
+      "table_label": "Table"
     },
     "game": {
       "pot": "Pot",
@@ -554,8 +562,29 @@
         "waiting": "Waiting"
       }
     },
+    "players": {
+      "section_label": "PLAYERS",
+      "active_label": "Active"
+    },
+    "actions": {
+      "recent_label": "Recent"
+    },
     "lobby": {
       "no_players": "No players seated yet"
+    }
+  },
+  "poker": {
+    "hand": {
+      "royal_flush": "Royal Flush",
+      "straight_flush": "Straight Flush",
+      "four_of_a_kind": "Four of a Kind",
+      "full_house": "Full House",
+      "flush": "Flush",
+      "straight": "Straight",
+      "three_of_a_kind": "Three of a Kind",
+      "two_pair": "Two Pair",
+      "pair": "Pair",
+      "high_card": "High Card"
     }
   },
   "private_game": {
