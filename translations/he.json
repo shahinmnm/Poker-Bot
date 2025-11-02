@@ -87,7 +87,8 @@
       "insufficient_funds_detail": "🇮🇱 ❌ אין לך מספיק ז'יטונים. יש לך {balance} אבל נדרשים {required}.",
       "not_enough_players_ready": "🇮🇱 ⚠️ ממתינים לעוד שחקנים מוכנים לפני תחילת המשחק.",
       "players_insufficient_funds": "🇮🇱 ⚠️ השחקנים האלה צריכים עוד ז'יטונים: {players}",
-      "wallet_not_enough": "🇮🇱 ❌ אין לך מספיק ז'יטונים לפעולה הזאת."
+      "wallet_not_enough": "🇮🇱 ❌ אין לך מספיק ז'יטונים לפעולה הזאת.",
+      "rate_limited": "[he] ⚠️ Too many requests. Please slow down and try again later."
     },
     "game_started": "🎮 המשחק התחיל! בהצלחה!",
     "new_round": "🔄 מתחיל סיבוב חדש...",
@@ -103,7 +104,22 @@
     "private": {
       "invite": {
         "body": "🎰 הזמנה למשחק פרטי\n\n{inviter} מזמין אותך להצטרף!\n\n🎲 הימורים: {stake}\n🔑 קוד: {code}\n\nמצטרף?",
-        "detailed_body": "🎴 הזמנה למשחק\n\n{host} מזמין אותך לשחק!\n\n🎯 קוד המשחק: {code}\n\n💰 הימורים: {stake_name}\n• בלאיינד קטן: ${small_blind}\n• בלאיינד גדול: ${big_blind}\n💵 מינימום קנייה: ${min_buyin}\n\nרוצה להצטרף?"
+        "detailed_body": "🎴 הזמנה למשחק\n\n{host} מזמין אותך לשחק!\n\n🎯 קוד המשחק: {code}\n\n💰 הימורים: {stake_name}\n• בלאיינד קטן: ${small_blind}\n• בלאיינד גדול: ${big_blind}\n💵 מינימום קנייה: ${min_buyin}\n\nרוצה להצטרף?",
+        "sent": "[he] ✅ Invitation sent to {username}!",
+        "send_failed": "[he] ❌ Couldn't send invitation to {username}.\nThey may have blocked the bot.",
+        "accepted": "[he] ✅ Joined Game!\n\nGame Code: {code}\nStakes: {stake}\n\nUse /leave to exit the lobby.",
+        "accepted_host": "[he] ✅ {player} accepted your invitation!",
+        "declined": "[he] ❌ Invitation Declined\n\nYou declined the game invitation.",
+        "declined_host": "[he] ❌ {player} declined your invitation.",
+        "summary": {
+          "empty": "[he] 📭 You have no pending invitations.",
+          "header": "[he] 📨 Pending invitations:",
+          "entry_with_details": "[he] • {code} — {details}",
+          "entry_simple": "[he] • {code}",
+          "footer": "[he] Use /accept CODE to join or /decline CODE to refuse."
+        },
+        "already_accepted": "[he] ✅ You already accepted this invitation!",
+        "declined_with_hint": "[he] ❌ Invitation declined.\n\nYou can still join later with /join {code}"
       },
       "lobby": {
         "body": "{title}\n\n🎯 מארח: {host}\n🎲 הימורים: {stake}\n🔑 קוד: {code}\n\n{player_status}\n\n{players}\n\n{readiness}",
@@ -111,7 +127,13 @@
         "player_status": "{status_icon} שחקנים: {current}/{max} {min_indicator}",
         "ready": "✅ מוכנים להתחיל!",
         "title": "🔒 לובי משחק פרטי",
-        "waiting": "⏳ ממתינים לעוד שחקנים (מינימום {min_players})..."
+        "waiting": "⏳ ממתינים לעוד שחקנים (מינימום {min_players})...",
+        "leave_confirmation": "[he] 🚪 You left the private game.\nYour seat is now available for others.",
+        "player_left": "[he] 👋 {player} left the game.",
+        "new_host": "[he] 👑 {player} is now the host!",
+        "current_players": "[he] 👥 Current players ({current}/{max}):",
+        "player_entry": "[he] {index}. {player}{host_marker}",
+        "host_marker": "[he]  👑 (Host)"
       },
       "stake_menu": {
         "body": "🇮🇱 {title}\\n\\n{subtitle}\\n\\n{options}\\n\\n{footer}",
@@ -127,7 +149,31 @@
       },
       "error": {
         "already_active": "🇮🇱 ⚠️ כבר יש לך משחק פרטי פעיל. סיים או סגור אותו לפני יצירת חדש.",
-        "invalid_stake": "🇮🇱 ⚠️ רמת הימור '{level}' אינה מוכרת. אנא בחר אפשרות אחרת."
+        "invalid_stake": "🇮🇱 ⚠️ רמת הימור '{level}' אינה מוכרת. אנא בחר אפשרות אחרת.",
+        "no_active_game": "[he] ❌ You don't have an active private game.\n\nCreate one with /private",
+        "missing_player": "[he] ❌ Please specify a player:\n\n/invite @username",
+        "user_not_found": "[he] ❌ User {username} not found.\n\nPlayers must have used the bot before being invited.",
+        "game_not_found": "[he] ❌ Game not found.",
+        "game_misconfigured": "[he] ❌ Game stakes are misconfigured.",
+        "game_expired": "[he] ❌ Game {code} not found or expired.",
+        "host_only_start": "[he] ❌ Only the host can start the game!",
+        "already_started": "[he] ❌ Game has already started or finished!",
+        "min_players": "[he] ❌ Need at least {min_players} players to start!\n\nCurrent: {current} player(s)",
+        "too_many_players": "[he] ❌ Too many players to start!\n\nMaximum: {max_players} players\nCurrent: {current} players\n\nSome players must /leave before starting.",
+        "stake_missing": "[he] ❌ Stake configuration missing for this game!",
+        "insufficient_funds_header": "[he] ❌ Cannot start game - insufficient funds:\n",
+        "insufficient_funds_line": "[he] • {player}: ${balance} (need ${required})",
+        "insufficient_funds_footer": "[he] \nAll players need at least ${required} to play.",
+        "lobby_changed": "[he] ⚠️ Lobby state changed during game start. Please try /start again.",
+        "invite_invalid": "[he] ❌ This invitation has expired or is invalid.",
+        "invite_already_responded": "[he] ❌ You already {status} this invitation.",
+        "game_missing": "[he] ❌ Game no longer exists.",
+        "not_in_game": "[he] ❌ You're not in any private game.",
+        "session_missing": "[he] ❌ Game session not found.",
+        "cannot_leave_started": "[he] ❌ Cannot leave started game. Use buttons to fold.",
+        "status_unavailable": "[he] ⚠️ This private game is no longer available.",
+        "status_failed": "[he] ⚠️ Unable to load private game details.",
+        "not_invited": "[he] ❌ You are not invited to this game."
       },
       "created": "🇮🇱 🎉 שולחן פרטי נוצר!\\nמארח: {host}\\nהימורים: {stake}\\nבאי-אין: ${min_buyin} - ${max_buyin}\\nקוד: {code}\\nמקסימום שחקנים: {max_players}\\n\\nשתף את הקוד עם חברים להזמנה."
     },
@@ -147,6 +193,22 @@
       "game_in_progress": "🇮🇱 🎮 משחק כבר רץ.",
       "insufficient_funds": "🇮🇱 💰 אין לך מספיק ז'יטונים לשולחן הזה.",
       "room_full": "🇮🇱 🚫 הלובי מלא (מקסימום {max_players} שחקנים)."
+    },
+    "player_action": {
+      "generic": "[he] {player} {action} ${amount}"
+    },
+    "model": {
+      "error": {
+        "chat_context_missing": "[he] ❌ Cannot determine chat context",
+        "no_active_game_chat": "[he] ❌ No active game in this chat",
+        "action_expired": "[he] ♻️ Action expired. Please use the latest buttons.",
+        "game_inactive": "[he] 🛑 Game is not accepting actions right now.",
+        "already_folded": "[he] ❌ You already folded!",
+        "cannot_act_now": "[he] ❌ You cannot act right now",
+        "call_or_raise": "[he] ❌ You must call or raise",
+        "invalid_raise_amount": "[he] ❌ Invalid raise amount",
+        "unknown_action": "[he] ❌ Unknown action"
+      }
     }
   },
   "popup": {
