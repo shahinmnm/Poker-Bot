@@ -1662,8 +1662,7 @@ class LiveMessageManager:
 
         big_blind = max((getattr(game, "table_stake", 0) or 0) * 2, 1)
         min_raise = max(current_bet * 2, big_blind)
-        if min_raise > total_stack:
-            return []
+        allow_partial_raise = min_raise <= total_stack
 
         language_code = getattr(self, "_language_code", translation_manager.DEFAULT_LANGUAGE)
 
@@ -1722,36 +1721,37 @@ class LiveMessageManager:
                 )
             )
 
-        _add_amount_option(min_raise)
+        if allow_partial_raise:
+            _add_amount_option(min_raise)
 
-        max_raise = total_stack
-        span = max(max_raise - min_raise, 0)
-        if span > 0:
-            step = max(big_blind, span // 5 or big_blind)
-            for idx in range(1, 6):
-                _add_amount_option(min_raise + step * idx)
+            max_raise = total_stack
+            span = max(max_raise - min_raise, 0)
+            if span > 0:
+                step = max(big_blind, span // 5 or big_blind)
+                for idx in range(1, 6):
+                    _add_amount_option(min_raise + step * idx)
 
-        if len(amount_options) < 4:
-            for offset in range(1, 6):
-                _add_amount_option(min_raise + big_blind * offset)
-                if len(amount_options) >= 4:
-                    break
+            if len(amount_options) < 4:
+                for offset in range(1, 6):
+                    _add_amount_option(min_raise + big_blind * offset)
+                    if len(amount_options) >= 4:
+                        break
 
-        pot_amount = max(getattr(game, "pot", 0), 0)
-        if pot_amount > 0:
-            for ratio, suffix, label in (
-                (0.5, "HALF", "½ Pot"),
-                (2 / 3, "TWO_THIRDS", "⅔ Pot"),
-                (0.75, "THREE_QUARTERS", "¾ Pot"),
-                (1.0, "FULL", "Pot"),
-                (1.5, "ONE_HALF", "1½ Pot"),
-                (2.0, "DOUBLE", "2× Pot"),
-            ):
-                _add_pot_option(
-                    suffix,
-                    int(round(pot_amount * ratio)),
-                    label,
-                )
+            pot_amount = max(getattr(game, "pot", 0), 0)
+            if pot_amount > 0:
+                for ratio, suffix, label in (
+                    (0.5, "HALF", "½ Pot"),
+                    (2 / 3, "TWO_THIRDS", "⅔ Pot"),
+                    (0.75, "THREE_QUARTERS", "¾ Pot"),
+                    (1.0, "FULL", "Pot"),
+                    (1.5, "ONE_HALF", "1½ Pot"),
+                    (2.0, "DOUBLE", "2× Pot"),
+                ):
+                    _add_pot_option(
+                        suffix,
+                        int(round(pot_amount * ratio)),
+                        label,
+                    )
 
         amount_options.sort(key=lambda option: option.amount or 0)
         pot_options.sort(key=lambda option: option.amount or 0)
