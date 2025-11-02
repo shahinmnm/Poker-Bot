@@ -189,6 +189,9 @@
       "stand": "🚶 Stand Up",
       "start": "🎮 Start Game"
     },
+    "navigation": {
+      "already_main": "ℹ️ You're already at the main menu."
+    },
     "controller": {
       "commands": {
         "start": "🎮 Start the bot and show main menu",
@@ -226,7 +229,18 @@
         "fold": "❌ Folded",
         "raise": "⬆️ Raise queued",
         "raise_to": "⬆️ Raised to {amount}",
-        "submitted": "✅ Action submitted"
+        "submitted": "✅ Action submitted",
+        "bet": "💰 Bet {amount}",
+        "confirmed": "✅ Action confirmed",
+        "invalid_format": "❌ Invalid action format",
+        "invalid_raise_format": "❌ Invalid raise format",
+        "invalid_raise_amount": "❌ Invalid raise amount",
+        "invalid_version": "❌ Invalid action version",
+        "missing_context": "❌ Cannot determine chat context",
+        "unknown": "❌ Unknown action type",
+        "failed_state": "❌ Action failed. Please check the game state.",
+        "failed_generic": "❌ Action failed - not your turn or invalid action",
+        "handler_unavailable": "❌ Action handler not available"
       },
       "fold": {
         "cancelled": "↩️ Fold cancelled",
@@ -250,7 +264,14 @@
         "error_selection": "⚠️ Couldn't determine your raise choice.",
         "error_unavailable": "⚠️ Raise controls are currently unavailable.",
         "error_unknown": "⚠️ Something went wrong while processing your raise.",
-        "error_user": "⚠️ Only the acting player can use this control."
+        "error_user": "⚠️ Only the acting player can use this control.",
+        "picker_unavailable": "❌ Raise picker unavailable",
+        "pick_amount": "📈 Pick a raise amount"
+      },
+      "group_admin": {
+        "ban": "/ban <user> - Remove a disruptive player",
+        "stop": "/stop - End the current game",
+        "language": "/language - Change table language"
       }
     },
     "error": {

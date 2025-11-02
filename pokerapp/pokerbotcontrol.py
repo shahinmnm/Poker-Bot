@@ -45,6 +45,10 @@ class ControllerTextKeys:
     LOBBY_LEFT = "controller.lobby.left"
     INVITE_ACCEPT_HELP = "controller.invite.accept_help"
     INVITE_DECLINE_HELP = "controller.invite.decline_help"
+    NAVIGATION_ALREADY_MAIN = "navigation.already_main"
+    GROUP_ADMIN_BAN = "controller.group_admin.ban"
+    GROUP_ADMIN_STOP = "controller.group_admin.stop"
+    GROUP_ADMIN_LANGUAGE = "controller.group_admin.language"
     FOLD_EXPIRED = "controller.fold.expired"
     FOLD_SUCCESS = "controller.fold.success"
     FOLD_FAILURE = "controller.fold.failure"
@@ -57,6 +61,17 @@ class ControllerTextKeys:
     ACTION_RAISE_TO = "controller.action.raise_to"
     ACTION_RAISE = "controller.action.raise"
     ACTION_ALL_IN = "controller.action.all_in"
+    ACTION_BET = "controller.action.bet"
+    ACTION_CONFIRMED = "controller.action.confirmed"
+    ACTION_INVALID_FORMAT = "controller.action.invalid_format"
+    ACTION_INVALID_RAISE_FORMAT = "controller.action.invalid_raise_format"
+    ACTION_INVALID_RAISE_AMOUNT = "controller.action.invalid_raise_amount"
+    ACTION_INVALID_VERSION = "controller.action.invalid_version"
+    ACTION_MISSING_CONTEXT = "controller.action.missing_context"
+    ACTION_UNKNOWN = "controller.action.unknown"
+    ACTION_FAILED_STATE = "controller.action.failed_state"
+    ACTION_FAILED_GENERIC = "controller.action.failed_generic"
+    ACTION_HANDLER_UNAVAILABLE = "controller.action.handler_unavailable"
     RAISE_ERROR_CONTEXT = "controller.raise.error_context"
     RAISE_ERROR_USER = "controller.raise.error_user"
     RAISE_ERROR_NO_GAME = "controller.raise.error_no_game"
@@ -66,6 +81,8 @@ class ControllerTextKeys:
     RAISE_ERROR_EXPIRED = "controller.raise.error_expired"
     RAISE_ERROR_CHOOSE_AMOUNT = "controller.raise.error_choose_amount"
     RAISE_ERROR_UNKNOWN = "controller.raise.error_unknown"
+    RAISE_PICKER_UNAVAILABLE = "controller.raise.picker_unavailable"
+    RAISE_PICK_AMOUNT = "controller.raise.pick_amount"
 
 
 class ControllerCommandKeys:
@@ -787,7 +804,20 @@ class PokerBotController:
                 error_msg = translator("error.navigation_failed")
                 await query.answer(error_msg, show_alert=True)
             except Exception:
-                await query.answer("⚠️ Navigation error", show_alert=True)
+                user_id = getattr(user, "id", None) if 'user' in locals() else None
+                language_code = (
+                    getattr(user, "language_code", None)
+                    if 'user' in locals()
+                    else None
+                )
+                await query.answer(
+                    translation_manager.t(
+                        "error.navigation_failed",
+                        user_id=user_id,
+                        lang=language_code,
+                    ),
+                    show_alert=True,
+                )
 
             return False
 
@@ -825,7 +855,12 @@ class PokerBotController:
 
                 parent_location_value = MENU_HIERARCHY.get(current_location)
                 if parent_location_value is None:
-                    await query.answer("Already at main menu")
+                    await query.answer(
+                        self._translate(
+                            ControllerTextKeys.NAVIGATION_ALREADY_MAIN,
+                            query=query,
+                        )
+                    )
                     return
 
                 if isinstance(parent_location_value, MenuLocation):
@@ -854,7 +889,13 @@ class PokerBotController:
                 exc,
                 exc_info=True,
             )
-            await query.answer("⚠️ Navigation error", show_alert=True)
+            await query.answer(
+                self._translate(
+                    "error.navigation_failed",
+                    query=query,
+                ),
+                show_alert=True,
+            )
 
     async def _handle_nav_home(
         self,
@@ -887,7 +928,13 @@ class PokerBotController:
                 exc,
                 exc_info=True,
             )
-            await query.answer("⚠️ Navigation error", show_alert=True)
+            await query.answer(
+                self._translate(
+                    "error.navigation_failed",
+                    query=query,
+                ),
+                show_alert=True,
+            )
 
     async def _handle_stop(
         self,
@@ -1305,6 +1352,28 @@ class PokerBotController:
                 telegram_language_code=getattr(query_user, "language_code", None),
             )
 
+        user_id = getattr(query_user, "id", None)
+        user_language_code = getattr(query_user, "language_code", None)
+        resolved_language = translation_manager.resolve_language(
+            user_id=user_id,
+            lang=user_language_code,
+        )
+
+        def _translate_for_query(key: str, **kwargs: Any) -> str:
+            return self._translate(
+                key,
+                query=query,
+                user_id=user_id,
+                language_code=user_language_code,
+                **kwargs,
+            )
+
+        def _format_amount(amount: Optional[int]) -> str:
+            return translation_manager.format_currency(
+                amount or 0,
+                language=resolved_language,
+            )
+
         await self._respond_to_query(query)
         await self._model.accept_invitation(update, context)
 
@@ -1665,9 +1734,9 @@ class PokerBotController:
         help_lines = [
             title,
             "",
-            "/ban <user> - Remove a disruptive player",
-            "/stop - End the current game",
-            "/language - Change table language",
+            self._translate(ControllerTextKeys.GROUP_ADMIN_BAN, query=query),
+            self._translate(ControllerTextKeys.GROUP_ADMIN_STOP, query=query),
+            self._translate(ControllerTextKeys.GROUP_ADMIN_LANGUAGE, query=query),
         ]
 
         target_chat = update.effective_chat
@@ -2328,7 +2397,10 @@ class PokerBotController:
         if not success:
             await NotificationManager.popup(
                 query,
-                text="❌ Raise picker unavailable",
+                text=self._translate(
+                    ControllerTextKeys.RAISE_PICKER_UNAVAILABLE,
+                    query=query,
+                ),
                 show_alert=False,
                 event="RaiseSelectError",
             )
@@ -2336,7 +2408,10 @@ class PokerBotController:
 
         await NotificationManager.popup(
             query,
-            text="Pick a raise amount",
+            text=self._translate(
+                ControllerTextKeys.RAISE_PICK_AMOUNT,
+                query=query,
+            ),
             show_alert=False,
             event="RaiseSelectAck",
         )
@@ -2407,7 +2482,9 @@ class PokerBotController:
                         reason="too_few_parts",
                     )
                     await show_popup(
-                        "❌ Invalid action format",
+                        _translate_for_query(
+                            ControllerTextKeys.ACTION_INVALID_FORMAT
+                        ),
                         is_alert=False,
                     )
                     return
@@ -2431,7 +2508,9 @@ class PokerBotController:
                             reason="missing_game_id",
                         )
                         await show_popup(
-                            "❌ Invalid action format",
+                            _translate_for_query(
+                                ControllerTextKeys.ACTION_INVALID_FORMAT
+                            ),
                             is_alert=False,
                         )
                         return
@@ -2453,7 +2532,9 @@ class PokerBotController:
                         )
                         await self._respond_to_query(
                             query,
-                            "❌ Invalid raise format",
+                            _translate_for_query(
+                                ControllerTextKeys.ACTION_INVALID_RAISE_FORMAT
+                            ),
                             event="ActionPopup",
                         )
                         return
@@ -2468,7 +2549,9 @@ class PokerBotController:
                         )
                         await self._respond_to_query(
                             query,
-                            "❌ Invalid raise amount",
+                            _translate_for_query(
+                                ControllerTextKeys.ACTION_INVALID_RAISE_AMOUNT
+                            ),
                             event="ActionPopup",
                         )
                         return
@@ -2486,7 +2569,9 @@ class PokerBotController:
                             )
                             await self._respond_to_query(
                                 query,
-                                "❌ Invalid action version",
+                                _translate_for_query(
+                                    ControllerTextKeys.ACTION_INVALID_VERSION
+                                ),
                                 event="ActionPopup",
                             )
                             return
@@ -2500,7 +2585,9 @@ class PokerBotController:
                             )
                             await self._respond_to_query(
                                 query,
-                                "❌ Invalid action format",
+                                _translate_for_query(
+                                    ControllerTextKeys.ACTION_INVALID_FORMAT
+                                ),
                                 event="ActionPopup",
                             )
                             return
@@ -2518,7 +2605,9 @@ class PokerBotController:
                             )
                             await self._respond_to_query(
                                 query,
-                                "❌ Invalid action version",
+                                _translate_for_query(
+                                    ControllerTextKeys.ACTION_INVALID_VERSION
+                                ),
                                 event="ActionPopup",
                             )
                             return
@@ -2532,14 +2621,16 @@ class PokerBotController:
                             )
                             await self._respond_to_query(
                                 query,
-                                "❌ Invalid action format",
+                                _translate_for_query(
+                                    ControllerTextKeys.ACTION_INVALID_FORMAT
+                                ),
                                 event="ActionPopup",
                             )
                             return
 
             if not game_id:
                 await show_popup(
-                    "❌ Invalid action format",
+                    _translate_for_query(ControllerTextKeys.ACTION_INVALID_FORMAT),
                     is_alert=False,
                 )
                 return
@@ -2550,7 +2641,9 @@ class PokerBotController:
             if not chat_id:
                 await self._respond_to_query(
                     query,
-                    "❌ Cannot determine chat context",
+                    _translate_for_query(
+                        ControllerTextKeys.ACTION_MISSING_CONTEXT
+                    ),
                     event="ActionPopup",
                 )
                 return
@@ -2564,7 +2657,9 @@ class PokerBotController:
                 )
                 await self._respond_to_query(
                     query,
-                    "❌ Action handler not available",
+                    _translate_for_query(
+                        ControllerTextKeys.ACTION_HANDLER_UNAVAILABLE
+                    ),
                     event="ActionPopup",
                 )
                 return
@@ -2594,7 +2689,9 @@ class PokerBotController:
                     ):
                         error_message = (
                             validation.message
-                            or "❌ Action failed - not your turn or invalid action"
+                            or _translate_for_query(
+                                ControllerTextKeys.ACTION_FAILED_GENERIC
+                            )
                         )
                         await show_popup(
                             error_message,
@@ -2637,7 +2734,9 @@ class PokerBotController:
                         action_type=action_type,
                     )
                     await show_popup(
-                        "❌ Action failed. Please check the game state.",
+                        _translate_for_query(
+                            ControllerTextKeys.ACTION_FAILED_STATE
+                        ),
                         is_alert=True,
                         fallback_chat_id=chat_id,
                     )
@@ -2653,20 +2752,47 @@ class PokerBotController:
 
             if "action_type" in signature.parameters:
                 # ✅ Toast feedback: instant confirmation for user
-                action_toasts = {
-                    "fold": "🚪 Folded",
-                    "check": "✅ Checked",
-                    "call": f"💵 Called ${raise_amount or 0}",
-                    "raise": f"📈 Raised ${raise_amount or 0}",
-                    "bet": f"💰 Bet ${raise_amount or 0}",
-                    "all_in": "🚀 All-in!",
-                }
-
-                # Get toast text with safe fallback
-                toast_text = action_toasts.get(
-                    action_type,
-                    "✅ Action confirmed"
-                )
+                if action_type == "fold":
+                    toast_text = _translate_for_query(
+                        ControllerTextKeys.ACTION_FOLD
+                    )
+                elif action_type == "check":
+                    toast_text = _translate_for_query(
+                        ControllerTextKeys.ACTION_CHECK
+                    )
+                elif action_type == "call":
+                    toast_text = _translate_for_query(
+                        ControllerTextKeys.ACTION_CALL,
+                        amount=_format_amount(raise_amount),
+                    )
+                elif action_type == "raise":
+                    if raise_amount:
+                        toast_text = _translate_for_query(
+                            ControllerTextKeys.ACTION_RAISE_TO,
+                            amount=_format_amount(raise_amount),
+                        )
+                    else:
+                        toast_text = _translate_for_query(
+                            ControllerTextKeys.ACTION_RAISE
+                        )
+                elif action_type == "bet":
+                    if raise_amount:
+                        toast_text = _translate_for_query(
+                            ControllerTextKeys.ACTION_BET,
+                            amount=_format_amount(raise_amount),
+                        )
+                    else:
+                        toast_text = _translate_for_query(
+                            ControllerTextKeys.ACTION_CONFIRMED
+                        )
+                elif action_type == "all_in":
+                    toast_text = _translate_for_query(
+                        ControllerTextKeys.ACTION_ALL_IN
+                    )
+                else:
+                    toast_text = _translate_for_query(
+                        ControllerTextKeys.ACTION_CONFIRMED
+                    )
 
                 # Send toast (non-blocking, clears button spinner)
                 await NotificationManager.toast(
@@ -2695,27 +2821,54 @@ class PokerBotController:
                 if player_action is None:
                     await self._respond_to_query(
                         query,
-                        "❌ Unknown action type",
+                        _translate_for_query(ControllerTextKeys.ACTION_UNKNOWN),
                     )
                     return
 
                 legacy_amount = raise_amount if raise_amount is not None else 0
 
                 # ✅ Toast feedback: instant confirmation for user
-                action_toasts = {
-                    "fold": "🚪 Folded",
-                    "check": "✅ Checked",
-                    "call": f"💵 Called ${legacy_amount}",
-                    "raise": f"📈 Raised ${legacy_amount}",
-                    "bet": f"💰 Bet ${legacy_amount}",
-                    "all_in": "🚀 All-in!",
-                }
-
-                # Get toast text with safe fallback
-                toast_text = action_toasts.get(
-                    action_type,
-                    "✅ Action confirmed"
-                )
+                if action_type == "fold":
+                    toast_text = _translate_for_query(
+                        ControllerTextKeys.ACTION_FOLD
+                    )
+                elif action_type == "check":
+                    toast_text = _translate_for_query(
+                        ControllerTextKeys.ACTION_CHECK
+                    )
+                elif action_type == "call":
+                    toast_text = _translate_for_query(
+                        ControllerTextKeys.ACTION_CALL,
+                        amount=_format_amount(legacy_amount),
+                    )
+                elif action_type == "raise":
+                    if legacy_amount:
+                        toast_text = _translate_for_query(
+                            ControllerTextKeys.ACTION_RAISE_TO,
+                            amount=_format_amount(legacy_amount),
+                        )
+                    else:
+                        toast_text = _translate_for_query(
+                            ControllerTextKeys.ACTION_RAISE
+                        )
+                elif action_type == "bet":
+                    if legacy_amount:
+                        toast_text = _translate_for_query(
+                            ControllerTextKeys.ACTION_BET,
+                            amount=_format_amount(legacy_amount),
+                        )
+                    else:
+                        toast_text = _translate_for_query(
+                            ControllerTextKeys.ACTION_CONFIRMED
+                        )
+                elif action_type == "all_in":
+                    toast_text = _translate_for_query(
+                        ControllerTextKeys.ACTION_ALL_IN
+                    )
+                else:
+                    toast_text = _translate_for_query(
+                        ControllerTextKeys.ACTION_CONFIRMED
+                    )
 
                 # Send toast (non-blocking, clears button spinner)
                 await NotificationManager.toast(
@@ -2735,7 +2888,9 @@ class PokerBotController:
             if not success:
                 await self._respond_to_query(
                     query,
-                    "❌ Action failed - not your turn or invalid action",
+                    _translate_for_query(
+                        ControllerTextKeys.ACTION_FAILED_GENERIC
+                    ),
                 )
         except Exception as exc:  # pragma: no cover - defensive logging
             log_helper.error(
@@ -2745,7 +2900,11 @@ class PokerBotController:
                 exc_info=True,
             )
             await show_popup(
-                "❌ An error occurred. Please try again.",
+                translation_manager.t(
+                    "msg.error.generic",
+                    user_id=user_id,
+                    lang=user_language_code,
+                ),
                 is_alert=True,
                 fallback_chat_id=(
                     query.message.chat_id if query and query.message else None
