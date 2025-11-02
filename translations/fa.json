@@ -437,5 +437,22 @@
         "waiting": "🇺🇸 Waiting for other players..."
       }
     }
+  },
+  "viewer": {
+    "board": {
+      "cards_locked": "کارت‌ها قفل شده‌اند"
+    },
+    "game": {
+      "pot": "پات",
+      "bet": "شرط",
+      "turn": "نوبت",
+      "waiting_players": "در انتظار بازیکنان…",
+      "active_players": "{active}/{total} فعال",
+      "recent_actions": "اقدامات اخیر",
+      "selected_raise": "افزایش انتخاب‌شده"
+    },
+    "lobby": {
+      "no_players": "هنوز بازیکنی نشسته نیست"
+    }
   }
 }

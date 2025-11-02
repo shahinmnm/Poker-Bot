@@ -437,5 +437,22 @@
         "waiting": "🇺🇸 Waiting for other players..."
       }
     }
+  },
+  "viewer": {
+    "board": {
+      "cards_locked": "Cartas ocultas"
+    },
+    "game": {
+      "pot": "Bote",
+      "bet": "Apuesta",
+      "turn": "TURNO",
+      "waiting_players": "Esperando a los jugadores…",
+      "active_players": "{active}/{total} activos",
+      "recent_actions": "Acciones recientes",
+      "selected_raise": "Subida seleccionada"
+    },
+    "lobby": {
+      "no_players": "No hay jugadores sentados todavía"
+    }
   }
 }
