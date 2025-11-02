@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Set
+from typing import Any, Dict, Optional, Set
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
@@ -93,13 +93,35 @@ class GroupLobbyManager:
         return lobby
 
     async def add_player(
-        self, chat_id: int, user_id: int, user_name: str
+        self,
+        chat_id: int,
+        user_id: int,
+        user_name: str,
+        *,
+        max_players: Optional[int] = None,
     ) -> GroupLobbyState:
         """Add player to lobby, persist, and update message."""
 
         lobby = self.get_or_create_lobby(chat_id)
         added = lobby.add_player(user_id)
         lobby.player_names[user_id] = user_name
+        language_code = self._get_chat_language(chat_id)
+        if added:
+            await self._notify_lobby_event(
+                chat_id,
+                "lobby.player_joined",
+                language_code,
+                player_name=user_name,
+                current=lobby.player_count(),
+                max=max_players if max_players is not None else lobby.player_count(),
+            )
+        else:
+            await self._notify_lobby_event(
+                chat_id,
+                "lobby.error.already_joined",
+                language_code,
+                player_name=user_name,
+            )
         self._logger.info(
             "Adding player %s to lobby %s (already_present=%s)",
             user_id,
@@ -110,7 +132,13 @@ class GroupLobbyManager:
         self._save_lobby_state(lobby)
         return lobby
 
-    async def remove_player(self, chat_id: int, user_id: int) -> None:
+    async def remove_player(
+        self,
+        chat_id: int,
+        user_id: int,
+        *,
+        max_players: Optional[int] = None,
+    ) -> None:
         """Remove a player; delete lobby when empty."""
 
         lobby = self._lobbies.get(chat_id)
@@ -125,6 +153,7 @@ class GroupLobbyManager:
             )
             return
 
+        player_name = lobby.player_names.get(user_id, str(user_id))
         removed = lobby.remove_player(user_id)
         self._logger.info(
             "Removing player %s from lobby %s (removed=%s)",
@@ -132,6 +161,17 @@ class GroupLobbyManager:
             chat_id,
             removed,
         )
+
+        if removed:
+            language_code = self._get_chat_language(chat_id)
+            await self._notify_lobby_event(
+                chat_id,
+                "lobby.player_left",
+                language_code,
+                player_name=player_name,
+                current=lobby.player_count(),
+                max=max_players if max_players is not None else lobby.player_count(),
+            )
 
         if lobby.player_count() == 0:
             await self.delete_lobby(chat_id)
@@ -166,10 +206,7 @@ class GroupLobbyManager:
     ) -> None:
         """Send or edit lobby message with current players."""
 
-        language_code = (
-            self._kv.get_chat_language(chat_id)
-            or translation_manager.DEFAULT_LANGUAGE
-        )
+        language_code = self._get_chat_language(chat_id)
         translator = translation_manager.get_translator(language_code)
 
         text = self._format_lobby_message(lobby, translator)
@@ -207,6 +244,37 @@ class GroupLobbyManager:
         except TelegramError as exc:  # pragma: no cover - Telegram API
             self._logger.error(
                 "Failed to send lobby message to chat %s: %s",
+                chat_id,
+                exc,
+            )
+
+    def _get_chat_language(self, chat_id: int) -> str:
+        """Return persisted language for chat with fallback."""
+
+        return (
+            self._kv.get_chat_language(chat_id)
+            or translation_manager.DEFAULT_LANGUAGE
+        )
+
+    async def _notify_lobby_event(
+        self,
+        chat_id: int,
+        key: str,
+        language_code: str,
+        **kwargs: Any,
+    ) -> None:
+        """Send localized notification for lobby lifecycle events."""
+
+        message = translation_manager.t(key, lang=language_code, **kwargs)
+        if not message:
+            return
+
+        try:
+            await self._bot.send_message(chat_id=chat_id, text=message)
+        except TelegramError as exc:  # pragma: no cover - Telegram API
+            self._logger.warning(
+                "Failed to send lobby notification '%s' to chat %s: %s",
+                key,
                 chat_id,
                 exc,
             )

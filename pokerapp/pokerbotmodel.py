@@ -819,6 +819,7 @@ class PokerBotModel:
                 chat_id=chat_id,
                 user_id=user.id,
                 user_name=display_name,
+                max_players=MAX_PLAYERS,
             )
 
             return
@@ -837,7 +838,11 @@ class PokerBotModel:
         game.ready_users.discard(user_id)
         game.players = [p for p in game.players if p.user_id != user_id]
 
-        await self._lobby_manager.remove_player(chat_id, user_id)
+        await self._lobby_manager.remove_player(
+            chat_id,
+            user_id,
+            max_players=MAX_PLAYERS,
+        )
 
     async def stop(self, user_id: UserId) -> None:
         UserPrivateChatModel(user_id=user_id, kv=self._kv).delete()
