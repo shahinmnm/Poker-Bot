@@ -87,7 +87,8 @@
       "insufficient_funds_detail": "❌ Not enough chips. You have {balance} but need {required}.",
       "not_enough_players_ready": "⚠️ Waiting for more ready players before starting the game.",
       "players_insufficient_funds": "⚠️ These players need more chips: {players}",
-      "wallet_not_enough": "❌ You don't have enough chips for that action."
+      "wallet_not_enough": "❌ You don't have enough chips for that action.",
+      "rate_limited": "⚠️ Too many requests. Please slow down and try again later."
     },
     "game_started": "🎮 Game started! Good luck!",
     "new_round": "🔄 New round starting...",
@@ -103,7 +104,22 @@
     "private": {
       "invite": {
         "body": "🎰 𝗣𝗿𝗶𝘃𝗮𝘁𝗲 𝗚𝗮𝗺𝗲 𝗜𝗻𝘃𝗶𝘁𝗮𝘁𝗶𝗼𝗻\n\n{inviter} invited you to join!\n\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\nWill you join?",
-        "detailed_body": "🎴 𝗚𝗮𝗺𝗲 𝗜𝗻𝘃𝗶𝘁𝗮𝘁𝗶𝗼𝗻\n\n{host} invited you to join!\n\n🎯 Game Code: {code}\n\n💰 Stakes: {stake_name}\n• Small Blind: ${small_blind}\n• Big Blind: ${big_blind}\n💵 Min Buy-in: ${min_buyin}\n\nDo you want to join?"
+        "detailed_body": "🎴 𝗚𝗮𝗺𝗲 𝗜𝗻𝘃𝗶𝘁𝗮𝘁𝗶𝗼𝗻\n\n{host} invited you to join!\n\n🎯 Game Code: {code}\n\n💰 Stakes: {stake_name}\n• Small Blind: ${small_blind}\n• Big Blind: ${big_blind}\n💵 Min Buy-in: ${min_buyin}\n\nDo you want to join?",
+        "sent": "✅ Invitation sent to {username}!",
+        "send_failed": "❌ Couldn't send invitation to {username}.\nThey may have blocked the bot.",
+        "accepted": "✅ Joined Game!\n\nGame Code: {code}\nStakes: {stake}\n\nUse /leave to exit the lobby.",
+        "accepted_host": "✅ {player} accepted your invitation!",
+        "declined": "❌ Invitation Declined\n\nYou declined the game invitation.",
+        "declined_host": "❌ {player} declined your invitation.",
+        "summary": {
+          "empty": "📭 You have no pending invitations.",
+          "header": "📨 Pending invitations:",
+          "entry_with_details": "• {code} — {details}",
+          "entry_simple": "• {code}",
+          "footer": "Use /accept CODE to join or /decline CODE to refuse."
+        },
+        "already_accepted": "✅ You already accepted this invitation!",
+        "declined_with_hint": "❌ Invitation declined.\n\nYou can still join later with /join {code}"
       },
       "lobby": {
         "body": "{title}\n\n🎯 Host: {host}\n🎲 Stakes: {stake}\n🔑 Code: {code}\n\n{player_status}\n\n{players}\n\n{readiness}",
@@ -111,7 +127,13 @@
         "player_status": "{status_icon} Players: {current}/{max} {min_indicator}",
         "ready": "✅ Ready to start!",
         "title": "🔒 Private Game Lobby",
-        "waiting": "⏳ Waiting for more players (min {min_players})..."
+        "waiting": "⏳ Waiting for more players (min {min_players})...",
+        "leave_confirmation": "🚪 You left the private game.\nYour seat is now available for others.",
+        "player_left": "👋 {player} left the game.",
+        "new_host": "👑 {player} is now the host!",
+        "current_players": "👥 Current players ({current}/{max}):",
+        "player_entry": "{index}. {player}{host_marker}",
+        "host_marker": " 👑 (Host)"
       },
       "stake_menu": {
         "body": "{title}\n\n{subtitle}\n\n{options}\n\n{footer}",
@@ -127,7 +149,31 @@
       },
       "error": {
         "already_active": "⚠️ You already have an active private game. Finish or close it before creating another.",
-        "invalid_stake": "⚠️ Unknown stake level '{level}'. Please choose a different option."
+        "invalid_stake": "⚠️ Unknown stake level '{level}'. Please choose a different option.",
+        "no_active_game": "❌ You don't have an active private game.\n\nCreate one with /private",
+        "missing_player": "❌ Please specify a player:\n\n/invite @username",
+        "user_not_found": "❌ User {username} not found.\n\nPlayers must have used the bot before being invited.",
+        "game_not_found": "❌ Game not found.",
+        "game_misconfigured": "❌ Game stakes are misconfigured.",
+        "game_expired": "❌ Game {code} not found or expired.",
+        "host_only_start": "❌ Only the host can start the game!",
+        "already_started": "❌ Game has already started or finished!",
+        "min_players": "❌ Need at least {min_players} players to start!\n\nCurrent: {current} player(s)",
+        "too_many_players": "❌ Too many players to start!\n\nMaximum: {max_players} players\nCurrent: {current} players\n\nSome players must /leave before starting.",
+        "stake_missing": "❌ Stake configuration missing for this game!",
+        "insufficient_funds_header": "❌ Cannot start game - insufficient funds:\n",
+        "insufficient_funds_line": "• {player}: ${balance} (need ${required})",
+        "insufficient_funds_footer": "\nAll players need at least ${required} to play.",
+        "lobby_changed": "⚠️ Lobby state changed during game start. Please try /start again.",
+        "invite_invalid": "❌ This invitation has expired or is invalid.",
+        "invite_already_responded": "❌ You already {status} this invitation.",
+        "game_missing": "❌ Game no longer exists.",
+        "not_in_game": "❌ You're not in any private game.",
+        "session_missing": "❌ Game session not found.",
+        "cannot_leave_started": "❌ Cannot leave started game. Use buttons to fold.",
+        "status_unavailable": "⚠️ This private game is no longer available.",
+        "status_failed": "⚠️ Unable to load private game details.",
+        "not_invited": "❌ You are not invited to this game."
       },
       "created": "🎉 Private table created!\nHost: {host}\nStakes: {stake}\nBuy-in: ${min_buyin} - ${max_buyin}\nCode: {code}\nMax players: {max_players}\n\nShare the code with friends to invite them."
     },
@@ -147,6 +193,22 @@
       "game_in_progress": "🎮 A game is already running.",
       "insufficient_funds": "💰 You don't have enough chips for this table.",
       "room_full": "🚫 The lobby is full (max {max_players} players)."
+    },
+    "player_action": {
+      "generic": "{player} {action} ${amount}"
+    },
+    "model": {
+      "error": {
+        "chat_context_missing": "❌ Cannot determine chat context",
+        "no_active_game_chat": "❌ No active game in this chat",
+        "action_expired": "♻️ Action expired. Please use the latest buttons.",
+        "game_inactive": "🛑 Game is not accepting actions right now.",
+        "already_folded": "❌ You already folded!",
+        "cannot_act_now": "❌ You cannot act right now",
+        "call_or_raise": "❌ You must call or raise",
+        "invalid_raise_amount": "❌ Invalid raise amount",
+        "unknown_action": "❌ Unknown action"
+      }
     }
   },
   "popup": {
