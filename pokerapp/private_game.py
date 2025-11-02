@@ -11,6 +11,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Set
 
 from pokerapp.entities import ChatId, StakeConfig, STAKE_PRESETS, UserId
+from pokerapp.i18n import translation_manager
 from pokerapp.kvstore import ensure_kv
 
 logger = logging.getLogger(__name__)
@@ -170,18 +171,22 @@ class PrivateGameSession:
 
         if stake_level not in STAKE_PRESETS:
             logger.warning(
-                "Invalid stake level %s for private game %s",
-                stake_level,
-                self.chat_id,
+                translation_manager.t(
+                    "private_game.log.invalid_stake_level",
+                    stake_level=stake_level,
+                    chat_id=self.chat_id,
+                )
             )
             return False
 
         self.stake_config = STAKE_PRESETS[stake_level]
         self.state = PrivateGameState.WAITING_FOR_PLAYERS
         logger.info(
-            "Stake set to %s for private game %s",
-            stake_level,
-            self.chat_id,
+            translation_manager.t(
+                "private_game.log.stake_set",
+                stake_level=stake_level,
+                chat_id=self.chat_id,
+            )
         )
         return True
 
@@ -203,18 +208,20 @@ class PrivateGameSession:
             True if custom stake was valid
         """
         if big_blind != 2 * small_blind:
-            logger.warning("Invalid big blind: must be 2x small blind")
+            logger.warning(
+                translation_manager.t("private_game.log.invalid_big_blind")
+            )
             return False
 
         if min_buy_in < 20 * big_blind:
             logger.warning(
-                "Min buy-in too low: should be at least 20x big blind",
+                translation_manager.t("private_game.log.min_buy_in_too_low")
             )
             return False
 
         stake = StakeConfig(
             small_blind=small_blind,
-            name="Custom",
+            name=translation_manager.t("private_game.stake.custom_name"),
             min_buy_in=min_buy_in,
         )
         stake.big_blind = big_blind
@@ -223,10 +230,12 @@ class PrivateGameSession:
         self.stake_config = stake
         self.state = PrivateGameState.WAITING_FOR_PLAYERS
         logger.info(
-            "Custom stake set for private game %s: SB=%s BB=%s",
-            self.chat_id,
-            small_blind,
-            big_blind,
+            translation_manager.t(
+                "private_game.log.custom_stake_set",
+                chat_id=self.chat_id,
+                small_blind=small_blind,
+                big_blind=big_blind,
+            )
         )
         return True
 
@@ -242,14 +251,21 @@ class PrivateGameSession:
             True if invitation was sent
         """
         if len(self.invited_players) >= self.max_players - 1:  # -1 for host
-            logger.warning("Private game %s is full", self.chat_id)
+            logger.warning(
+                translation_manager.t(
+                    "private_game.log.lobby_full",
+                    chat_id=self.chat_id,
+                )
+            )
             return False
 
         if user_id in self.invited_players:
             logger.debug(
-                "Player %s already invited to %s",
-                user_id,
-                self.chat_id,
+                translation_manager.t(
+                    "private_game.log.already_invited",
+                    user_id=user_id,
+                    chat_id=self.chat_id,
+                )
             )
             return False
 
@@ -259,9 +275,11 @@ class PrivateGameSession:
             invited_at=datetime.datetime.now(),
         )
         logger.info(
-            "Player %s invited to private game %s",
-            user_id,
-            self.chat_id,
+            translation_manager.t(
+                "private_game.log.player_invited",
+                user_id=user_id,
+                chat_id=self.chat_id,
+            )
         )
         return True
 
@@ -277,18 +295,22 @@ class PrivateGameSession:
         """
         if user_id not in self.invited_players:
             logger.warning(
-                "No invite found for user %s in game %s",
-                user_id,
-                self.chat_id,
+                translation_manager.t(
+                    "private_game.log.invite_missing",
+                    user_id=user_id,
+                    chat_id=self.chat_id,
+                )
             )
             return False
 
         invite = self.invited_players[user_id]
         if invite.accepted:
             logger.debug(
-                "User %s already accepted invite to %s",
-                user_id,
-                self.chat_id,
+                translation_manager.t(
+                    "private_game.log.invite_already_accepted",
+                    user_id=user_id,
+                    chat_id=self.chat_id,
+                )
             )
             return False
 
@@ -300,9 +322,11 @@ class PrivateGameSession:
             self.state = PrivateGameState.READY_TO_START
 
         logger.info(
-            "User %s accepted invite to private game %s",
-            user_id,
-            self.chat_id,
+            translation_manager.t(
+                "private_game.log.invite_accepted",
+                user_id=user_id,
+                chat_id=self.chat_id,
+            )
         )
         return True
 
@@ -337,13 +361,20 @@ class PrivateGameSession:
         """
         if not self.can_start():
             logger.warning(
-                "Cannot start private game %s: not ready",
-                self.chat_id,
+                translation_manager.t(
+                    "private_game.log.cannot_start",
+                    chat_id=self.chat_id,
+                )
             )
             return False
 
         self.state = PrivateGameState.IN_PROGRESS
-        logger.info("Private game %s started", self.chat_id)
+        logger.info(
+            translation_manager.t(
+                "private_game.log.started",
+                chat_id=self.chat_id,
+            )
+        )
         return True
 
 
@@ -355,7 +386,7 @@ class PrivateGameManager:
 
     def __init__(self):
         self._sessions: Dict[ChatId, PrivateGameSession] = {}
-        logger.info("PrivateGameManager initialized")
+        logger.info(translation_manager.t("private_game.log.manager_initialized"))
 
     def create_session(
         self,
@@ -369,9 +400,11 @@ class PrivateGameManager:
         )
         self._sessions[chat_id] = session
         logger.info(
-            "Created private game session for host %s in chat %s",
-            host_user_id,
-            chat_id,
+            translation_manager.t(
+                "private_game.log.session_created",
+                host_user_id=host_user_id,
+                chat_id=chat_id,
+            )
         )
         return session
 
@@ -383,7 +416,12 @@ class PrivateGameManager:
         """Remove session after game ends."""
         if chat_id in self._sessions:
             del self._sessions[chat_id]
-            logger.info("Removed private game session for chat %s", chat_id)
+            logger.info(
+                translation_manager.t(
+                    "private_game.log.session_removed",
+                    chat_id=chat_id,
+                )
+            )
 
     def get_user_sessions(self, user_id: UserId) -> List[PrivateGameSession]:
         """Get all sessions where user is host or invited."""
@@ -416,10 +454,12 @@ class PrivateGameModel:
             await asyncio.to_thread(self._ensure_wallet, user_id)
         except Exception as exc:  # pragma: no cover - Redis failure
             self._logger.error(
-                "Failed to create wallet for user %s in chat %s: %s",
-                user_id,
-                chat_id,
-                exc,
+                translation_manager.t(
+                    "private_game.log.wallet_create_failed",
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    error=exc,
+                )
             )
             return False
 

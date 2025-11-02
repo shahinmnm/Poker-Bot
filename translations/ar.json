@@ -553,5 +553,29 @@
     "lobby": {
       "no_players": "لا يوجد لاعبون بعد"
     }
+  },
+  "private_game": {
+    "log": {
+      "invalid_stake_level": "Invalid stake level {stake_level} for private game {chat_id}",
+      "stake_set": "Stake set to {stake_level} for private game {chat_id}",
+      "invalid_big_blind": "Invalid big blind: must be 2x small blind",
+      "min_buy_in_too_low": "Min buy-in too low: should be at least 20x big blind",
+      "custom_stake_set": "Custom stake set for private game {chat_id}: SB={small_blind} BB={big_blind}",
+      "lobby_full": "Private game {chat_id} is full",
+      "already_invited": "Player {user_id} already invited to {chat_id}",
+      "player_invited": "Player {user_id} invited to private game {chat_id}",
+      "invite_missing": "No invite found for user {user_id} in game {chat_id}",
+      "invite_already_accepted": "User {user_id} already accepted invite to {chat_id}",
+      "invite_accepted": "User {user_id} accepted invite to private game {chat_id}",
+      "cannot_start": "Cannot start private game {chat_id}: not ready",
+      "started": "Private game {chat_id} started",
+      "manager_initialized": "PrivateGameManager initialized",
+      "session_created": "Created private game session for host {host_user_id} in chat {chat_id}",
+      "session_removed": "Removed private game session for chat {chat_id}",
+      "wallet_create_failed": "Failed to create wallet for user {user_id} in chat {chat_id}: {error}"
+    },
+    "stake": {
+      "custom_name": "Custom"
+    }
   }
 }
