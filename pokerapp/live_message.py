@@ -221,6 +221,13 @@ class LiveMessageManager:
         4: "🃏",
         5: "🃏",
     }
+
+    STAGE_DESCRIPTIONS = {
+        0: "no community cards yet",
+        3: "three cards revealed",
+        4: "fourth card revealed",
+        5: "fifth card revealed",
+    }
     # Minimum spacing between consecutive updates per chat (seconds)
     DEBOUNCE_WINDOW = 0.0
     # BANNER_DURATION removed - system deleted
@@ -293,6 +300,11 @@ class LiveMessageManager:
             return translation_manager.t(key, lang=self._language_code)
 
         return translation_manager.t("game.state.initial", lang=self._language_code)
+
+    def _get_stage_description(self, card_count: int) -> str:
+        """Return a compact English description for the current street."""
+
+        return self.STAGE_DESCRIPTIONS.get(card_count, "in progress")
 
     def _apply_direction(self, text: Optional[str]) -> Optional[str]:
         if not text or self._language_direction != "rtl":
@@ -970,6 +982,7 @@ class LiveMessageManager:
             "seat_label": f"{len(players)}-max",
             "stage_name": stage_name,
             "stage_icon": stage_icon,
+            "stage_description": self._get_stage_description(num_cards),
             "last_bet_value": max(getattr(game, "max_round_rate", 0), 0),
             "timer_label": timer_label,
             "actor_user_id": actor_user_id,
@@ -1054,7 +1067,7 @@ class LiveMessageManager:
                 numeric = 0
             return self._sanitize_text(f"${numeric:,}")
 
-        lines: List[str] = []
+        sections: List[str] = []
 
         table_id = self._sanitize_text(context.get("table_code", ""))
         seat_label = self._sanitize_text(context.get("seat_label", ""))
@@ -1067,69 +1080,59 @@ class LiveMessageManager:
                 ),
             )
         )
+        stage_description = self._sanitize_text(context.get("stage_description", ""))
 
         header_parts: List[str] = []
         if table_id and table_id != "----":
             header_parts.append(f"#{table_id}")
         if seat_label and seat_label != "—":
             header_parts.append(seat_label)
-        stage_segment = " ".join(part for part in (stage_icon, stage_name) if part)
-        if stage_segment.strip():
-            header_parts.append(stage_segment.strip())
 
-        if header_parts:
-            header_text = " • ".join(header_parts)
-            lines.append(UnicodeTextFormatter.make_bold(f"🎴 {header_text}"))
+        stage_segment = f"{stage_icon} {stage_name}".strip()
+        if stage_segment:
+            if stage_description:
+                stage_segment = f"{stage_segment} – {stage_description}"
+            header_parts.append(stage_segment)
+
+        header_content = " • ".join(header_parts)
+        header_text = f"🎴 {header_content}" if header_content else "🎴"
+        sections.append(header_text)
 
         board_cards = list(getattr(game, "cards_table", []) or [])
         if board_cards:
-            board_text = self._sanitize_text(self._format_board_cards(board_cards))
-            board_label = self._sanitize_text(
-                context.get("t_board_label", "Board")
-            )
-            if " " in board_label:
-                board_label = board_label.split(" ", 1)[-1]
-            board_label = board_label or "Board"
-            lines.append(f"🃏 {board_label}: {board_text}")
+            cards_display = self._format_board_cards(board_cards)
+            table_block = "\n".join(["🪑 Table:", cards_display])
         else:
             locked_msg = context.get("t_cards_locked") or translation_manager.t(
                 "viewer.board.cards_locked", lang=language_code
             )
-            lines.append(f"🃏 {self._sanitize_text(locked_msg)}")
+            table_block = "\n".join(
+                [
+                    "🪑 Table:",
+                    self._sanitize_text(locked_msg),
+                ]
+            )
+        sections.append(table_block)
 
         pot_amount = max(getattr(game, "pot", 0), 0)
         bet_amount = max(context.get("last_bet_value", 0) or 0, 0)
-        pot_label = self._sanitize_text(
-            context.get("t_pot_label")
-            or translation_manager.t("viewer.game.pot", lang=language_code)
-        )
-        bet_label = self._sanitize_text(
-            context.get("t_bet_label")
-            or translation_manager.t("viewer.game.bet", lang=language_code)
-        )
-        lines.append(
-            f"💰 {pot_label}: {_inline_amount(pot_amount)} | "
-            f"{bet_label}: {_inline_amount(bet_amount)}"
-        )
+        pot_line = f"💰 Pot: {_inline_amount(pot_amount)} | Bet: {_inline_amount(bet_amount)}"
+        sections.append(pot_line)
 
         actor_name = self._get_player_name(current_player)
         timer_display = self._sanitize_text(context.get("timer_label", ""))
 
         if current_player and actor_name not in {"", "—"}:
             actor_display = self._sanitize_text(actor_name)
-            turn_label = self._sanitize_text(
-                context.get("t_turn_label")
-                or translation_manager.t("viewer.game.turn", lang=language_code)
-            )
-            turn_line = f"⏰ {turn_label}: {actor_display}"
+            turn_line = f"⏰ Turn: {actor_display}"
             if timer_display and timer_display != "—":
                 turn_line += f" ({timer_display})"
-            lines.append(turn_line)
         else:
             waiting_msg = context.get("t_waiting") or translation_manager.t(
                 "viewer.game.waiting_players", lang=language_code
             )
-            lines.append(f"⏸️ {self._sanitize_text(waiting_msg)}")
+            turn_line = f"⏰ Turn: {self._sanitize_text(waiting_msg)}"
+        sections.append(turn_line)
 
         players = list(getattr(game, "players", []) or [])
         active_count = sum(
@@ -1137,36 +1140,10 @@ class LiveMessageManager:
             for p in players
             if getattr(p, "state", None) not in {PlayerState.FOLD, None}
         )
-        active_label = context.get("t_active_count") or translation_manager.t(
-            "viewer.game.active_players", lang=language_code
-        )
-        active_text = self._sanitize_text(
-            active_label.format(active=active_count, total=len(players))
-        )
-        lines.append(f"👥 {active_text}")
+        player_lines: List[str] = [f"👥 Active: {active_count}/{len(players)}"]
 
         actor_id = getattr(current_player, "user_id", None) if current_player else None
         max_name = 20 if compact else 32
-        fold_label = self._sanitize_text(
-            translation_manager.t(
-                "viewer.game.player_state.fold", lang=language_code
-            )
-        )
-        all_in_label = self._sanitize_text(
-            translation_manager.t(
-                "viewer.game.player_state.all_in", lang=language_code
-            )
-        )
-        waiting_label = self._sanitize_text(
-            translation_manager.t(
-                "viewer.game.player_state.waiting", lang=language_code
-            )
-        )
-
-        bet_label_text = self._sanitize_text(
-            context.get("t_bet_label")
-            or translation_manager.t("viewer.game.bet", lang=language_code)
-        )
 
         for player in players:
             name = self._get_player_name(player)
@@ -1187,54 +1164,42 @@ class LiveMessageManager:
                 except (TypeError, ValueError):
                     stack_amount = 0
 
-            bet_value = max(getattr(player, "round_rate", 0) or 0, 0)
+            stack_text = _inline_amount(stack_amount)
             state = getattr(player, "state", None)
 
-            turn_emoji = "▶️" if actor_id and player.user_id == actor_id else "⏸️"
-
-            detail_text: Optional[str] = None
             if state == PlayerState.FOLD:
-                detail_text = fold_label
+                icon = "❌"
+                detail = " (folded)"
             elif state == PlayerState.ALL_IN:
-                detail_text = all_in_label
-            elif bet_value > 0:
-                bet_detail = f"{bet_label_text} {_inline_amount(bet_value)}"
-                detail_text = self._sanitize_text(bet_detail)
-            elif player.user_id != actor_id:
-                detail_text = waiting_label
+                icon = "🔥"
+                detail = " (all-in)"
+            elif actor_id and player.user_id == actor_id:
+                icon = "▶️"
+                detail = ""
+            else:
+                icon = "⏸️"
+                detail = " • waiting"
 
-            stack_text = _inline_amount(stack_amount)
-            line = f"{turn_emoji} {safe_name} {stack_text}"
-            if detail_text and detail_text != "—":
-                line += f" • {detail_text}"
-            lines.append(line)
+            line = f"{icon} {safe_name} {stack_text}{detail}"
+            player_lines.append(line)
 
         if not players:
-            no_players_msg = context.get("t_no_players") or translation_manager.t(
-                "viewer.lobby.no_players", lang=language_code
-            )
-            lines.append(f"👥 {self._sanitize_text(no_players_msg)}")
+            player_lines.append("⏸️ Waiting for players")
+
+        sections.append("\n".join(player_lines))
 
         if preview_raise and preview_raise.strip() and preview_raise.strip() != "—":
-            selected_label = context.get("t_selected_label") or translation_manager.t(
-                "viewer.game.selected_raise", lang=language_code
-            )
-            lines.append(
-                f"💰 {self._sanitize_text(selected_label)}: {self._sanitize_text(preview_raise)}"
-            )
+            preview_block = f"💰 Selected: {self._sanitize_text(preview_raise)}"
+            sections.append(preview_block)
 
         recent = context.get("recent_actions", [])
         if recent:
-            recent_label = context.get("t_recent_label") or translation_manager.t(
-                "viewer.game.recent_actions", lang=language_code
-            )
-            lines.append(
-                f"📝 {UnicodeTextFormatter.make_bold(self._sanitize_text(recent_label))}"
-            )
+            recent_lines = ["📝 Recent actions"]
             for action in recent[-2:]:
-                lines.append(f"• {self._sanitize_text(action)}")
+                recent_lines.append(f"• {self._sanitize_text(action)}")
+            sections.append("\n".join(recent_lines))
 
-        message_text = "\n".join(lines)
+        message_text = "\n\n".join(section for section in sections if section)
         return normalize_numbers(message_text)
 
     def _format_game_state(
@@ -1380,7 +1345,8 @@ class LiveMessageManager:
         from pokerapp.pokerbotview import PokerBotViewer
 
         formatted = [PokerBotViewer._format_card(card) for card in cards]
-        return "  ".join(formatted)
+        cards_display = " - ".join(formatted)
+        return "\u202A" + cards_display + "\u202C"
 
     def _compute_content_hash(
         self,
