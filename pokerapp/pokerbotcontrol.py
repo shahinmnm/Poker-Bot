@@ -1665,9 +1665,9 @@ class PokerBotController:
         help_lines = [
             title,
             "",
-            "/ban <user> - Remove a disruptive player",
-            "/stop - End the current game",
-            "/language - Change table language",
+            self._translate("help.menu.admin.ban", query=query),
+            self._translate("help.menu.admin.stop", query=query),
+            self._translate("help.menu.admin.language", query=query),
         ]
 
         target_chat = update.effective_chat

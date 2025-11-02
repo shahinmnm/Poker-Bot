@@ -121,9 +121,12 @@ class PokerBot:
 
         if update and isinstance(update, Update) and update.effective_message:
             try:
-                await update.effective_message.reply_text(
-                    "❌ An error occurred. Please try again later.",
+                user = update.effective_user
+                error_text = translation_manager.t(
+                    "msg.error.generic",
+                    user_id=getattr(user, "id", None),
                 )
+                await update.effective_message.reply_text(error_text)
             except TelegramError:
                 pass
 

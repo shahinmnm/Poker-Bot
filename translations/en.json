@@ -66,6 +66,13 @@
       "objective": "**Objective:** Make the best 5-card hand from your 2 cards + 5 community cards.",
       "title": "📖 Texas Hold'em Rules"
     },
+    "menu": {
+      "admin": {
+        "ban": "/ban <user> - Remove a disruptive player",
+        "stop": "/stop - End the current game",
+        "language": "/language - Change table language"
+      }
+    },
     "full_text": "🎴 Texas Hold’em Poker Bot\n\n📖 How to Play:\n• Use /start to open the main menu\n• Use /private to create or join private games\n• Use /help to see this message\n• Use /language to change your language\n\n🎮 Game Rules:\n• 2-10 players per game\n• Standard Texas Hold’em rules\n• Betting rounds: Pre-flop, Flop, Turn, River\n\n💰 Actions:\n• Fold - Give up your hand\n• Check - Pass without betting\n• Call - Match current bet\n• Raise - Increase the bet\n• All-in - Bet everything\n\n🏆 Hand Rankings (High to Low):\n1. Royal Flush\n2. Straight Flush\n3. Four of a Kind\n4. Full House\n5. Flush\n6. Straight\n7. Three of a Kind\n8. Two Pair\n9. One Pair\n10. High Card\n\nGood luck! 🍀",
     "model": {
       "fallback": "ℹ️ Poker help is temporarily unavailable. Please try again later."
@@ -147,6 +154,18 @@
       "game_in_progress": "🎮 A game is already running.",
       "insufficient_funds": "💰 You don't have enough chips for this table.",
       "room_full": "🚫 The lobby is full (max {max_players} players)."
+    },
+    "game": {
+      "ban": {
+        "too_early": "🚫 You can't ban yet. Wait for 2 minutes.",
+        "time_over": "⏱️ Time is over!"
+      },
+      "finish": {
+        "header": "🎉 Game finished!",
+        "winner": "{player}\nGOT: *${amount}*",
+        "hand": "With combination of cards\n{hand}",
+        "ready_prompt": "/ready to continue"
+      }
     }
   },
   "popup": {

@@ -69,6 +69,13 @@
     "full_text": "🎴 Bot de Póker Texas Hold’em\n\n📖 Cómo Jugar:\n• Usa /start para abrir el menú principal\n• Usa /private para crear o unirte a juegos privados\n• Usa /help para ver este mensaje\n• Usa /language para cambiar tu idioma\n\n🎮 Reglas del Juego:\n• 2-10 jugadores por juego\n• Reglas estándar de Texas Hold’em\n• Rondas de apuestas: Pre-flop, Flop, Turn, River\n\n💰 Acciones:\n• Fold - Abandonar tu mano\n• Check - Pasar sin apostar\n• Call - Igualar la apuesta actual\n• Raise - Aumentar la apuesta\n• All-in - Apostar todo\n\n🏆 Clasificación de Manos (de mayor a menor):\n1. Escalera Real\n2. Escalera de Color\n3. Póker\n4. Full House\n5. Color\n6. Escalera\n7. Trío\n8. Doble Pareja\n9. Pareja\n10. Carta Alta\n\n¡Buena suerte! 🍀",
     "model": {
       "fallback": "🇪🇸 ℹ️ La ayuda de póker no está disponible temporalmente. Inténtalo de nuevo más tarde."
+    },
+    "menu": {
+      "admin": {
+        "ban": "/ban <usuario> - Expulsa a un jugador problemático",
+        "stop": "/stop - Termina la partida actual",
+        "language": "/language - Cambia el idioma de la mesa"
+      }
     }
   },
   "meta": {
@@ -147,6 +154,18 @@
       "game_in_progress": "🇪🇸 🎮 Ya hay una partida en marcha.",
       "insufficient_funds": "🇪🇸 💰 No tienes suficientes fichas para esta mesa.",
       "room_full": "🇪🇸 🚫 La sala está llena (máx. {max_players} jugadores)."
+    },
+    "game": {
+      "ban": {
+        "too_early": "🚫 No puedes expulsar todavía. Espera 2 minutos.",
+        "time_over": "⏱️ ¡Se acabó el tiempo!"
+      },
+      "finish": {
+        "header": "🎉 ¡La partida ha terminado!",
+        "winner": "{player}\nGanó: *${amount}*",
+        "hand": "Con la combinación\n{hand}",
+        "ready_prompt": "/ready para continuar"
+      }
     }
   },
   "popup": {
