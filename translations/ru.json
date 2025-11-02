@@ -68,7 +68,7 @@
     },
     "full_text": "🎴 Бот Техасского Холдема\n\n📖 Как Играть:\n• Используйте /start для открытия главного меню\n• Используйте /private для создания или присоединения к частным играм\n• Используйте /help для просмотра этого сообщения\n• Используйте /language для смены языка\n\n🎮 Правила Игры:\n• 2-10 игроков в игре\n• Стандартные правила Техасского Холдема\n• Раунды ставок: Пре-флоп, Флоп, Терн, Ривер\n\n💰 Действия:\n• Fold - Сбросить карты\n• Check - Пропустить без ставки\n• Call - Уравнять ставку\n• Raise - Повысить ставку\n• All-in - Поставить всё\n\n🏆 Комбинации (от старшей к младшей):\n1. Роял-флеш\n2. Стрит-флеш\n3. Каре\n4. Фулл-хаус\n5. Флеш\n6. Стрит\n7. Сет\n8. Две пары\n9. Пара\n10. Старшая карта\n\nУдачи! 🍀",
     "model": {
-      "fallback": "🇺🇸 ℹ️ Poker help is temporarily unavailable. Please try again later."
+      "fallback": "🇷🇺 ℹ️ Справка по покеру временно недоступна. Пожалуйста, попробуйте позже."
     }
   },
   "meta": {
@@ -84,10 +84,10 @@
       "generic": "❌ Произошла ошибка. Попробуйте снова.",
       "network": "🌐 Ошибка сети. Проверьте подключение.",
       "timeout": "⏱️ Время на действие истекло",
-      "insufficient_funds_detail": "🇺🇸 ❌ Not enough chips. You have {balance} but need {required}.",
-      "not_enough_players_ready": "🇺🇸 ⚠️ Waiting for more ready players before starting the game.",
-      "players_insufficient_funds": "🇺🇸 ⚠️ These players need more chips: {players}",
-      "wallet_not_enough": "🇺🇸 ❌ You don't have enough chips for that action."
+      "insufficient_funds_detail": "🇷🇺 ❌ Недостаточно фишек. У вас {balance}, но требуется {required}.",
+      "not_enough_players_ready": "🇷🇺 ⚠️ Ожидаем больше готовых игроков перед стартом игры.",
+      "players_insufficient_funds": "🇷🇺 ⚠️ Этим игрокам нужны дополнительные фишки: {players}",
+      "wallet_not_enough": "🇷🇺 ❌ У вас недостаточно фишек для этого действия."
     },
     "game_started": "🎮 Игра началась! Удачи!",
     "new_round": "🔄 Начинается новый раунд...",
@@ -114,22 +114,22 @@
         "waiting": "⏳ Ожидаем ещё игроков (мин. {min_players})..."
       },
       "stake_menu": {
-        "body": "🇺🇸 {title}\n\n{subtitle}\n\n{options}\n\n{footer}",
+        "body": "🇷🇺 {title}\\n\\n{subtitle}\\n\\n{options}\\n\\n{footer}",
         "footer": "ℹ️ Минимальный бай-ин зависит от выбранных ставок",
         "option_high": "💎 Высокие ($5K/$10K)",
         "option_low": "💰 Низкие ($250/$500)",
         "option_medium": "🎯 Средние ($1K/$2K)",
-        "option_micro": "💵 Микро ($50/$100)",
-        "option_premium": "🏆 Премиум ($10K/$20K)",
+        "option_micro": "🇷🇺 💵 Микро ($50/$100)",
+        "option_premium": "🇷🇺 🏆 Премиум ($10K/$20K)",
         "subtitle": "Выберите подходящий уровень блайндов:",
         "title": "🎲 Выбор уровня ставок",
-        "cancelled": "🇺🇸 ❌ Private table creation cancelled."
+        "cancelled": "🇷🇺 ❌ Создание приватного стола отменено."
       },
       "error": {
-        "already_active": "🇺🇸 ⚠️ You already have an active private game. Finish or close it before creating another.",
-        "invalid_stake": "🇺🇸 ⚠️ Unknown stake level '{level}'. Please choose a different option."
+        "already_active": "🇷🇺 ⚠️ У вас уже есть активная приватная игра. Завершите или закройте её перед созданием новой.",
+        "invalid_stake": "🇷🇺 ⚠️ Неизвестный уровень ставок '{level}'. Пожалуйста, выберите другой вариант."
       },
-      "created": "🇺🇸 🎉 Private table created!\nHost: {host}\nStakes: {stake}\nBuy-in: ${min_buyin} - ${max_buyin}\nCode: {code}\nMax players: {max_players}\n\nShare the code with friends to invite them."
+      "created": "🇷🇺 🎉 Приватный стол создан!\\nХост: {host}\\nСтавки: {stake}\\nБай-ин: ${min_buyin} - ${max_buyin}\\nКод: {code}\\nМаксимум игроков: {max_players}\\n\\nПоделитесь кодом с друзьями, чтобы пригласить их."
     },
     "showdown": "🎭 Вскрытие!",
     "tie": "🤝 Ничья! Банк делят: {players}",
@@ -137,16 +137,16 @@
     "winner": "🏆 {player} выигрывает ${amount}!",
     "your_turn": "🎯 Ваш ход, {player}!",
     "bonus": {
-      "already_claimed": "🇺🇸 🎁 You've already claimed today's bonus. Current balance: ${amount}",
-      "already_claimed_plain": "🇺🇸 Daily bonus already claimed. Balance: ${amount}",
-      "result": "🇺🇸 {icon} Bonus unlocked! You received ${bonus}. New balance: ${total}"
+      "already_claimed": "🇷🇺 🎁 Вы уже забрали сегодняшний бонус. Текущий баланс: ${amount}",
+      "already_claimed_plain": "🇷🇺 Ежедневный бонус уже получен. Баланс: ${amount}",
+      "result": "🇷🇺 {icon} Бонус разблокирован! Вы получили ${bonus}. Новый баланс: ${total}"
     },
-    "game_in_progress": "🇺🇸 🎮 A game is already in progress.",
+    "game_in_progress": "🇷🇺 🎮 Игра уже идёт.",
     "lobby": {
-      "already_ready": "🇺🇸 ✅ You're already marked as ready.",
-      "game_in_progress": "🇺🇸 🎮 A game is already running.",
-      "insufficient_funds": "🇺🇸 💰 You don't have enough chips for this table.",
-      "room_full": "🇺🇸 🚫 The lobby is full (max {max_players} players)."
+      "already_ready": "🇷🇺 ✅ Вы уже отмечены как готовые.",
+      "game_in_progress": "🇷🇺 🎮 Игра уже запущена.",
+      "insufficient_funds": "🇷🇺 💰 У вас недостаточно фишек для этого стола.",
+      "room_full": "🇷🇺 🚫 Лобби заполнено (максимум {max_players} игроков)."
     }
   },
   "popup": {
@@ -155,15 +155,15 @@
       "pot": "Банк: ${amount}",
       "title": "⚠️ Подтвердите фолд",
       "your_cards": "Ваши карты: {cards}",
-      "body": "🇺🇸 ⚠️ Confirm fold?\nPot: {pot}\nYou invested: {investment} ({percentage}% of pot)",
-      "confirm_button": "🇺🇸 ✅ Fold",
-      "cancel_button": "🇺🇸 ↩️ Keep playing"
+      "body": "🇷🇺 ⚠️ Подтвердить фолд?\\nБанк: {pot}\\nВы вложили: {investment} ({percentage}% банка)",
+      "confirm_button": "🇷🇺 ✅ Фолд",
+      "cancel_button": "🇷🇺 ↩️ Продолжить игру"
     },
     "toast": {
       "error": "❌ Ошибка: {message}",
       "info": "ℹ️ Инфо: {message}",
       "success": "✅ Успех: {message}",
-      "fold_prompt": "🇺🇸 Tap a button to confirm or cancel the fold."
+      "fold_prompt": "🇷🇺 Нажмите кнопку, чтобы подтвердить или отменить фолд."
     }
   },
   "ui": {
@@ -219,38 +219,38 @@
         "left_game": "👋 Вы покинули стол"
       },
       "action": {
-        "all_in": "🇺🇸 🔥 All-in locked in!",
-        "call": "🇺🇸 💵 Called {amount}",
-        "call_check": "🇺🇸 ✅ Call — no chips needed",
-        "check": "🇺🇸 ✅ Checked",
-        "fold": "🇺🇸 ❌ Folded",
-        "raise": "🇺🇸 ⬆️ Raise queued",
-        "raise_to": "🇺🇸 ⬆️ Raised to {amount}",
-        "submitted": "🇺🇸 ✅ Action submitted"
+        "all_in": "🇷🇺 🔥 Олл-ин зафиксирован!",
+        "call": "🇷🇺 💵 Колл {amount}",
+        "call_check": "🇷🇺 ✅ Колл — фишки не требуются",
+        "check": "🇷🇺 ✅ Чек",
+        "fold": "🇷🇺 ❌ Сбросил карты",
+        "raise": "🇷🇺 ⬆️ Рейз поставлен в очередь",
+        "raise_to": "🇷🇺 ⬆️ Повысил до {amount}",
+        "submitted": "🇷🇺 ✅ Действие отправлено"
       },
       "fold": {
-        "cancelled": "🇺🇸 ↩️ Fold cancelled",
-        "expired": "🇺🇸 ⌛ Fold confirmation expired",
-        "failure": "🇺🇸 ⚠️ Fold could not be processed",
-        "success": "🇺🇸 ✅ Fold confirmed"
+        "cancelled": "🇷🇺 ↩️ Фолд отменён",
+        "expired": "🇷🇺 ⌛ Подтверждение фолда истекло",
+        "failure": "🇷🇺 ⚠️ Не удалось обработать фолд",
+        "success": "🇷🇺 ✅ Фолд подтверждён"
       },
       "invite": {
-        "accept_help": "🇺🇸 Send /accept CODE to accept your latest invite.",
-        "decline_help": "🇺🇸 Send /decline CODE to decline your latest invite."
+        "accept_help": "🇷🇺 Отправьте ‎/accept CODE, чтобы принять ваше последнее приглашение.",
+        "decline_help": "🇷🇺 Отправьте ‎/decline CODE, чтобы отклонить ваше последнее приглашение."
       },
       "lobby": {
-        "left": "🇺🇸 👋 You left the lobby."
+        "left": "🇷🇺 👋 Вы покинули лобби."
       },
       "raise": {
-        "error_choose_amount": "🇺🇸 Select a raise amount first.",
-        "error_context": "🇺🇸 ⚠️ This raise control is no longer active.",
-        "error_expired": "🇺🇸 ⌛ Raise selection expired.",
-        "error_invalid": "🇺🇸 ❌ That raise option isn't available.",
-        "error_no_game": "🇺🇸 ❌ No active game found.",
-        "error_selection": "🇺🇸 ⚠️ Couldn't determine your raise choice.",
-        "error_unavailable": "🇺🇸 ⚠️ Raise controls are currently unavailable.",
-        "error_unknown": "🇺🇸 ⚠️ Something went wrong while processing your raise.",
-        "error_user": "🇺🇸 ⚠️ Only the acting player can use this control."
+        "error_choose_amount": "🇷🇺 Сначала выберите сумму рейза.",
+        "error_context": "🇷🇺 ⚠️ Этот контрол рейза больше не активен.",
+        "error_expired": "🇷🇺 ⌛ Выбор рейза истёк.",
+        "error_invalid": "🇷🇺 ❌ Этот вариант рейза недоступен.",
+        "error_no_game": "🇷🇺 ❌ Активная игра не найдена.",
+        "error_selection": "🇷🇺 ⚠️ Не удалось определить выбранный вами рейз.",
+        "error_unavailable": "🇷🇺 ⚠️ Контролы рейза сейчас недоступны.",
+        "error_unknown": "🇷🇺 ⚠️ При обработке рейза произошла ошибка.",
+        "error_user": "🇷🇺 ⚠️ Использовать этот контрол может только игрок, который ходит."
       }
     },
     "error": {
@@ -265,7 +265,7 @@
       "min_players": "Нужно минимум {min} игроков для старта",
       "new_game": "🆕 Новая игра",
       "no_active_games": "Нет активных игр. Создайте новую!",
-      "player_entry": "🇺🇸 • {player}",
+      "player_entry": "🇷🇺 • {player}",
       "players": "👥 Игроки ({count}/{max})",
       "players_ready": "{ready}/{total} игроков готовы",
       "ready_to_start": "✅ Всё готово к старту!",
@@ -374,8 +374,8 @@
           "language": "🌐 Сменить язык",
           "low": "💰 Низкие",
           "medium": "🎯 Средние",
-          "micro": "💵 Микро",
-          "premium": "🏆 Премиум"
+          "micro": "🇷🇺 💵 Микро",
+          "premium": "🇷🇺 🏆 Премиум"
         }
       }
     },
@@ -410,15 +410,15 @@
         "not_your_turn_with_player": "Сейчас ход {player}."
       },
       "join": {
-        "already_in_game": "🇺🇸 ⚠️ You're already seated in this private game.",
-        "code_invalid": "🇺🇸 Invite codes must be 6 letters or numbers. '{code}' isn't valid.",
-        "code_required": "🇺🇸 Please provide the 6-character invite code (e.g., /join ABC123).",
-        "game_full": "🇺🇸 🚫 That private game is already full.",
-        "game_not_found": "🇺🇸 ❌ No private game found for code {code}.",
-        "game_started": "🇺🇸 ⚠️ That private game has already started.",
-        "not_accepting": "🇺🇸 ⚠️ That private game isn't accepting new players right now.",
-        "success": "🇺🇸 ✅ You're in! Wait for the host to start the game.",
-        "usage": "🇺🇸 Use /join CODE to join a private game lobby."
+        "already_in_game": "🇷🇺 ⚠️ Вы уже сидите за этим приватным столом.",
+        "code_invalid": "🇷🇺 Коды приглашения должны содержать 6 букв или цифр. '{code}' недействителен.",
+        "code_required": "🇷🇺 Укажите 6-значный код приглашения (например, ‎/join ABC123).",
+        "game_full": "🇷🇺 🚫 Этот приватный стол уже заполнен.",
+        "game_not_found": "🇷🇺 ❌ Приватная игра с кодом {code} не найдена.",
+        "game_started": "🇷🇺 ⚠️ Эта приватная игра уже началась.",
+        "not_accepting": "🇷🇺 ⚠️ Эта приватная игра сейчас не принимает новых игроков.",
+        "success": "🇷🇺 ✅ Вы в игре! Подождите, пока хост запустит партию.",
+        "usage": "🇷🇺 Используйте ‎/join CODE, чтобы присоединиться к приватному лобби."
       }
     },
     "viewer": {
@@ -428,13 +428,13 @@
         "title": "⚠️ Подтвердите фолд"
       },
       "hand": {
-        "header": "🇺🇸 🃏 Your Hand",
-        "empty": "🇺🇸 No cards yet. Hang tight!",
-        "pot": "🇺🇸 💰 Pot: {amount}"
+        "header": "🇷🇺 🃏 Ваша рука",
+        "empty": "🇷🇺 Карты ещё не розданы. Подождите!",
+        "pot": "🇷🇺 💰 Банк: {amount}"
       },
       "table": {
-        "header": "🇺🇸 🪑 Table",
-        "waiting": "🇺🇸 Waiting for other players..."
+        "header": "🇷🇺 🪑 Стол",
+        "waiting": "🇷🇺 Ожидание других игроков..."
       }
     }
   },
