@@ -1348,6 +1348,11 @@ class PokerBotModel:
         if resolved_player is None:
             return
 
+        for index, player in enumerate(game.players):
+            if player.user_id == resolved_player.user_id:
+                game.current_player_index = index
+                break
+
         try:
             await live_manager.send_or_update_game_state(
                 chat_id=chat_id,
