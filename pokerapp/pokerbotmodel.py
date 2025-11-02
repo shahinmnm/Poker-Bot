@@ -1611,6 +1611,8 @@ class PokerBotModel:
         if game.state in (GameState.INITIAL, GameState.FINISHED):
             return
 
+        player = self._current_turn_player(game)
+
         diff = dt.now() - game.last_turn_time
         if diff < MAX_TIME_FOR_TURN:
             await self._view.send_message(
@@ -1644,7 +1646,7 @@ class PokerBotModel:
         player_name = self._get_player_name(player)
         game.add_action(
             self._translate(
-                "msg.player_folded",
+                "msg.history.player_folded",
                 user_id=player.user_id,
                 player=player_name,
             )
@@ -1684,7 +1686,8 @@ class PokerBotModel:
                 await self.all_in(update=update, context=context)
                 return
 
-            mention_markdown = self._current_turn_player(game).mention_markdown
+            mention_markdown = player.mention_markdown
+            call_amount = self._coordinator.player_call_or_check(game, player)
             if action == PlayerAction.CHECK.value:
                 chat_text = self._translate(
                     "msg.player_checked",
@@ -1699,17 +1702,16 @@ class PokerBotModel:
                     amount=call_amount,
                 )
             await self._view.send_message(chat_id=chat_id, text=chat_text)
-            call_amount = self._coordinator.player_call_or_check(game, player)
 
             if action == PlayerAction.CHECK.value:
                 action_text = self._translate(
-                    "msg.player_checked",
+                    "msg.history.player_checked",
                     user_id=player.user_id,
                     player=player_name,
                 )
             else:
                 action_text = self._translate(
-                    "msg.player_called",
+                    "msg.history.player_called",
                     user_id=player.user_id,
                     player=player_name,
                     amount=call_amount,
@@ -1764,7 +1766,7 @@ class PokerBotModel:
             )
             game.add_action(
                 self._translate(
-                    "msg.player_raised",
+                    "msg.history.player_raised",
                     user_id=player.user_id,
                     player=player_name,
                     amount=target_amount,
@@ -1798,7 +1800,7 @@ class PokerBotModel:
         player.state = PlayerState.ALL_IN
         game.add_action(
             self._translate(
-                "msg.player_all_in",
+                "msg.history.player_all_in",
                 user_id=player.user_id,
                 player=player_name,
                 amount=amount,

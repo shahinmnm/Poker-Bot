@@ -106,6 +106,13 @@
     "player_left": "➖ غادر {player} الطاولة",
     "player_raised": "⬆️ زاد {player} الرهان إلى ${amount}",
     "player_ready": "✋ {player} جاهز",
+    "history": {
+      "player_folded": "{player} انسحب",
+      "player_checked": "{player} انتظر",
+      "player_called": "{player} ساوى ${amount}",
+      "player_raised": "{player} زاد الرهان إلى ${amount}",
+      "player_all_in": "{player} دخل بكل الرقائق ${amount}!"
+    },
     "pot": "💰 قيمة الرهان: ${amount}",
     "private": {
       "invite": {

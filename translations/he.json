@@ -106,6 +106,13 @@
     "player_left": "➖ {player} עזב את השולחן",
     "player_raised": "⬆️ {player} העלה ל-${amount}",
     "player_ready": "✋ {player} מוכן",
+    "history": {
+      "player_folded": "{player} קיפל",
+      "player_checked": "{player} עבר",
+      "player_called": "{player} השווה ${amount}",
+      "player_raised": "{player} העלה ל-${amount}",
+      "player_all_in": "{player} הולך על הכול עם ${amount}!"
+    },
     "pot": "💰 קופה: ${amount}",
     "private": {
       "invite": {

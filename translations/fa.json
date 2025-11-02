@@ -106,6 +106,13 @@
     "player_left": "➖ {player} از بازی خارج شد",
     "player_raised": "⬆️ {player} ریز کرد تا ${amount}",
     "player_ready": "✋ {player} آماده است",
+    "history": {
+      "player_folded": "{player} فولد کرد",
+      "player_checked": "{player} چک کرد",
+      "player_called": "{player} کال کرد ${amount}",
+      "player_raised": "{player} ریز کرد تا ${amount}",
+      "player_all_in": "{player} با ${amount} آل‌این رفت!"
+    },
     "pot": "💰 پات: ${amount}",
     "private": {
       "invite": {

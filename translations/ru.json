@@ -106,6 +106,13 @@
     "player_left": "➖ {player} покинул стол",
     "player_raised": "⬆️ {player} повысил до ${amount}",
     "player_ready": "✋ {player} готов",
+    "history": {
+      "player_folded": "{player} сделал фолд",
+      "player_checked": "{player} сделал чек",
+      "player_called": "{player} заколлировал ${amount}",
+      "player_raised": "{player} повысил до ${amount}",
+      "player_all_in": "{player} пошёл олл-ин на ${amount}!"
+    },
     "pot": "💰 Банк: ${amount}",
     "private": {
       "invite": {

@@ -106,6 +106,13 @@
     "player_left": "➖ {player} salió de la partida",
     "player_raised": "⬆️ {player} subió a ${amount}",
     "player_ready": "✋ {player} está listo",
+    "history": {
+      "player_folded": "{player} se retiró",
+      "player_checked": "{player} pasó",
+      "player_called": "{player} igualó ${amount}",
+      "player_raised": "{player} subió a ${amount}",
+      "player_all_in": "¡{player} fue all-in con ${amount}!"
+    },
     "pot": "💰 Bote: ${amount}",
     "private": {
       "invite": {
