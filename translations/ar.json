@@ -68,7 +68,7 @@
     },
     "full_text": "🎴 بوت بوكر تكساس هولدم\n\n📖 كيفية اللعب:\n• استخدم /start لفتح القائمة الرئيسية\n• استخدم /private لإنشاء أو الانضمام إلى الألعاب الخاصة\n• استخدم /help لرؤية هذه الرسالة\n• استخدم /language لتغيير لغتك\n\n🎮 قواعد اللعبة:\n• 2-10 لاعبين في كل لعبة\n• قواعد تكساس هولدم القياسية\n• جولات الرهان: قبل الفلوب، الفلوب، التيرن، الريفر\n\n💰 الإجراءات:\n• Fold - التخلي عن يدك\n• Check - المرور دون المراهنة\n• Call - مطابقة الرهان الحالي\n• Raise - زيادة الرهان\n• All-in - الرهان بكل شيء\n\n🏆 ترتيب الأيدي (من الأعلى إلى الأدنى):\n1. رويال فلاش\n2. ستريت فلاش\n3. أربعة من نوع\n4. فول هاوس\n5. فلاش\n6. ستريت\n7. ثلاثة من نوع\n8. زوجان\n9. زوج واحد\n10. البطاقة الأعلى\n\nحظاً موفقاً! 🍀",
     "model": {
-      "fallback": "🇺🇸 ℹ️ Poker help is temporarily unavailable. Please try again later."
+      "fallback": "🇸🇦 ℹ️ مساعدة البوكر غير متاحة مؤقتاً. حاول مرة أخرى لاحقاً."
     }
   },
   "meta": {
@@ -84,10 +84,10 @@
       "generic": "❌ حدث خطأ. حاول مجدداً.",
       "network": "🌐 مشكلة في الاتصال. تحقق من الشبكة.",
       "timeout": "⏱️ انتهى الوقت المتاح للحركة",
-      "insufficient_funds_detail": "🇺🇸 ❌ Not enough chips. You have {balance} but need {required}.",
-      "not_enough_players_ready": "🇺🇸 ⚠️ Waiting for more ready players before starting the game.",
-      "players_insufficient_funds": "🇺🇸 ⚠️ These players need more chips: {players}",
-      "wallet_not_enough": "🇺🇸 ❌ You don't have enough chips for that action."
+      "insufficient_funds_detail": "🇸🇦 ❌ لا توجد رقائق كافية. لديك {balance} لكنك تحتاج {required}.",
+      "not_enough_players_ready": "🇸🇦 ⚠️ ننتظر مزيداً من اللاعبين الجاهزين قبل بدء اللعبة.",
+      "players_insufficient_funds": "🇸🇦 ⚠️ هؤلاء اللاعبون يحتاجون إلى مزيد من الرقائق: {players}",
+      "wallet_not_enough": "🇸🇦 ❌ ليس لديك ما يكفي من الرقائق لتنفيذ هذا الإجراء."
     },
     "game_started": "🎮 بدأت الجولة! بالتوفيق!",
     "new_round": "🔄 جولة جديدة تبدأ...",
@@ -114,22 +114,22 @@
         "waiting": "⏳ ننتظر المزيد من اللاعبين (الحد الأدنى {min_players})..."
       },
       "stake_menu": {
-        "body": "🇺🇸 {title}\n\n{subtitle}\n\n{options}\n\n{footer}",
+        "body": "🇸🇦 {title}\\n\\n{subtitle}\\n\\n{options}\\n\\n{footer}",
         "footer": "ℹ️ الحد الأدنى للشراء يعتمد على مستوى الرهانات",
         "option_high": "💎 مرتفع ($5K/$10K)",
         "option_low": "💰 منخفض ($250/$500)",
         "option_medium": "🎯 متوسط ($1K/$2K)",
-        "option_micro": "💵 صغير ($50/$100)",
-        "option_premium": "🏆 مميز ($10K/$20K)",
+        "option_micro": "🇸🇦 💵 ميكرو ($50/$100)",
+        "option_premium": "🇸🇦 🏆 بريميوم ($10K/$20K)",
         "subtitle": "اختر مستوى الرهانات المفضل:",
         "title": "🎲 اختيار الرهانات",
-        "cancelled": "🇺🇸 ❌ Private table creation cancelled."
+        "cancelled": "🇸🇦 ❌ تم إلغاء إنشاء الطاولة الخاصة."
       },
       "error": {
-        "already_active": "🇺🇸 ⚠️ You already have an active private game. Finish or close it before creating another.",
-        "invalid_stake": "🇺🇸 ⚠️ Unknown stake level '{level}'. Please choose a different option."
+        "already_active": "🇸🇦 ⚠️ لديك بالفعل لعبة خاصة نشطة. أنهها أو أغلقها قبل إنشاء أخرى.",
+        "invalid_stake": "🇸🇦 ⚠️ مستوى الرهانات '{level}' غير معروف. اختر خياراً آخر."
       },
-      "created": "🇺🇸 🎉 Private table created!\nHost: {host}\nStakes: {stake}\nBuy-in: ${min_buyin} - ${max_buyin}\nCode: {code}\nMax players: {max_players}\n\nShare the code with friends to invite them."
+      "created": "🇸🇦 🎉 تم إنشاء طاولة خاصة!\\nالمضيف: {host}\\nالرهانات: {stake}\\nالشراء: ${min_buyin} - ${max_buyin}\\nالرمز: {code}\\nالحد الأقصى للاعبين: {max_players}\\n\\nشارك الرمز مع أصدقائك لدعوتهم."
     },
     "showdown": "🎭 كشف الأوراق!",
     "tie": "🤝 تعادل! تم تقسيم الرهان بين: {players}",
@@ -137,16 +137,16 @@
     "winner": "🏆 فاز {player} بمبلغ ${amount}!",
     "your_turn": "🎯 دورك الآن يا {player}!",
     "bonus": {
-      "already_claimed": "🇺🇸 🎁 You've already claimed today's bonus. Current balance: ${amount}",
-      "already_claimed_plain": "🇺🇸 Daily bonus already claimed. Balance: ${amount}",
-      "result": "🇺🇸 {icon} Bonus unlocked! You received ${bonus}. New balance: ${total}"
+      "already_claimed": "🇸🇦 🎁 لقد طالبت بمكافأة اليوم بالفعل. الرصيد الحالي: ${amount}",
+      "already_claimed_plain": "🇸🇦 تمت المطالبة بالمكافأة اليومية. الرصيد: ${amount}",
+      "result": "🇸🇦 {icon} تم فتح المكافأة! حصلت على ${bonus}. الرصيد الجديد: ${total}"
     },
-    "game_in_progress": "🇺🇸 🎮 A game is already in progress.",
+    "game_in_progress": "🇸🇦 🎮 هناك لعبة جارية بالفعل.",
     "lobby": {
-      "already_ready": "🇺🇸 ✅ You're already marked as ready.",
-      "game_in_progress": "🇺🇸 🎮 A game is already running.",
-      "insufficient_funds": "🇺🇸 💰 You don't have enough chips for this table.",
-      "room_full": "🇺🇸 🚫 The lobby is full (max {max_players} players)."
+      "already_ready": "🇸🇦 ✅ تم وضع علامة جاهز لك مسبقاً.",
+      "game_in_progress": "🇸🇦 🎮 هناك لعبة قيد التشغيل بالفعل.",
+      "insufficient_funds": "🇸🇦 💰 لا تملك ما يكفي من الرقائق لهذه الطاولة.",
+      "room_full": "🇸🇦 🚫 الصالة ممتلئة (الحد الأقصى {max_players} لاعبين)."
     }
   },
   "popup": {
@@ -155,15 +155,15 @@
       "pot": "قيمة الرهان: ${amount}",
       "title": "⚠️ تأكيد الانسحاب",
       "your_cards": "أوراقك: {cards}",
-      "body": "🇺🇸 ⚠️ Confirm fold?\nPot: {pot}\nYou invested: {investment} ({percentage}% of pot)",
-      "confirm_button": "🇺🇸 ✅ Fold",
-      "cancel_button": "🇺🇸 ↩️ Keep playing"
+      "body": "🇸🇦 ⚠️ تأكيد الانسحاب؟\\nالوعاء: {pot}\\nاستثمرت: {investment} ({percentage}% من الوعاء)",
+      "confirm_button": "🇸🇦 ✅ انسحاب",
+      "cancel_button": "🇸🇦 ↩️ متابعة اللعب"
     },
     "toast": {
       "error": "❌ خطأ: {message}",
       "info": "ℹ️ معلومات: {message}",
       "success": "✅ نجاح: {message}",
-      "fold_prompt": "🇺🇸 Tap a button to confirm or cancel the fold."
+      "fold_prompt": "🇸🇦 اضغط زراً لتأكيد أو إلغاء الانسحاب."
     }
   },
   "ui": {
@@ -219,38 +219,38 @@
         "left_game": "👋 غادرت الجولة"
       },
       "action": {
-        "all_in": "🇺🇸 🔥 All-in locked in!",
-        "call": "🇺🇸 💵 Called {amount}",
-        "call_check": "🇺🇸 ✅ Call — no chips needed",
-        "check": "🇺🇸 ✅ Checked",
-        "fold": "🇺🇸 ❌ Folded",
-        "raise": "🇺🇸 ⬆️ Raise queued",
-        "raise_to": "🇺🇸 ⬆️ Raised to {amount}",
-        "submitted": "🇺🇸 ✅ Action submitted"
+        "all_in": "🇸🇦 🔥 تم تثبيت حركة الكل-إن!",
+        "call": "🇸🇦 💵 ساوى {amount}",
+        "call_check": "🇸🇦 ✅ مساواة — لا تحتاج إلى رقائق",
+        "check": "🇸🇦 ✅ مرر",
+        "fold": "🇸🇦 ❌ انسحب",
+        "raise": "🇸🇦 ⬆️ زيادة قيد التنفيذ",
+        "raise_to": "🇸🇦 ⬆️ تمت الزيادة إلى {amount}",
+        "submitted": "🇸🇦 ✅ تم إرسال الحركة"
       },
       "fold": {
-        "cancelled": "🇺🇸 ↩️ Fold cancelled",
-        "expired": "🇺🇸 ⌛ Fold confirmation expired",
-        "failure": "🇺🇸 ⚠️ Fold could not be processed",
-        "success": "🇺🇸 ✅ Fold confirmed"
+        "cancelled": "🇸🇦 ↩️ تم إلغاء الانسحاب",
+        "expired": "🇸🇦 ⌛ انتهى وقت تأكيد الانسحاب",
+        "failure": "🇸🇦 ⚠️ تعذر تنفيذ الانسحاب",
+        "success": "🇸🇦 ✅ تم تأكيد الانسحاب"
       },
       "invite": {
-        "accept_help": "🇺🇸 Send /accept CODE to accept your latest invite.",
-        "decline_help": "🇺🇸 Send /decline CODE to decline your latest invite."
+        "accept_help": "🇸🇦 أرسل ‎/accept CODE لقبول آخر دعوة.",
+        "decline_help": "🇸🇦 أرسل ‎/decline CODE لرفض آخر دعوة."
       },
       "lobby": {
-        "left": "🇺🇸 👋 You left the lobby."
+        "left": "🇸🇦 👋 غادرت الصالة."
       },
       "raise": {
-        "error_choose_amount": "🇺🇸 Select a raise amount first.",
-        "error_context": "🇺🇸 ⚠️ This raise control is no longer active.",
-        "error_expired": "🇺🇸 ⌛ Raise selection expired.",
-        "error_invalid": "🇺🇸 ❌ That raise option isn't available.",
-        "error_no_game": "🇺🇸 ❌ No active game found.",
-        "error_selection": "🇺🇸 ⚠️ Couldn't determine your raise choice.",
-        "error_unavailable": "🇺🇸 ⚠️ Raise controls are currently unavailable.",
-        "error_unknown": "🇺🇸 ⚠️ Something went wrong while processing your raise.",
-        "error_user": "🇺🇸 ⚠️ Only the acting player can use this control."
+        "error_choose_amount": "🇸🇦 اختر مبلغ الزيادة أولاً.",
+        "error_context": "🇸🇦 ⚠️ عنصر التحكم في الزيادة لم يعد نشطاً.",
+        "error_expired": "🇸🇦 ⌛ انتهت صلاحية اختيار الزيادة.",
+        "error_invalid": "🇸🇦 ❌ خيار الزيادة هذا غير متاح.",
+        "error_no_game": "🇸🇦 ❌ لا توجد لعبة نشطة.",
+        "error_selection": "🇸🇦 ⚠️ تعذر تحديد خيار الزيادة الخاص بك.",
+        "error_unavailable": "🇸🇦 ⚠️ عناصر التحكم في الزيادة غير متاحة حالياً.",
+        "error_unknown": "🇸🇦 ⚠️ حدث خطأ أثناء معالجة الزيادة.",
+        "error_user": "🇸🇦 ⚠️ لا يمكن استخدام هذا التحكم إلا من قبل اللاعب صاحب الدور."
       }
     },
     "error": {
@@ -265,7 +265,7 @@
       "min_players": "نحتاج إلى {min} لاعبين على الأقل للبدء",
       "new_game": "🆕 جولة جديدة",
       "no_active_games": "لا توجد جولات نشطة. ابدأ واحدة!",
-      "player_entry": "🇺🇸 • {player}",
+      "player_entry": "🇸🇦 • {player}",
       "players": "👥 اللاعبون ({count}/{max})",
       "players_ready": "{ready}/{total} لاعب جاهز",
       "ready_to_start": "✅ جاهزون للبدء!",
@@ -374,8 +374,8 @@
           "language": "🌐 تغيير اللغة",
           "low": "💰 منخفض",
           "medium": "🎯 متوسط",
-          "micro": "💵 صغير",
-          "premium": "🏆 مميز"
+          "micro": "🇸🇦 💵 ميكرو",
+          "premium": "🇸🇦 🏆 بريميوم"
         }
       }
     },
@@ -410,15 +410,15 @@
         "not_your_turn_with_player": "الدور الآن على {player}."
       },
       "join": {
-        "already_in_game": "🇺🇸 ⚠️ You're already seated in this private game.",
-        "code_invalid": "🇺🇸 Invite codes must be 6 letters or numbers. '{code}' isn't valid.",
-        "code_required": "🇺🇸 Please provide the 6-character invite code (e.g., /join ABC123).",
-        "game_full": "🇺🇸 🚫 That private game is already full.",
-        "game_not_found": "🇺🇸 ❌ No private game found for code {code}.",
-        "game_started": "🇺🇸 ⚠️ That private game has already started.",
-        "not_accepting": "🇺🇸 ⚠️ That private game isn't accepting new players right now.",
-        "success": "🇺🇸 ✅ You're in! Wait for the host to start the game.",
-        "usage": "🇺🇸 Use /join CODE to join a private game lobby."
+        "already_in_game": "🇸🇦 ⚠️ أنت جالس بالفعل في هذه اللعبة الخاصة.",
+        "code_invalid": "🇸🇦 يجب أن تتكون رموز الدعوة من 6 أحرف أو أرقام. '{code}' غير صالح.",
+        "code_required": "🇸🇦 يرجى تقديم رمز الدعوة المكون من 6 أحرف (مثال: ‎/join ABC123).",
+        "game_full": "🇸🇦 🚫 هذه اللعبة الخاصة ممتلئة بالفعل.",
+        "game_not_found": "🇸🇦 ❌ لا توجد لعبة خاصة بالرمز {code}.",
+        "game_started": "🇸🇦 ⚠️ هذه اللعبة الخاصة بدأت بالفعل.",
+        "not_accepting": "🇸🇦 ⚠️ هذه اللعبة الخاصة لا تستقبل لاعبين جدداً حالياً.",
+        "success": "🇸🇦 ✅ تم الانضمام! انتظر المضيف لبدء اللعبة.",
+        "usage": "🇸🇦 استخدم ‎/join CODE للانضمام إلى صالة لعبة خاصة."
       }
     },
     "viewer": {
@@ -428,13 +428,13 @@
         "title": "⚠️ تأكيد الانسحاب"
       },
       "hand": {
-        "header": "🇺🇸 🃏 Your Hand",
-        "empty": "🇺🇸 No cards yet. Hang tight!",
-        "pot": "🇺🇸 💰 Pot: {amount}"
+        "header": "🇸🇦 🃏 يدك",
+        "empty": "🇸🇦 لا توجد أوراق بعد. انتظر قليلاً!",
+        "pot": "🇸🇦 💰 الوعاء: {amount}"
       },
       "table": {
-        "header": "🇺🇸 🪑 Table",
-        "waiting": "🇺🇸 Waiting for other players..."
+        "header": "🇸🇦 🪑 الطاولة",
+        "waiting": "🇸🇦 ننتظر اللاعبين الآخرين..."
       }
     }
   },
