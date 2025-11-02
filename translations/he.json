@@ -114,7 +114,7 @@
         "waiting": "⏳ ממתינים לעוד שחקנים (מינימום {min_players})..."
       },
       "stake_menu": {
-        "body": "🇮🇱 {title}\\n\\n{subtitle}\\n\\n{options}\\n\\n{footer}",
+        "body": "🇮🇱 {title}\n\n{subtitle}\n\n{options}\n\n{footer}",
         "footer": "ℹ️ מינימום הקנייה תלוי ברמת ההימורים",
         "option_high": "💎 גבוה ($5K/$10K)",
         "option_low": "💰 נמוך ($250/$500)",
@@ -129,7 +129,7 @@
         "already_active": "🇮🇱 ⚠️ כבר יש לך משחק פרטי פעיל. סיים או סגור אותו לפני יצירת חדש.",
         "invalid_stake": "🇮🇱 ⚠️ רמת הימור '{level}' אינה מוכרת. אנא בחר אפשרות אחרת."
       },
-      "created": "🇮🇱 🎉 שולחן פרטי נוצר!\\nמארח: {host}\\nהימורים: {stake}\\nבאי-אין: ${min_buyin} - ${max_buyin}\\nקוד: {code}\\nמקסימום שחקנים: {max_players}\\n\\nשתף את הקוד עם חברים להזמנה."
+      "created": "🇮🇱 🎉 שולחן פרטי נוצר!\nמארח: {host}\nהימורים: {stake}\nבאי-אין: ${min_buyin} - ${max_buyin}\nקוד: {code}\nמקסימום שחקנים: {max_players}\n\nשתף את הקוד עם חברים להזמנה."
     },
     "showdown": "🎭 חשיפת קלפים!",
     "tie": "🤝 תיקו! הקופה מתחלקת בין: {players}",
@@ -155,7 +155,7 @@
       "pot": "קופה: ${amount}",
       "title": "⚠️ אישור קיפול",
       "your_cards": "הקלפים שלכם: {cards}",
-      "body": "🇮🇱 ⚠️ לאשר קיפול?\\nקופה: {pot}\\nהשקעת: {investment} ({percentage}% מהקופה)",
+      "body": "🇮🇱 ⚠️ לאשר קיפול?\nקופה: {pot}\nהשקעת: {investment} ({percentage}% מהקופה)",
       "confirm_button": "🇮🇱 ✅ לקפל",
       "cancel_button": "🇮🇱 ↩️ להמשיך לשחק"
     },
