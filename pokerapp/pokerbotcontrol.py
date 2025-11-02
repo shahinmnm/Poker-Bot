@@ -545,6 +545,44 @@ class PokerBotController:
             event=event,
         )
 
+    async def _safe_query_answer(
+        self,
+        query: Optional[CallbackQuery],
+        *,
+        text: Optional[str] = None,
+        show_alert: bool = False,
+    ) -> bool:
+        """Answer callback queries while gracefully handling stale references."""
+
+        if query is None:
+            return False
+
+        try:
+            await query.answer(text=text, show_alert=show_alert)
+            return True
+        except BadRequest as error:
+            if self._is_stale_callback_query_error(error):
+                log_helper.debug(
+                    "CallbackAnswerStale",
+                    "Callback query expired before answer",
+                    text=text,
+                )
+                return False
+            log_helper.warn(
+                "CallbackAnswerFailed",
+                "Failed to answer callback query",
+                error=str(error),
+                text=text,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            log_helper.error(
+                "CallbackAnswerError",
+                "Unexpected error while answering callback",
+                error=str(exc),
+                text=text,
+            )
+        return False
+
     async def _post_init(self, application: Application) -> None:
         """Set up bot command descriptions in Telegram UI."""
         default_lang = translation_manager.DEFAULT_LANGUAGE
@@ -1873,7 +1911,7 @@ class PokerBotController:
         data = getattr(query, "data", "") or ""
         result: dict = {"handled": False}
 
-        if not data.startswith("raise_"):
+        if not data.startswith("action:raise_"):
             return result
 
         message = query.message
@@ -1919,6 +1957,7 @@ class PokerBotController:
             result["handled"] = True
             return result
 
+        game_identifier = str(getattr(game, "id", ""))
         live_manager = self._get_live_manager()
         if live_manager is None:
             log_helper.warn(
@@ -1945,7 +1984,7 @@ class PokerBotController:
             current_player = game.players[index]
 
         parts = data.split(":")
-        if len(parts) < 2:
+        if len(parts) < 3:
             await NotificationManager.popup(
                 query,
                 text=self._translate(
@@ -1958,7 +1997,10 @@ class PokerBotController:
             result["handled"] = True
             return result
 
-        action = parts[0]
+        if parts[0] != "action":
+            return result
+
+        action = parts[1]
 
         def _parse_version_and_game(raw_parts: List[str], start_index: int) -> Tuple[Optional[int], Optional[str]]:
             version_val: Optional[int] = None
@@ -1988,9 +2030,9 @@ class PokerBotController:
                 result["handled"] = True
                 return result
 
-            selection_key = parts[1]
-            message_version, game_id = _parse_version_and_game(parts, 2)
-            if game_id is None or game_id != getattr(game, "id", None):
+            selection_key = parts[2]
+            message_version, game_id = _parse_version_and_game(parts, 3)
+            if game_id is None or game_id != game_identifier:
                 await NotificationManager.popup(
                     query,
                     text=self._translate(
@@ -2042,6 +2084,21 @@ class PokerBotController:
                 result["handled"] = True
                 return result
 
+            selection_key, selected_option = live_manager.get_raise_selection(
+                chat_id,
+                user_id,
+            )
+            if selected_option is not None:
+                selection_display: str = selection_key or "?"
+                if selected_option.kind == "all_in":
+                    selection_display = "ALL-IN"
+                elif selected_option.amount is not None:
+                    selection_display = translation_manager.format_currency(
+                        selected_option.amount,
+                        language=translation_manager.resolve_language(user_id=user_id),
+                    )
+                logger.info("🎯 Raise selected %s by user %s", selection_display, user_id)
+
             await NotificationManager.popup(
                 query,
                 text=None,
@@ -2053,8 +2110,8 @@ class PokerBotController:
             return result
 
         if action == "raise_back":
-            message_version, game_id = _parse_version_and_game(parts, 1)
-            if game_id is None or game_id != getattr(game, "id", None):
+            message_version, game_id = _parse_version_and_game(parts, 2)
+            if game_id is None or game_id != game_identifier:
                 await NotificationManager.popup(
                     query,
                     text=self._translate(
@@ -2086,8 +2143,8 @@ class PokerBotController:
             return result
 
         if action == "raise_confirm":
-            message_version, game_id = _parse_version_and_game(parts, 1)
-            if game_id is None or game_id != getattr(game, "id", None):
+            message_version, game_id = _parse_version_and_game(parts, 2)
+            if game_id is None or game_id != game_identifier:
                 await NotificationManager.popup(
                     query,
                     text=self._translate(
@@ -2121,14 +2178,11 @@ class PokerBotController:
                 user_id,
             )
             if selection_key is None or option is None:
-                await NotificationManager.popup(
+                logger.info("💬 Raise confirm popup issued to %s", user_id)
+                await self._safe_query_answer(
                     query,
-                    text=self._translate(
-                        ControllerTextKeys.RAISE_ERROR_CHOOSE_AMOUNT,
-                        query=query,
-                    ),
+                    text="💬 Please choose a raise amount first!",
                     show_alert=False,
-                    event="RaiseSelectAck",
                 )
                 result["handled"] = True
                 return result

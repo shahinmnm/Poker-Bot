@@ -392,6 +392,17 @@ class PokerBotViewer:
         emoji_scale = getattr(device_profile, "emoji_size_multiplier", 1.0)
         cache_variant = f"{getattr(device_profile.device_type, 'value', 'default')}:{self._language_context.code}"
 
+        if self._live_manager is not None:
+            markup, _ = self._live_manager._build_action_inline_keyboard(
+                game=game,
+                player=current_player,
+                version=version,
+                use_cache=use_cache,
+                device_profile=device_profile,
+            )
+            if markup is not None:
+                return markup
+
         cache_enabled = use_cache and self._render_cache is not None and not is_mobile
         if cache_enabled:
             cached = self._render_cache.get_cached_render(
@@ -647,6 +658,28 @@ class PokerBotViewer:
             )
 
         return markup
+
+    def _build_raise_menu(
+        self,
+        game: Game,
+        current_player: Player,
+        *,
+        version: Optional[int] = None,
+        selected_key: Optional[str] = None,
+    ) -> Optional[InlineKeyboardMarkup]:
+        """Proxy helper that leverages the live manager's raise builder."""
+
+        if self._live_manager is None:
+            return None
+
+        options = self._live_manager._compute_raise_options(game, current_player)
+        return self._live_manager._build_raise_selection_keyboard(
+            game=game,
+            player=current_player,
+            version=version,
+            options=options,
+            selected_key=selected_key,
+        )
 
     def get_render_cache_stats(self) -> Dict[str, Any]:
         """Expose render cache performance metrics."""
