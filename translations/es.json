@@ -352,20 +352,12 @@
       "new_game": "🆕 Nuevo juego",
       "no_active_games": "No hay juegos activos. ¡Crea uno!",
       "player_entry": "🇪🇸 • {player}",
-      "player_joined": "🎉 {player_name} se unió al lobby. ({current}/{max})",
-      "player_left": "👋 {player_name} salió del lobby. ({current}/{max})",
       "players": "👥 Jugadores ({count}/{max})",
       "players_ready": "{ready}/{total} jugadores listos",
       "ready_to_start": "✅ ¡Listo para comenzar!",
       "title": "🎰 Lobby de póker",
       "waiting": "⏳ Esperando a que el anfitrión inicie...",
-      "waiting_for_players": "⏳ Esperando a más jugadores...",
-      "waiting_players": "⏳ Esperando jugadores...",
-      "error": {
-        "full": "🚫 El lobby está lleno (máximo {max} jugadores).",
-        "already_joined": "ℹ️ {player_name} ya está en el lobby.",
-        "insufficient_balance": "💰 {player_name} no tiene suficientes fichas para unirse."
-      }
+      "waiting_players": "⏳ Esperando jugadores..."
     },
     "group_lobby": {
       "title": "🎰 SALA DE PÓKER 🎰",
