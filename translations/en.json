@@ -352,20 +352,12 @@
       "new_game": "🆕 New Game",
       "no_active_games": "No active games. Start one!",
       "player_entry": "• {player}",
-      "player_joined": "🎉 {player_name} joined the lobby! ({current}/{max})",
-      "player_left": "👋 {player_name} left the lobby. ({current}/{max})",
       "players": "👥 Players ({count}/{max})",
       "players_ready": "{ready}/{total} players ready",
       "ready_to_start": "✅ Ready to start!",
       "title": "🎮 Game Lobby",
       "waiting": "⏳ Waiting for host to start...",
-      "waiting_for_players": "⏳ Waiting for more players...",
-      "waiting_players": "⏳ Waiting for players...",
-      "error": {
-        "full": "🚫 The lobby is full (max {max} players).",
-        "already_joined": "ℹ️ {player_name} is already in the lobby.",
-        "insufficient_balance": "💰 {player_name} doesn't have enough chips to join."
-      }
+      "waiting_players": "⏳ Waiting for players..."
     },
     "group_lobby": {
       "title": "🎰 Poker Game Lobby 🎰",
