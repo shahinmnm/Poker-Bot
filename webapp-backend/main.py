@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import hashlib
 import hmac
+import json
 import os
 import urllib.parse
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,17 +20,17 @@ app = FastAPI(title="Poker WebApp API", version="1.0.0")
 
 class TelegramAuthData(BaseModel):
     initData: str
-    user: Dict[str, Any]
+    user: Optional[Dict[str, Any]] = None
 
 
-def verify_telegram_webapp_data(init_data: str, bot_token: str) -> bool:
-    """Verify that the request originates from Telegram."""
+def verify_telegram_webapp_data(init_data: str, bot_token: str) -> Optional[Dict[str, str]]:
+    """Verify that the request originates from Telegram and return the parsed payload."""
     try:
         parsed_data = dict(urllib.parse.parse_qsl(init_data))
         received_hash = parsed_data.pop("hash", None)
 
         if not received_hash:
-            return False
+            return None
 
         data_check_arr = [f"{k}={v}" for k, v in sorted(parsed_data.items())]
         data_check_string = "\n".join(data_check_arr)
@@ -46,9 +47,12 @@ def verify_telegram_webapp_data(init_data: str, bot_token: str) -> bool:
             hashlib.sha256,
         ).hexdigest()
 
-        return hmac.compare_digest(calculated_hash, received_hash)
+        if not hmac.compare_digest(calculated_hash, received_hash):
+            return None
+
+        return parsed_data
     except Exception:
-        return False
+        return None
 
 
 def create_session(user_id: Any) -> str:
@@ -83,10 +87,23 @@ async def authenticate_telegram_user(data: TelegramAuthData):
     if not bot_token:
         raise HTTPException(status_code=500, detail="Bot token is not configured")
 
-    if not verify_telegram_webapp_data(data.initData, bot_token):
+    parsed_payload = verify_telegram_webapp_data(data.initData, bot_token)
+    if not parsed_payload:
         raise HTTPException(status_code=401, detail="Invalid Telegram data")
 
-    user_id = data.user.get("id")
+    user_json = parsed_payload.get("user")
+    if not user_json:
+        raise HTTPException(status_code=400, detail="Missing user information in init data")
+
+    try:
+        verified_user = json.loads(user_json)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid user information in init data")
+
+    if data.user is not None and data.user != verified_user:
+        raise HTTPException(status_code=400, detail="User mismatch between init data and payload")
+
+    user_id = verified_user.get("id")
     if user_id is None:
         raise HTTPException(status_code=400, detail="Missing user identifier")
 
@@ -95,7 +112,7 @@ async def authenticate_telegram_user(data: TelegramAuthData):
     return {
         "success": True,
         "token": session_token,
-        "user": data.user,
+        "user": verified_user,
     }
 
 # WebSocket
