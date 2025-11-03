@@ -533,19 +533,22 @@
     "game": {
       "pot": "الوعاء",
       "bet": "الرهان",
-      "turn": "دورك",
+      "turn": "الدور",
       "waiting_players": "في انتظار اللاعبين…",
       "active_players": "{active}/{total} نشط",
-      "recent_actions": "الإجراءات الأخيرة",
-      "selected_raise": "المبلغ المحدد",
+      "selected_raise": "الزيادة المحددة",
+      "recent_actions": "آخر الإجراءات",
       "player_state": {
-        "fold": "انسحب",
-        "all_in": "آل-إن",
+        "fold": "منسحب",
+        "all_in": "كل الرهان",
         "waiting": "ينتظر"
       }
     },
     "lobby": {
       "no_players": "لا يوجد لاعبون بعد"
+    },
+    "table": {
+      "header": "الطاولة"
     }
   }
 }

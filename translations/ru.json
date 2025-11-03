@@ -536,8 +536,8 @@
       "turn": "ХОД",
       "waiting_players": "Ожидание игроков…",
       "active_players": "{active}/{total} активны",
+      "selected_raise": "Выбранное повышение",
       "recent_actions": "Недавние действия",
-      "selected_raise": "Выбранная ставка",
       "player_state": {
         "fold": "Пас",
         "all_in": "Ва-банк",
@@ -546,6 +546,9 @@
     },
     "lobby": {
       "no_players": "Пока нет игроков за столом"
+    },
+    "table": {
+      "header": "Стол"
     }
   }
 }

@@ -536,8 +536,8 @@
       "turn": "نوبت",
       "waiting_players": "در انتظار بازیکنان…",
       "active_players": "{active}/{total} فعال",
-      "recent_actions": "اقدامات اخیر",
       "selected_raise": "افزایش انتخاب‌شده",
+      "recent_actions": "اقدامات اخیر",
       "player_state": {
         "fold": "کنار رفت",
         "all_in": "آل-این",
@@ -546,6 +546,9 @@
     },
     "lobby": {
       "no_players": "هنوز بازیکنی نشسته نیست"
+    },
+    "table": {
+      "header": "میز"
     }
   }
 }
