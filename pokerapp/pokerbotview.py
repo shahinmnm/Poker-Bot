@@ -257,7 +257,6 @@ class PokerBotViewer:
         """
 
         rank_str, suit_key = PokerBotViewer._extract_rank_and_suit(card)
-        rank_str = rank_str.strip()
         suit_emoji = PokerBotViewer._SUIT_EMOJIS.get(suit_key, "?")
 
         return f"{suit_emoji}{rank_str}"
