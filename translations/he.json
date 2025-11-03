@@ -523,7 +523,12 @@
   },
   "viewer": {
     "board": {
+      "label": "שולחן",
       "cards_locked": "הקלפים נעולים"
+    },
+    "pot": {
+      "label": "קופה",
+      "bet_label": "הימור"
     },
     "game": {
       "pot": "קופה",

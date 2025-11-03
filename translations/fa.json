@@ -523,7 +523,12 @@
   },
   "viewer": {
     "board": {
+      "label": "میز",
       "cards_locked": "کارت‌ها قفل شده‌اند"
+    },
+    "pot": {
+      "label": "پات",
+      "bet_label": "شرط"
     },
     "game": {
       "pot": "پات",

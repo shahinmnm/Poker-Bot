@@ -523,7 +523,12 @@
   },
   "viewer": {
     "board": {
+      "label": "Стол",
       "cards_locked": "Карты скрыты"
+    },
+    "pot": {
+      "label": "Банк",
+      "bet_label": "Ставка"
     },
     "game": {
       "pot": "Банк",
