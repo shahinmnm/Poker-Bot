@@ -1074,6 +1074,11 @@ class LiveMessageManager:
 
         stage_icon = context.get("stage_icon", "")
         stage_name = context.get("stage_name", "")
+        # Remove duplicate emojis from stage text (keep only text after emoji prefix)
+        if stage_name and "🃏" in stage_name:
+            parts = stage_name.split("🃏", 2)
+            if len(parts) > 2:
+                stage_name = "🃏 " + parts[-1].strip()
         if stage_name and stage_name != "—":
             stage_text = f"{stage_icon} {stage_name}".strip()
             bold_stage = UnicodeTextFormatter.make_bold(stage_text)
