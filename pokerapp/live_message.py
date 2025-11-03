@@ -1186,10 +1186,10 @@ class LiveMessageManager:
                 icon = "🔥"
                 status = f" • {all_in_label}"
             elif actor_id and player.user_id == actor_id:
-                icon = "▶️"
+                icon = "✅"
                 status = ""
             else:
-                icon = "⏸️"
+                icon = "🚫"
                 status = f" • {waiting_label}"
 
             player_line = f"{icon} {name} • {_inline_amount(stack)}{status}"
@@ -1222,8 +1222,8 @@ class LiveMessageManager:
         # ═══════════════════════════════════════════════════
         action_lines: List[str] = []
         for action in recent[-5:]:  # Last 5 actions
-            emoji = self._get_action_emoji(action)
-            action_lines.append(f"• {emoji} {self._sanitize_text(action)}")
+            action_text = self._sanitize_text(action)
+            action_lines.append(f"• {action_text}")
 
         if action_lines:
             sections.append("\n".join(action_lines))
@@ -1378,7 +1378,7 @@ class LiveMessageManager:
         from pokerapp.pokerbotview import PokerBotViewer
 
         formatted = [PokerBotViewer._format_card(card) for card in cards]
-        return "  ".join(formatted)
+        return " - ".join(formatted)
 
     def _get_action_emoji(self, action_text: str) -> str:
         """Return emoji based on action type."""
@@ -1455,35 +1455,7 @@ class LiveMessageManager:
     def _select_banner(
         self, context: Dict[str, Any], previous: Dict[str, Any]
     ) -> Optional[str]:
-        if not previous:
-            return None
-
-        stage_changed = context.get("stage_name") != previous.get("stage_name")
-        actor_changed = (
-            context.get("actor_user_id") is not None
-            and context.get("actor_user_id") != previous.get("actor_user_id")
-        )
-        bet_changed = (
-            context.get("last_bet_value") != previous.get("last_bet_value")
-        )
-
-        if stage_changed:
-            stage_name = context.get("stage_name", "Stage").upper()
-            icon = context.get("stage_icon", "🎴")
-            base_notice = UnicodeTextFormatter.make_bold(f"{icon} {stage_name}")
-            if actor_changed:
-                return f"🔔 {base_notice} — your move!"
-            return f"🔔 {base_notice}"
-
-        if actor_changed:
-            return f"🔔 {UnicodeTextFormatter.make_bold('Your move!')}"
-
-        if bet_changed:
-            old_bet = self._format_chips(previous.get("last_bet_value", 0))
-            new_bet = self._format_chips(context.get("last_bet_value", 0))
-            bet_text = f"Bet {old_bet} → {new_bet}"
-            return f"🔔 {UnicodeTextFormatter.make_bold(bet_text)}"
-
+        """Banner system disabled - returns None to suppress notification line."""
         return None
 
     def _compute_raise_options(
