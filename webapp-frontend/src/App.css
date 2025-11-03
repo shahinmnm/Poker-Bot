@@ -1,29 +1,173 @@
 #root {
-  max-width: 1280px;
+  width: min(720px, 100%);
   margin: 0 auto;
-  padding: 2rem;
+  padding: 2.5rem 1.5rem 3rem;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.app__header {
   text-align: center;
+  color: rgba(226, 232, 240, 0.95);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+.app__title {
+  font-size: 2.4rem;
+  margin: 0;
 }
 
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.subtitle {
+  margin: 0.5rem 0 0;
+  color: rgba(148, 163, 184, 0.85);
+  font-size: 1rem;
 }
 
 .card {
-  padding: 2em;
+  background: rgba(22, 26, 36, 0.85);
+  border-radius: 1.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
+  padding: 1.75rem;
+  backdrop-filter: blur(18px);
+  color: rgba(226, 232, 240, 0.95);
 }
 
-.read-the-docs {
-  color: #888;
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.user-card__avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.6);
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.user-card__avatar--placeholder {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.user-card__details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.user-card__name {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.user-card__username {
+  margin: 0;
+  color: rgba(148, 181, 255, 0.9);
+  font-weight: 500;
+}
+
+.user-card__meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.user-card__meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.user-card__meta dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.user-card__meta dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.status {
+  margin: 0;
+  font-weight: 600;
+}
+
+.status--idle {
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.status--loading {
+  color: #f5a524;
+}
+
+.status--success {
+  color: #22c55e;
+}
+
+.status--error {
+  color: #f87171;
+}
+
+.payload {
+  margin: 0;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(30, 41, 59, 0.7);
+  color: rgba(226, 232, 240, 0.95);
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular,
+    Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error {
+  margin: 0;
+  color: #fda4af;
+  font-weight: 500;
+}
+
+.info {
+  margin: 0;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+@media (max-width: 540px) {
+  #root {
+    padding: 1.75rem 1rem 2.5rem;
+  }
+
+  .card {
+    padding: 1.5rem;
+  }
+
+  .user-card {
+    align-items: flex-start;
+  }
+
+  .user-card__avatar {
+    width: 60px;
+    height: 60px;
+  }
 }
