@@ -917,7 +917,10 @@ class LiveMessageManager:
         if include_banner:
             banner = self._select_banner(context, state.last_context)
 
-        message_text = stable_text_value
+        banner_text = self._apply_direction(banner) if banner else None
+        message_text = (
+            f"{banner_text}\n{stable_text_value}" if banner_text else stable_text_value
+        )
 
         if use_cache and current_player is not None:
             layout_to_cache: Optional[List[List[Dict[str, str]]]] = None
@@ -1077,6 +1080,8 @@ class LiveMessageManager:
                 ),
             )
         )
+        stage_description = self._sanitize_text(context.get("stage_description", ""))
+
         header_parts: List[str] = []
         if table_id and table_id != "----":
             header_parts.append(f"#{table_id}")
@@ -1085,6 +1090,8 @@ class LiveMessageManager:
 
         stage_segment = f"{stage_icon} {stage_name}".strip()
         if stage_segment:
+            if stage_description:
+                stage_segment = f"{stage_segment} – {stage_description}"
             header_parts.append(stage_segment)
 
         header_content = " • ".join(header_parts)
@@ -1094,8 +1101,7 @@ class LiveMessageManager:
         board_cards = list(getattr(game, "cards_table", []) or [])
         if board_cards:
             cards_display = self._format_board_cards(board_cards)
-            cards_ltr = f"\u202A{cards_display}\u202C"
-            table_block = "\n".join(["🪑 Table:", cards_ltr])
+            table_block = "\n".join(["🪑 Table:", cards_display])
         else:
             locked_msg = context.get("t_cards_locked") or translation_manager.t(
                 "viewer.board.cards_locked", lang=language_code
@@ -1340,7 +1346,7 @@ class LiveMessageManager:
 
         formatted = [PokerBotViewer._format_card(card) for card in cards]
         cards_display = " - ".join(formatted)
-        return cards_display
+        return "\u202A" + cards_display + "\u202C"
 
     def _compute_content_hash(
         self,
