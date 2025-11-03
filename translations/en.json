@@ -77,27 +77,6 @@
     "rtl": false,
     "version": "1.0.0"
   },
-  "viewer": {
-    "turn": {
-      "label": "TURN"
-    },
-    "board": {
-      "label": "Table",
-      "cards_locked": "Cards locked"
-    },
-    "pot": {
-      "label": "Pot",
-      "bet_label": "Bet"
-    },
-    "players": {
-      "active_format": "{active}/{total} Active",
-      "status_your_turn": "Your turn",
-      "status_waiting": "Waiting"
-    },
-    "actions": {
-      "recent_header": "Recent {count} action"
-    }
-  },
   "msg": {
     "current_bet": "🎯 Current bet: ${amount}",
     "dealing_cards": "🃏 Dealing cards...",
