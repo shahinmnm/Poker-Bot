@@ -1583,7 +1583,7 @@ class PokerBotModel:
     async def ban_player(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        user_language = self._apply_user_language(update)
+        self._apply_user_language(update)
 
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
@@ -1591,41 +1591,24 @@ class PokerBotModel:
         if game.state in (GameState.INITIAL, GameState.FINISHED):
             return
 
-        try:
-            player = self._current_turn_player(game)
-        except Exception:  # pragma: no cover - fallback safety
-            player = None
-        player_name = self._get_player_name(player) if player else ""
-        player_id = getattr(player, "user_id", None) if player else None
-
         diff = dt.now() - game.last_turn_time
         if diff < MAX_TIME_FOR_TURN:
             await self._view.send_message(
                 chat_id=chat_id,
-                text=self._translate(
-                    "msg.ban.unavailable",
-                    user_id=player_id,
-                    lang=user_language,
-                    player=player_name,
-                ),
+                text="You can't ban. Max turn time is 2 minutes",
             )
             return
 
         await self._view.send_message(
             chat_id=chat_id,
-            text=self._translate(
-                "msg.ban.timeout",
-                user_id=player_id,
-                lang=user_language,
-                player=player_name,
-            ),
+            text="Time is over!",
         )
         await self.fold(update, context)
 
     async def fold(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        user_language = self._apply_user_language(update)
+        self._apply_user_language(update)
 
         game = self._game_from_context(context)
         player = self._current_turn_player(game)
@@ -1633,23 +1616,11 @@ class PokerBotModel:
         player.state = PlayerState.FOLD
 
         player_name = self._get_player_name(player)
-        chat_text = self._translate(
-            "msg.player_folded",
-            user_id=player.user_id,
-            lang=user_language,
-            player=player.mention_markdown,
-        )
-        action_text = self._translate(
-            "msg.player_folded",
-            user_id=player.user_id,
-            lang=user_language,
-            player=player_name,
-        )
-        game.add_action(action_text)
+        game.add_action(f"{player_name} folded")
 
         await self._view.send_message(
             chat_id=update.effective_message.chat_id,
-            text=chat_text,
+            text=f"{player.mention_markdown} {PlayerAction.FOLD.value}"
         )
 
         chat_id = update.effective_message.chat_id
@@ -1660,7 +1631,7 @@ class PokerBotModel:
         update: Update,
         context: ContextTypes.DEFAULT_TYPE,
     ) -> None:
-        user_language = self._apply_user_language(update)
+        self._apply_user_language(update)
 
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
@@ -1677,35 +1648,19 @@ class PokerBotModel:
                 await self.all_in(update=update, context=context)
                 return
 
-            call_amount = None
+            mention_markdown = self._current_turn_player(game).mention_markdown
+            await self._view.send_message(
+                chat_id=chat_id,
+                text=f"{mention_markdown} {action}"
+            )
+            call_amount = self._coordinator.player_call_or_check(game, player)
+
             if action == PlayerAction.CHECK.value:
-                call_amount = self._coordinator.player_call_or_check(game, player)
-                chat_key = "msg.player_checked"
+                action_text = f"{player_name} checked"
             else:
-                call_amount = self._coordinator.player_call_or_check(game, player)
-                chat_key = "msg.player_called"
+                action_text = f"{player_name} called ${call_amount}"
 
-            kwargs = {"player": player.mention_markdown}
-            action_kwargs = {"player": player_name}
-            if chat_key == "msg.player_called":
-                kwargs["amount"] = call_amount
-                action_kwargs["amount"] = call_amount
-
-            chat_text = self._translate(
-                chat_key,
-                user_id=player.user_id,
-                lang=user_language,
-                **kwargs,
-            )
-            action_text = self._translate(
-                chat_key,
-                user_id=player.user_id,
-                lang=user_language,
-                **action_kwargs,
-            )
             game.add_action(action_text)
-
-            await self._view.send_message(chat_id=chat_id, text=chat_text)
         except UserException as e:
             await self._view.send_message(chat_id=chat_id, text=str(e))
             return
@@ -1717,7 +1672,7 @@ class PokerBotModel:
         context: ContextTypes.DEFAULT_TYPE,
         raise_bet_rate: PlayerAction
     ) -> None:
-        user_language = self._apply_user_language(update)
+        self._apply_user_language(update)
 
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
@@ -1725,6 +1680,10 @@ class PokerBotModel:
         player_name = self._get_player_name(player)
 
         try:
+            action = PlayerAction.RAISE_RATE
+            if player.round_rate == game.max_round_rate:
+                action = PlayerAction.BET
+
             call_amount = max(game.max_round_rate - player.round_rate, 0)
             total_required = call_amount + raise_bet_rate.value
             target_amount = game.max_round_rate + raise_bet_rate.value
@@ -1733,17 +1692,10 @@ class PokerBotModel:
                 await self.all_in(update=update, context=context)
                 return
 
-            chat_text = self._translate(
-                "msg.player_raised",
-                user_id=player.user_id,
-                lang=user_language,
-                player=player.mention_markdown,
-                amount=target_amount,
-            )
-
             await self._view.send_message(
                 chat_id=chat_id,
-                text=chat_text,
+                text=player.mention_markdown +
+                f" {action.value} {raise_bet_rate.value}$"
             )
 
             self._coordinator.player_raise_bet(
@@ -1751,14 +1703,7 @@ class PokerBotModel:
                 player=player,
                 amount=target_amount,
             )
-            action_text = self._translate(
-                "msg.player_raised",
-                user_id=player.user_id,
-                lang=user_language,
-                player=player_name,
-                amount=target_amount,
-            )
-            game.add_action(action_text)
+            game.add_action(f"{player_name} raised to ${target_amount}")
         except UserException as e:
             await self._view.send_message(chat_id=chat_id, text=str(e))
             return
@@ -1767,7 +1712,7 @@ class PokerBotModel:
     async def all_in(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        user_language = self._apply_user_language(update)
+        self._apply_user_language(update)
 
         game = self._game_from_context(context)
         chat_id = update.effective_message.chat_id
@@ -1775,27 +1720,12 @@ class PokerBotModel:
         player_name = self._get_player_name(player)
         mention = player.mention_markdown
         amount = self._coordinator.player_all_in(game, player)
-
-        chat_text = self._translate(
-            "msg.player_all_in",
-            user_id=player.user_id,
-            lang=user_language,
-            player=mention,
-            amount=amount,
-        )
         await self._view.send_message(
             chat_id=chat_id,
-            text=chat_text,
+            text=f"{mention} {PlayerAction.ALL_IN.value} {amount}$"
         )
         player.state = PlayerState.ALL_IN
-        action_text = self._translate(
-            "msg.player_all_in",
-            user_id=player.user_id,
-            lang=user_language,
-            player=player_name,
-            amount=amount,
-        )
-        game.add_action(action_text)
+        game.add_action(f"{player_name} went ALL-IN (${amount})")
         await self._handle_post_action(game, chat_id)
 
     async def create_private_game(
