@@ -9,9 +9,13 @@ from telegram import (
     Message,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    KeyboardButton,
     ReplyKeyboardMarkup,
+    Update,
+    WebAppInfo,
     Bot,
 )
+from telegram.ext import ContextTypes
 from telegram.error import BadRequest
 from pokerapp.cards import Card, Cards
 from pokerapp.entities import (
@@ -919,6 +923,47 @@ class PokerBotViewer:
         """Public entry point for sending a context-aware menu."""
 
         await self._send_menu(chat_id, menu_context)
+
+    async def show_main_menu(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+    ) -> None:
+        """Display the primary reply keyboard with WebApp entry point."""
+
+        if update.effective_chat is None:
+            self._logger.warning("No effective chat available to show main menu")
+            return
+
+        keyboard = [
+            [
+                KeyboardButton(
+                    "🎮 باز کردن بازی",
+                    web_app=WebAppInfo(url="https://poker.shahin8n.sbs"),
+                )
+            ],
+            [KeyboardButton("/ready"), KeyboardButton("/status")],
+            [KeyboardButton("/balance"), KeyboardButton("/help")],
+        ]
+
+        reply_markup = ReplyKeyboardMarkup(
+            keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=False,
+        )
+
+        message_text = (
+            "🃏 Texas Poker Bot\n\n"
+            "برای شروع بازی روی دکمه زیر کلیک کن:"
+        )
+
+        await self._send_localized_message(
+            chat_id=update.effective_chat.id,
+            text=message_text,
+            reply_markup=reply_markup,
+            disable_notification=True,
+            disable_web_page_preview=True,
+        )
 
     async def _send_menu(
         self,
