@@ -79,7 +79,8 @@
   },
   "viewer": {
     "board": {
-      "label": "Table"
+      "label": "Table",
+      "cards_locked": "Cards locked"
     },
     "pot": {
       "label": "Pot",
@@ -95,6 +96,23 @@
     },
     "actions": {
       "recent_header": "Recent {count} action"
+    },
+    "game": {
+      "pot": "Pot",
+      "bet": "Bet",
+      "turn": "TURN",
+      "waiting_players": "Waiting for players…",
+      "active_players": "{active}/{total} Active",
+      "recent_actions": "Recent",
+      "selected_raise": "Selected",
+      "player_state": {
+        "fold": "Fold",
+        "all_in": "All-in",
+        "waiting": "Waiting"
+      }
+    },
+    "lobby": {
+      "no_players": "No players seated yet"
     }
   },
   "msg": {
@@ -539,28 +557,6 @@
         "header": "🪑 Table",
         "waiting": "Waiting for other players..."
       }
-    }
-  },
-  "viewer": {
-    "board": {
-      "cards_locked": "Cards locked"
-    },
-    "game": {
-      "pot": "Pot",
-      "bet": "Bet",
-      "turn": "TURN",
-      "waiting_players": "Waiting for players…",
-      "active_players": "{active}/{total} Active",
-      "recent_actions": "Recent",
-      "selected_raise": "Selected",
-      "player_state": {
-        "fold": "Fold",
-        "all_in": "All-in",
-        "waiting": "Waiting"
-      }
-    },
-    "lobby": {
-      "no_players": "No players seated yet"
     }
   }
 }
