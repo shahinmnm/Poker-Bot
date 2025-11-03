@@ -523,7 +523,12 @@
   },
   "viewer": {
     "board": {
+      "label": "الطاولة",
       "cards_locked": "البطاقات مقفلة"
+    },
+    "pot": {
+      "label": "الوعاء",
+      "bet_label": "الرهان"
     },
     "game": {
       "pot": "الوعاء",

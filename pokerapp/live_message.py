@@ -1101,8 +1101,8 @@ class LiveMessageManager:
         pot_amount = max(getattr(game, "pot", 0), 0)
         bet_amount = max(context.get("last_bet_value", 0) or 0, 0)
 
-        pot_label = translation_manager.t("viewer.pot.label", lang=language_code)
-        bet_label = translation_manager.t("viewer.pot.bet_label", lang=language_code)
+        pot_label = translation_manager.t("viewer.game.pot", lang=language_code)
+        bet_label = translation_manager.t("viewer.game.bet", lang=language_code)
 
         pot_line = (
             f"💰 {pot_label}: {_inline_amount(pot_amount)} | "
@@ -1117,7 +1117,7 @@ class LiveMessageManager:
             actor_name = self._get_player_name(current_player)
             timer_display = context.get("timer_label", "")
 
-            turn_label = translation_manager.t("viewer.turn.label", lang=language_code)
+            turn_label = translation_manager.t("viewer.game.turn", lang=language_code)
             turn_line = f"⏰ {turn_label}: {actor_name}"
 
             if timer_display and timer_display != "—":
@@ -1134,11 +1134,18 @@ class LiveMessageManager:
         )
 
         active_format = translation_manager.t(
-            "viewer.players.active_format",
+            "viewer.game.active_players",
             lang=language_code
         )
         active_text = active_format.format(active=active_count, total=len(players))
         sections.append(f"👥 {active_text}")
+
+        if not players:
+            waiting_message = translation_manager.t(
+                "viewer.game.waiting_players",
+                lang=language_code
+            )
+            sections.append(f"⏳ {waiting_message}")
 
         # ═══════════════════════════════════════════════════
         # SECTION 6: PLAYER LIST (joined with newline, not blank line)
@@ -1146,12 +1153,16 @@ class LiveMessageManager:
         actor_id = getattr(current_player, "user_id", None) if current_player else None
         player_lines: List[str] = []
 
-        your_turn_text = translation_manager.t(
-            "viewer.players.status_your_turn",
+        fold_label = translation_manager.t(
+            "viewer.game.player_state.fold",
             lang=language_code
         )
-        waiting_text = translation_manager.t(
-            "viewer.players.status_waiting",
+        all_in_label = translation_manager.t(
+            "viewer.game.player_state.all_in",
+            lang=language_code
+        )
+        waiting_label = translation_manager.t(
+            "viewer.game.player_state.waiting",
             lang=language_code
         )
 
@@ -1170,22 +1181,28 @@ class LiveMessageManager:
 
             if state == PlayerState.FOLD:
                 icon = "❌"
-                status = ""
+                status = f" • {fold_label}"
             elif state == PlayerState.ALL_IN:
                 icon = "🔥"
-                status = ""
+                status = f" • {all_in_label}"
             elif actor_id and player.user_id == actor_id:
                 icon = "✅"
-                status = f" • {your_turn_text}"
+                status = ""
             else:
-                icon = "❌"
-                status = f" • {waiting_text}"
+                icon = "⏳"
+                status = f" • {waiting_label}"
 
             player_line = f"{icon} {name} • {_inline_amount(stack)}{status}"
             player_lines.append(player_line)
 
         if player_lines:
             sections.append("\n".join(player_lines))
+        else:
+            no_players_text = translation_manager.t(
+                "viewer.lobby.no_players",
+                lang=language_code
+            )
+            sections.append(f"👥 {no_players_text}")
 
         # ═══════════════════════════════════════════════════
         # SECTION 7: RECENT ACTIONS HEADER
@@ -1193,9 +1210,9 @@ class LiveMessageManager:
         recent = context.get("recent_actions", [])
         if recent:
             header_text = translation_manager.t(
-                "viewer.actions.recent_header",
+                "viewer.game.recent_actions",
                 lang=language_code
-            ).format(count="5")
+            )
 
             bold_header = UnicodeTextFormatter.make_bold(header_text)
             sections.append(f"📝 {bold_header}")

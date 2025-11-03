@@ -523,7 +523,12 @@
   },
   "viewer": {
     "board": {
+      "label": "Mesa",
       "cards_locked": "Cartas ocultas"
+    },
+    "pot": {
+      "label": "Bote",
+      "bet_label": "Apuesta"
     },
     "game": {
       "pot": "Bote",
