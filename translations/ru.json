@@ -209,9 +209,6 @@
         "invalid_raise_amount": "[ru] ❌ Invalid raise amount",
         "unknown_action": "[ru] ❌ Unknown action"
       }
-    },
-    "info": {
-      "side_pot_repr": "Сайдпот(сумма={amount}, игроки={players})"
     }
   },
   "popup": {
