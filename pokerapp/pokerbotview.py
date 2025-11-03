@@ -26,7 +26,11 @@ from pokerapp.entities import (
 from pokerapp.device_detector import DeviceProfile, DeviceType
 from pokerapp.i18n import LanguageContext, translation_manager
 from pokerapp.kvstore import RedisKVStore, ensure_kv
-from pokerapp.live_message import LiveMessageManager, UnicodeTextFormatter
+from pokerapp.live_message import (
+    LiveMessageManager,
+    UnicodeTextFormatter,
+    normalize_numbers,
+)
 from pokerapp.keyboard_utils import (
     rehydrate_keyboard_layout,
     serialise_keyboard_layout,
@@ -202,7 +206,8 @@ class PokerBotViewer:
         """Send message with direction-aware wrapping."""
 
         plain_text = UnicodeTextFormatter.strip_all_html(text)
-        localized = self._localize_text(plain_text, context=context)
+        normalized_text = normalize_numbers(plain_text)
+        localized = self._localize_text(normalized_text, context=context)
         return await self._bot.send_message(chat_id=chat_id, text=localized, **kwargs)
 
     _SUIT_EMOJIS = {
@@ -359,7 +364,9 @@ class PokerBotViewer:
     ) -> str:
         """Delegate formatting to the LiveMessageManager implementation."""
 
-        return self._live_manager._format_game_state(game)
+        return self._live_manager._format_game_state(
+            game, current_player=current_player
+        )
 
     def build_action_buttons(
         self,
