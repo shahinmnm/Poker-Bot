@@ -1054,7 +1054,11 @@ class LiveMessageManager:
                 numeric = 0
             return self._sanitize_text(f"${numeric:,}")
 
-        language_code = context.get("language_code", "en")
+        language_code = (
+            context.get("language_code")
+            or getattr(self, "_language_code", None)
+            or "en"
+        )
         sections: List[str] = []
 
         # ═══════════════════════════════════════════════════
@@ -1159,6 +1163,7 @@ class LiveMessageManager:
             name = self._get_player_name(player)
             if len(name) > 20:
                 name = name[:19] + "…"
+            display_name = self._sanitize_text(name)
 
             wallet = getattr(player, "wallet", None)
             stack = 0
@@ -1181,7 +1186,7 @@ class LiveMessageManager:
                 icon = "❌"
                 status = f" • {waiting_text}"
 
-            player_line = f"{icon} {name} • {_inline_amount(stack)}{status}"
+            player_line = f"{icon} {display_name} • {_inline_amount(stack)}{status}"
             player_lines.append(player_line)
 
         if player_lines:
