@@ -78,15 +78,16 @@
     "version": "1.0.0"
   },
   "viewer": {
+    "turn": {
+      "label": "TURN"
+    },
     "board": {
-      "label": "Table"
+      "label": "Table",
+      "cards_locked": "Cards locked"
     },
     "pot": {
       "label": "Pot",
       "bet_label": "Bet"
-    },
-    "turn": {
-      "label": "TURN"
     },
     "players": {
       "active_format": "{active}/{total} Active",
@@ -543,24 +544,29 @@
   },
   "viewer": {
     "board": {
+      "label": "Table",
       "cards_locked": "Cards locked"
+    },
+    "pot": {
+      "label": "Pot",
+      "bet_label": "Bet"
     },
     "game": {
       "pot": "Pot",
       "bet": "Bet",
       "turn": "TURN",
-      "waiting_players": "Waiting for players…",
+      "waiting_players": "Waiting for players",
       "active_players": "{active}/{total} Active",
-      "recent_actions": "Recent",
-      "selected_raise": "Selected",
+      "selected_raise": "Selected raise",
+      "recent_actions": "Recent Actions",
       "player_state": {
-        "fold": "Fold",
+        "fold": "Folded",
         "all_in": "All-in",
         "waiting": "Waiting"
       }
     },
     "lobby": {
-      "no_players": "No players seated yet"
+      "no_players": "No players yet"
     }
   }
 }
