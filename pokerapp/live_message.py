@@ -23,7 +23,7 @@ from pokerapp.device_detector import (
 )
 from pokerapp.kvstore import ensure_kv
 from pokerapp.render_cache import RenderCache, RenderResult
-from .i18n import translation_manager
+from pokerapp.i18n import translation_manager
 from pokerapp.compact_formatter import CompactFormatter
 from pokerapp.keyboard_utils import (
     rehydrate_keyboard_layout,
@@ -1208,157 +1208,6 @@ class LiveMessageManager:
         message_text = "\n\n".join(section for section in sections if section)
         return normalize_numbers(message_text)
 
-    def _build_mobile_message(
-        self,
-        game: Game,
-        current_player: Player,
-        *,
-        device_profile: DeviceProfile,
-    ) -> str:
-        """Build compact mobile-optimized message."""
-
-        lang = self._language_code or "en"
-
-        table_label = translation_manager.t("viewer.board.table_label", lang=lang)
-        players_label = translation_manager.t(
-            "viewer.players.section_label", lang=lang
-        )
-        active_label = translation_manager.t("viewer.players.active_label", lang=lang)
-        recent_label = translation_manager.t("viewer.actions.recent_label", lang=lang)
-
-        context = self._build_render_context(game, current_player)
-
-        lines: List[str] = []
-
-        header_parts: List[str] = []
-        table_code = self._sanitize_text(context.get("table_code", ""))
-        if table_code:
-            header_parts.append(f"#{table_code}")
-
-        stage_icon = context.get("stage_icon", "🎴")
-        stage_name = self._sanitize_text(context.get("stage_name", ""))
-        if stage_name:
-            header_parts.append(f"{stage_icon} {stage_name}".strip())
-        elif stage_icon:
-            header_parts.append(stage_icon)
-
-        pot_label = translation_manager.t("viewer.game.pot", lang=lang)
-        bet_label = translation_manager.t("viewer.game.bet", lang=lang)
-        pot_amount = max(getattr(game, "pot", 0), 0)
-        bet_amount = max(context.get("last_bet_value", 0) or 0, 0)
-
-        if header_parts:
-            lines.append(" • ".join(part for part in header_parts if part))
-        lines.append(f"💰 {pot_label}: ${pot_amount:,} | {bet_label}: ${bet_amount:,}")
-
-        lines.append(f"🪑 {table_label}:")
-        board_cards = getattr(game, "board", None)
-        if not board_cards:
-            board_cards = getattr(game, "cards_table", [])
-
-        if board_cards:
-            card_display = self._format_board_cards_ltr(board_cards)
-            if card_display:
-                lines.append(card_display)
-        else:
-            has_key = getattr(translation_manager, "has_key", None)
-            if callable(has_key) and has_key("viewer.board.waiting_flop", lang):
-                waiting_text = translation_manager.t(
-                    "viewer.board.waiting_flop",
-                    lang=lang,
-                )
-            else:
-                waiting_text = "⏳"
-            lines.append(waiting_text)
-
-        lines.append(f"👥 {players_label}")
-
-        players = list(getattr(game, "players", []) or [])
-        active_count = sum(
-            1
-            for player in players
-            if getattr(player, "state", None) != PlayerState.FOLD
-        )
-        total_count = len(players)
-
-        def _inline_amount(value: Any) -> str:
-            try:
-                numeric = int(value)
-            except (TypeError, ValueError):
-                numeric = 0
-            if numeric < 0:
-                numeric = 0
-            return f"${numeric:,}"
-
-        player_lines = [f"👥 {active_label}: {active_count}/{total_count}"]
-
-        actor_id = getattr(current_player, "user_id", None) if current_player else None
-        max_name = 18
-
-        for player in players:
-            name = self._get_player_name(player)
-            if len(name) > max_name:
-                name = name[: max_name - 1] + "…"
-            safe_name = self._sanitize_text(name)
-
-            wallet_value = getattr(player.wallet, "value", None)
-            stack_amount = 0
-            if callable(wallet_value):
-                try:
-                    stack_amount = max(int(wallet_value()), 0)
-                except Exception:  # pragma: no cover - defensive
-                    stack_amount = 0
-            elif wallet_value is not None:
-                try:
-                    stack_amount = max(int(wallet_value), 0)
-                except (TypeError, ValueError):
-                    stack_amount = 0
-
-            state = getattr(player, "state", None)
-            if state == PlayerState.FOLD:
-                icon = "❌"
-                detail = " (folded)"
-            elif state == PlayerState.ALL_IN:
-                icon = "🔥"
-                detail = " (all-in)"
-            elif actor_id and getattr(player, "user_id", None) == actor_id:
-                icon = "▶️"
-                detail = ""
-            else:
-                icon = "⏸️"
-                detail = " • waiting"
-
-            stack_text = _inline_amount(stack_amount)
-            player_lines.append(f"{icon} {safe_name} {stack_text}{detail}")
-
-        if not players:
-            waiting_players = translation_manager.t(
-                "viewer.lobby.no_players", lang=lang
-            )
-            player_lines.append(f"⏸️ {waiting_players}")
-
-        lines.extend(player_lines)
-
-        action_history = getattr(game, "action_history", None)
-        if action_history is None:
-            action_history = getattr(game, "recent_actions", [])
-
-        if action_history:
-            is_mobile_profile = getattr(device_profile, "is_mobile", None)
-            if is_mobile_profile is None:
-                device_type = getattr(device_profile, "device_type", None)
-                is_mobile_profile = getattr(device_type, "value", None) == "mobile"
-
-            max_actions = 3 if is_mobile_profile else 5
-            recent = action_history[-max_actions:]
-
-            lines.append(f"📝 {recent_label}")
-            for action in recent:
-                safe_action = self._sanitize_text(str(action))
-                lines.append(f"  • {safe_action}")
-
-        return normalize_numbers("\n".join(line for line in lines if line))
-
     def _format_game_state(
         self,
         game: Game,
@@ -1488,14 +1337,6 @@ class LiveMessageManager:
     def _format_recent_actions(self, game: Game) -> List[str]:
         recent = getattr(game, "recent_actions", []) or []
         return [self._sanitize_text(action) for action in recent[-3:]]
-
-    def _format_board_cards_ltr(self, cards: List) -> str:
-        """Format board cards forcing LTR display for mixed-direction chats."""
-
-        if not cards:
-            return ""
-
-        return f"\u202A{self._format_board_cards(cards)}\u202C"
 
     def _format_board_cards(self, cards: List) -> str:
         """Format board cards without any flash effects.
