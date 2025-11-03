@@ -1167,7 +1167,7 @@ class LiveMessageManager:
         )
 
         for player in players:
-            name = self._get_player_name(player)
+            name = self._sanitize_text(self._get_player_name(player))
             if len(name) > 20:
                 name = name[:19] + "…"
 
@@ -1186,10 +1186,10 @@ class LiveMessageManager:
                 icon = "🔥"
                 status = f" • {all_in_label}"
             elif actor_id and player.user_id == actor_id:
-                icon = "✅"
+                icon = "▶️"
                 status = ""
             else:
-                icon = "⏳"
+                icon = "⏸️"
                 status = f" • {waiting_label}"
 
             player_line = f"{icon} {name} • {_inline_amount(stack)}{status}"
