@@ -1208,15 +1208,6 @@ class LiveMessageManager:
         message_text = "\n\n".join(section for section in sections if section)
         return normalize_numbers(message_text)
 
-    def _format_board_cards_ltr(self, cards: List) -> str:
-        """Format board cards forcing LTR display for mixed-direction chats."""
-
-        if not cards:
-            return ""
-
-        # Unicode LTR isolate markers
-        return f"\u202D{self._format_board_cards(cards)}\u202C"
-
     def _build_mobile_message(
         self,
         game: Game,
@@ -1266,14 +1257,18 @@ class LiveMessageManager:
             board_cards = getattr(game, "cards_table", [])
 
         if board_cards:
-            # Force LTR for card display to prevent RTL issues
-            card_text = self._format_board_cards(board_cards)
-            lines.append(f"\u202D{card_text}\u202C")
+            card_display = self._format_board_cards_ltr(board_cards)
+            if card_display:
+                lines.append(card_display)
         else:
-            waiting_text = translation_manager.t(
-                "viewer.board.waiting_flop",
-                lang=lang,
-            )
+            has_key = getattr(translation_manager, "has_key", None)
+            if callable(has_key) and has_key("viewer.board.waiting_flop", lang):
+                waiting_text = translation_manager.t(
+                    "viewer.board.waiting_flop",
+                    lang=lang,
+                )
+            else:
+                waiting_text = "⏳"
             lines.append(waiting_text)
 
         lines.append(f"👥 {players_label}")
@@ -1306,33 +1301,32 @@ class LiveMessageManager:
                 name = name[: max_name - 1] + "…"
             safe_name = self._sanitize_text(name)
 
-            # Get wallet value safely
-            try:
-                wallet = getattr(player, "wallet", None)
-                if wallet:
-                    wallet_val = getattr(wallet, "value", 0)
-                    stack_amount = max(
-                        int(wallet_val() if callable(wallet_val) else wallet_val),
-                        0,
-                    )
-                else:
+            wallet_value = getattr(player.wallet, "value", None)
+            stack_amount = 0
+            if callable(wallet_value):
+                try:
+                    stack_amount = max(int(wallet_value()), 0)
+                except Exception:  # pragma: no cover - defensive
                     stack_amount = 0
-            except (TypeError, ValueError, AttributeError):
-                stack_amount = 0
+            elif wallet_value is not None:
+                try:
+                    stack_amount = max(int(wallet_value), 0)
+                except (TypeError, ValueError):
+                    stack_amount = 0
 
             state = getattr(player, "state", None)
             if state == PlayerState.FOLD:
                 icon = "❌"
-                detail = ""  # Icon is sufficient
+                detail = " (folded)"
             elif state == PlayerState.ALL_IN:
                 icon = "🔥"
-                detail = ""
+                detail = " (all-in)"
             elif actor_id and getattr(player, "user_id", None) == actor_id:
                 icon = "▶️"
                 detail = ""
             else:
                 icon = "⏸️"
-                detail = ""
+                detail = " • waiting"
 
             stack_text = _inline_amount(stack_amount)
             player_lines.append(f"{icon} {safe_name} {stack_text}{detail}")
@@ -1494,6 +1488,14 @@ class LiveMessageManager:
     def _format_recent_actions(self, game: Game) -> List[str]:
         recent = getattr(game, "recent_actions", []) or []
         return [self._sanitize_text(action) for action in recent[-3:]]
+
+    def _format_board_cards_ltr(self, cards: List) -> str:
+        """Format board cards forcing LTR display for mixed-direction chats."""
+
+        if not cards:
+            return ""
+
+        return f"\u202A{self._format_board_cards(cards)}\u202C"
 
     def _format_board_cards(self, cards: List) -> str:
         """Format board cards without any flash effects.
