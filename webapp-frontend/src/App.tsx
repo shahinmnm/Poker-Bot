@@ -54,7 +54,7 @@ function App() {
     const tg = window.Telegram?.WebApp;
 
     if (!tg) {
-      setError("این برنامه باید داخل Telegram باز شود.");
+      setError("This app must be opened inside Telegram.");
       setAuthStatus("error");
       return;
     }
@@ -69,13 +69,13 @@ function App() {
       setTelegramUser(unsafeData.user);
       setError(null);
     } else {
-      setError("اطلاعات کاربر Telegram در دسترس نیست.");
+      setError("Telegram user information is not available.");
     }
 
     if (!initData) {
       setAuthStatus("error");
       setAuthMessage(null);
-      setError("توکن معتبر از Telegram دریافت نشد.");
+      setError("No valid token was provided by Telegram.");
       return;
     }
 
@@ -114,20 +114,20 @@ function App() {
         if (!response.ok) {
           throw new Error(
             parsedMessage ??
-              `درخواست با خطای ${response.status} مواجه شد.`
+              `Request failed with status ${response.status}.`
           );
         }
 
         setAuthStatus("success");
         setAuthMessage(
-          parsedMessage ?? "توکن Telegram با موفقیت تایید شد."
+          parsedMessage ?? "Telegram token verified successfully."
         );
         setError(null);
       } catch (fetchError) {
         const message =
           fetchError instanceof Error
             ? fetchError.message
-            : "در هنگام اتصال به سرور خطایی رخ داد.";
+            : "An error occurred while contacting the server.";
         setAuthStatus("error");
         setAuthMessage(null);
         setError(message);
@@ -140,13 +140,13 @@ function App() {
   const statusMessage = useMemo(() => {
     switch (authStatus) {
       case "loading":
-        return "در حال ارسال توکن به سرور...";
+        return "Sending token to the server...";
       case "success":
-        return "اتصال با سرور برقرار شد.";
+        return "Connected to the server successfully.";
       case "error":
-        return "احراز هویت انجام نشد.";
+        return "Authentication failed.";
       default:
-        return "در انتظار دریافت اطلاعات از Telegram.";
+        return "Waiting to receive data from Telegram.";
     }
   }, [authStatus]);
 
@@ -155,7 +155,7 @@ function App() {
       <header className="app__header">
         <h1 className="app__title">Poker WebApp</h1>
         <p className="subtitle">
-          احراز هویت کاربر از طریق Telegram Web App
+          Authenticate via the Telegram Web App
         </p>
       </header>
 
@@ -188,7 +188,7 @@ function App() {
                 </div>
                 {telegramUser.language_code && (
                   <div>
-                    <dt>زبان</dt>
+                    <dt>Language</dt>
                     <dd>{telegramUser.language_code.toUpperCase()}</dd>
                   </div>
                 )}
@@ -196,12 +196,12 @@ function App() {
             </div>
           </div>
         ) : (
-          <p className="info">در انتظار دریافت اطلاعات کاربر از Telegram...</p>
+          <p className="info">Waiting for Telegram user information...</p>
         )}
       </section>
 
       <section className="card status-card">
-        <h2>وضعیت احراز هویت</h2>
+        <h2>Authentication Status</h2>
         <p className={`status status--${authStatus}`}>{statusMessage}</p>
         {authMessage && authStatus === "success" && (
           <pre className="payload">{authMessage}</pre>

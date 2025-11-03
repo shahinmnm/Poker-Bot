@@ -521,6 +521,29 @@
       }
     }
   },
+  "webapp": {
+    "auth": {
+      "title": "Poker WebApp",
+      "subtitle": "Authenticate via the Telegram Web App",
+      "status_heading": "Authentication Status",
+      "info_waiting_user": "Waiting for Telegram user information...",
+      "status": {
+        "idle": "Waiting to receive data from Telegram.",
+        "loading": "Sending token to the server...",
+        "success": "Connected to the server successfully.",
+        "error": "Authentication failed."
+      },
+      "errors": {
+        "telegram_only": "This app must be opened inside Telegram.",
+        "user_unavailable": "Telegram user information is not available.",
+        "token_missing": "No valid token was provided by Telegram.",
+        "request_failed": "Request failed with status {status}.",
+        "network": "An error occurred while contacting the server."
+      },
+      "success_message": "Telegram token verified successfully.",
+      "language_label": "Language"
+    }
+  },
   "viewer": {
     "board": {
       "label": "Table",
