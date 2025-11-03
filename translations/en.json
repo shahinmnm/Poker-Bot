@@ -100,10 +100,6 @@
     "player_left": "➖ {player} left the game",
     "player_raised": "⬆️ {player} raised to ${amount}",
     "player_ready": "✋ {player} is ready",
-    "ban": {
-      "unavailable": "⏱️ Please wait for {player}'s 2-minute turn to finish before banning.",
-      "timeout": "⏱️ Time is over for {player}! The player has been folded."
-    },
     "pot": "💰 Pot: ${amount}",
     "private": {
       "invite": {
