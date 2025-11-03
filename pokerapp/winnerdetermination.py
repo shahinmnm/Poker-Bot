@@ -2,10 +2,10 @@
 
 import enum
 from itertools import combinations
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from pokerapp.cards import Card, Cards
-from pokerapp.entities import Game, Player, PlayerState, Score
+from pokerapp.entities import Player, Score
 
 HAND_RANK = 15**5
 
@@ -34,19 +34,6 @@ HAND_NAME_MAP = {
     HandsOfPoker.TWO_PAIR.value: "Two Pair",
     HandsOfPoker.PAIR.value: "One Pair",
     HandsOfPoker.HIGH_CARD.value: "High Card",
-}
-
-HAND_RANK_KEYS = {
-    HandsOfPoker.ROYAL_FLUSH.value: "royal_flush",
-    HandsOfPoker.STRAIGHT_FLUSH.value: "straight_flush",
-    HandsOfPoker.FOUR_OF_A_KIND.value: "four_of_a_kind",
-    HandsOfPoker.FULL_HOUSE.value: "full_house",
-    HandsOfPoker.FLUSH.value: "flush",
-    HandsOfPoker.STRAIGHTS.value: "straight",
-    HandsOfPoker.THREE_OF_A_KIND.value: "three_of_a_kind",
-    HandsOfPoker.TWO_PAIR.value: "two_pair",
-    HandsOfPoker.PAIR.value: "pair",
-    HandsOfPoker.HIGH_CARD.value: "high_card",
 }
 
 
@@ -195,66 +182,3 @@ class WinnerDetermination:
             res[score].append((player, best_hand))
 
         return res
-
-
-def _resolve_active_players(game: Game) -> List[Player]:
-    players = list(getattr(game, "players", []) or [])
-    if not players:
-        return []
-
-    active_states = {PlayerState.ACTIVE, PlayerState.ALL_IN}
-    active_players = [
-        player for player in players if getattr(player, "state", None) in active_states
-    ]
-
-    if active_players:
-        return active_players
-
-    # Fallback: include players that have not folded yet.
-    return [
-        player
-        for player in players
-        if getattr(player, "state", None) != PlayerState.FOLD
-    ]
-
-
-def _determine_best_player(
-    game: Game,
-) -> Tuple[Optional[Player], Optional[Score], Cards]:
-    if game is None:
-        return None, None, []
-
-    players = _resolve_active_players(game)
-    if not players:
-        return None, None, []
-
-    determiner = WinnerDetermination()
-    results = determiner.determinate_scores(
-        players=players,
-        cards_table=list(getattr(game, "cards_table", []) or []),
-    )
-
-    if not results:
-        return None, None, []
-
-    best_score = max(results.keys())
-    winners = results.get(best_score) or []
-    if not winners:
-        return None, best_score, []
-
-    winner_player, best_hand = winners[0]
-    return winner_player, best_score, list(best_hand)
-
-
-def determine_winner(game: Game) -> Optional[Player]:
-    winner, _, _ = _determine_best_player(game)
-    return winner
-
-
-def determine_winner_with_rank(game: Game) -> Tuple[Optional[Player], str]:
-    winner, score, _ = _determine_best_player(game)
-    if not winner or score is None:
-        return None, "high_card"
-
-    rank_value = score // HAND_RANK
-    return winner, HAND_RANK_KEYS.get(rank_value, "high_card")
