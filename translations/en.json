@@ -209,9 +209,6 @@
         "invalid_raise_amount": "❌ Invalid raise amount",
         "unknown_action": "❌ Unknown action"
       }
-    },
-    "info": {
-      "side_pot_repr": "SidePot(amount={amount}, players={players})"
     }
   },
   "popup": {

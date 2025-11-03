@@ -209,9 +209,6 @@
         "invalid_raise_amount": "[ar] ❌ Invalid raise amount",
         "unknown_action": "[ar] ❌ Unknown action"
       }
-    },
-    "info": {
-      "side_pot_repr": "وعاء جانبي(المبلغ={amount}، اللاعبون={players})"
     }
   },
   "popup": {
