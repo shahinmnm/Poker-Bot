@@ -1062,7 +1062,7 @@ class LiveMessageManager:
         # ═══════════════════════════════════════════════════
         header_parts: List[str] = []
 
-        table_id = context.get("table_id", "")
+        table_id = context.get("table_code", "")
         if table_id and table_id != "----":
             bold_id = UnicodeTextFormatter.make_bold(f"#{table_id}")
             header_parts.append(bold_id)
