@@ -24,7 +24,6 @@ from pokerapp.device_detector import (
 from pokerapp.kvstore import ensure_kv
 from pokerapp.render_cache import RenderCache, RenderResult
 from pokerapp.i18n import translation_manager
-from pokerapp.compact_formatter import CompactFormatter
 from pokerapp.keyboard_utils import (
     rehydrate_keyboard_layout,
     serialise_keyboard_layout,
@@ -1096,18 +1095,14 @@ class LiveMessageManager:
         if board_cards:
             cards_display = self._format_board_cards(board_cards)
             cards_ltr = f"\u202A{cards_display}\u202C"
-            table_label = translation_manager.t(
-                "viewer.board.table_label",
-                lang=language_code,
-            )
-            table_block = "\n".join([f"🪑 {table_label}:", cards_ltr])
+            table_block = "\n".join(["🪑 Table:", cards_ltr])
         else:
             locked_msg = context.get("t_cards_locked") or translation_manager.t(
                 "viewer.board.cards_locked", lang=language_code
             )
             table_block = "\n".join(
                 [
-                    f"🪑 {table_label}:",
+                    "🪑 Table:",
                     self._sanitize_text(locked_msg),
                 ]
             )
@@ -1139,10 +1134,7 @@ class LiveMessageManager:
             for p in players
             if getattr(p, "state", None) not in {PlayerState.FOLD, None}
         )
-        active_label = CompactFormatter.get_active_label(language_code)
-        player_lines: List[str] = [
-            f"👥 {active_label}: {active_count}/{len(players)}"
-        ]
+        player_lines: List[str] = [f"👥 Active: {active_count}/{len(players)}"]
 
         actor_id = getattr(current_player, "user_id", None) if current_player else None
         max_name = 20 if compact else 32
@@ -1196,11 +1188,7 @@ class LiveMessageManager:
 
         recent = context.get("recent_actions", [])
         if recent:
-            recent_label = translation_manager.t(
-                "viewer.actions.recent_label",
-                lang=language_code,
-            )
-            recent_lines = [f"📝 {recent_label}"]
+            recent_lines = ["📝 Recent actions"]
             for action in recent[-2:]:
                 recent_lines.append(f"• {self._sanitize_text(action)}")
             sections.append("\n".join(recent_lines))
@@ -2007,12 +1995,6 @@ class LiveMessageManager:
                 self._logger.debug(
                     "✅ Successfully edited message %s", message_id
                 )
-                coordinator = getattr(self, "_coordinator", None)
-                if coordinator is not None:
-                    await coordinator._track_game_message(
-                        getattr(game, "id", None),
-                        message_id,
-                    )
                 return message_id
             except TelegramError as exc:
                 error_msg = str(exc).lower()
@@ -2077,12 +2059,6 @@ class LiveMessageManager:
                     chat_id,
                 )
                 game.set_group_message(message_id)
-                coordinator = getattr(self, "_coordinator", None)
-                if coordinator is not None:
-                    await coordinator._track_game_message(
-                        getattr(game, "id", None),
-                        message_id,
-                    )
 
             return message_id
 

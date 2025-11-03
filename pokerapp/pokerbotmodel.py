@@ -1520,7 +1520,20 @@ class PokerBotModel:
 
         winners_results = self._coordinator.finish_game_with_winners(game)
 
-        await self._coordinator.finish_game_with_cleanup(chat_id, game)
+        active_players = game.players_by(
+            states=(PlayerState.ACTIVE, PlayerState.ALL_IN)
+        )
+        only_one_player = len(active_players) == 1
+
+        text = "Game is finished with result:\n\n"
+        for player, best_hand, money in winners_results:
+            win_hand = " ".join(best_hand)
+            text += f"{player.mention_markdown}\nGOT: *{money} $*\n"
+            if not only_one_player:
+                text += f"With combination of cards\n{win_hand}\n\n"
+
+        text += "/ready to continue"
+        await self._view.send_message(chat_id=chat_id, text=text)
 
         # Approve wallet transactions
         for winner, _hand, amount in winners_results:

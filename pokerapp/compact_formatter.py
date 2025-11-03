@@ -57,17 +57,6 @@ class CompactFormatter:
     }
 
     @staticmethod
-    def get_active_label(language_code: str = "en") -> str:
-        """Get localized 'Active:' label."""
-
-        from .i18n import translation_manager
-
-        return translation_manager.t(
-            "viewer.players.active_label",
-            lang=language_code,
-        )
-
-    @staticmethod
     def _extract_components(card: Card) -> tuple[str, str]:
         card_text = str(card)
         if not card_text:
