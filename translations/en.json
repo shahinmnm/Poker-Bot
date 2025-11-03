@@ -546,6 +546,9 @@
     },
     "lobby": {
       "no_players": "No players yet"
+    },
+    "table": {
+      "header": "Table"
     }
   }
 }
