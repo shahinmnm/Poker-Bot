@@ -1,83 +1,32 @@
-"""Authentication routes for Telegram WebApp logins."""
+from fastapi import APIRouter, Request, Response
+from app.dependencies import get_or_create_session
 
-import os
-from typing import Any, Dict
-
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
-
-from app.utils import (
-    generate_session_token,
-    verify_session_token,
-    verify_telegram_init_data,
-)
-
-# Routes live directly under /auth so that the backend aligns with the
-# Telegram WebApp's expected endpoints (frontend already calls /auth/*).
-router = APIRouter(prefix="/auth", tags=["auth"])
-
-BOT_TOKEN = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN environment variable is required")
+router = APIRouter()
 
 
-class TelegramAuthPayload(BaseModel):
-    """Request body for Telegram WebApp authentication."""
+@router.post("/login")
+async def login(request: Request, response: Response):
+    """Auto-login endpoint - creates session."""
+    session = get_or_create_session(request)
 
-    init_data: str = Field(..., alias="initData")
-
-    model_config = {"populate_by_name": True}
-
-
-class TelegramAuthResponse(BaseModel):
-    """Successful authentication response."""
-
-    success: bool = True
-    session_token: str
-    user: Dict[str, Any]
-    expires_in: int
-
-
-@router.post("/telegram", response_model=TelegramAuthResponse)
-async def telegram_login(payload: TelegramAuthPayload):
-    """Verify Telegram init data and issue a session token."""
-
-    user_data = verify_telegram_init_data(payload.init_data, BOT_TOKEN)
-    if not user_data:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid Telegram signature",
-        )
-
-    user_id = user_data.get("id")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing user identifier",
-        )
-
-    session_token = generate_session_token(
-        user_id=user_id,
-        username=user_data.get("username"),
-        ttl_seconds=86_400,
+    # Set session cookie
+    response.set_cookie(
+        key="session_id",
+        value=session["session_id"],
+        httponly=True,
+        max_age=86400,  # 24 hours
+        samesite="lax",
     )
 
-    return TelegramAuthResponse(
-        session_token=session_token,
-        user=user_data,
-        expires_in=86_400,
-    )
+    return {
+        "success": True,
+        "user_id": session["user_id"],
+        "username": session["username"],
+    }
 
 
-@router.get("/verify")
-async def verify_session(token: str):
-    """Verify if a session token is valid."""
-
-    session = verify_session_token(token)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session",
-        )
-
-    return {"valid": True, "user": session}
+@router.get("/me")
+async def get_current_user_info(request: Request):
+    """Get current user info."""
+    session = get_or_create_session(request)
+    return {"user_id": session["user_id"], "username": session["username"]}
