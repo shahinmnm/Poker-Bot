@@ -10,15 +10,13 @@ interface TelegramUser {
   photo_url?: string;
 }
 
-interface TelegramInitDataUnsafe {
-  user?: TelegramUser;
-}
-
 interface TelegramWebApp {
   ready: () => void;
   expand: () => void;
   initData?: string;
-  initDataUnsafe?: TelegramInitDataUnsafe;
+  initDataUnsafe?: {
+    user?: TelegramUser;
+  };
 }
 
 declare global {
@@ -32,6 +30,18 @@ declare global {
 type AuthStatus = "idle" | "loading" | "success" | "error";
 
 const AUTH_ENDPOINT = "https://poker.shahin8n.sbs/api/auth/telegram";
+
+interface AuthSuccessResponse {
+  success: true;
+  token: string;
+  user: TelegramUser;
+}
+
+interface AuthErrorResponse {
+  detail?: string;
+  message?: string;
+  error?: string;
+}
 
 const formatDisplayName = (user: TelegramUser) => {
   const name = [user.first_name, user.last_name].filter(Boolean).join(" ");
@@ -49,6 +59,7 @@ function App() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>("idle");
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -62,11 +73,11 @@ function App() {
     tg.ready();
     tg.expand();
 
-    const unsafeData = tg.initDataUnsafe;
+    const unsafeUser = tg.initDataUnsafe?.user;
     const initData = tg.initData ?? "";
 
-    if (unsafeData?.user) {
-      setTelegramUser(unsafeData.user);
+    if (unsafeUser) {
+      setTelegramUser(unsafeUser);
       setError(null);
     } else {
       setError("Telegram user information is not available.");
@@ -83,6 +94,7 @@ function App() {
       setAuthStatus("loading");
       setAuthMessage(null);
       setError(null);
+      setSessionToken(null);
 
       try {
         const response = await fetch(AUTH_ENDPOINT, {
@@ -90,38 +102,30 @@ function App() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ initData }),
+          body: JSON.stringify({
+            initData,
+            user: unsafeUser,
+          }),
         });
 
-        const rawPayload = await response.text();
-        let parsedMessage: string | null = null;
-
-        if (rawPayload) {
-          try {
-            const jsonPayload = JSON.parse(rawPayload);
-            if (typeof jsonPayload === "string") {
-              parsedMessage = jsonPayload;
-            } else if (typeof jsonPayload?.message === "string") {
-              parsedMessage = jsonPayload.message;
-            } else {
-              parsedMessage = JSON.stringify(jsonPayload, null, 2);
-            }
-          } catch (parseError) {
-            parsedMessage = rawPayload;
-          }
-        }
-
         if (!response.ok) {
-          throw new Error(
-            parsedMessage ??
-              `Request failed with status ${response.status}.`
-          );
+          const errorPayload = (await response
+            .json()
+            .catch(() => null)) as AuthErrorResponse | null;
+          const errorMessage =
+            errorPayload?.detail ||
+            errorPayload?.message ||
+            errorPayload?.error ||
+            `Request failed with status ${response.status}.`;
+          throw new Error(errorMessage);
         }
+
+        const json = (await response.json()) as AuthSuccessResponse;
 
         setAuthStatus("success");
-        setAuthMessage(
-          parsedMessage ?? "Telegram token verified successfully."
-        );
+        setAuthMessage("Telegram token verified successfully.");
+        setSessionToken(json.token);
+        setTelegramUser(json.user ?? unsafeUser ?? null);
         setError(null);
       } catch (fetchError) {
         const message =
@@ -130,6 +134,7 @@ function App() {
             : "An error occurred while contacting the server.";
         setAuthStatus("error");
         setAuthMessage(null);
+        setSessionToken(null);
         setError(message);
       }
     };
@@ -205,6 +210,11 @@ function App() {
         <p className={`status status--${authStatus}`}>{statusMessage}</p>
         {authMessage && authStatus === "success" && (
           <pre className="payload">{authMessage}</pre>
+        )}
+        {sessionToken && (
+          <p className="info">
+            Session token: <code>{sessionToken}</code>
+          </p>
         )}
         {error && <p className="error">{error}</p>}
       </section>
