@@ -1,18 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 import os
+import logging
 
-from app.routes import game, auth
+from app.routes import auth, game
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Poker WebApp API")
 
-# CORS configuration
+# CORS
 origins = os.getenv("CORS_ORIGINS", "https://poker.shahin8n.sbs").split(",")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -21,17 +20,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(game.router, prefix="/game", tags=["game"])
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+# Register routers
+app.include_router(auth.router, prefix="/api")
+app.include_router(game.router, prefix="/api")
 
 
 @app.on_event("startup")
-async def startup_event():
+async def startup():
     logger.info("🚀 Poker WebApp API starting...")
     logger.info(f"📍 CORS origins: {origins}")
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "poker-webapp-api"}

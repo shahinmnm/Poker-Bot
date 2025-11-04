@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class User(BaseModel):
     id: int
     username: Optional[str] = None
+    telegram_id: Optional[int] = None
 
 
 class TelegramAuthRequest(BaseModel):
