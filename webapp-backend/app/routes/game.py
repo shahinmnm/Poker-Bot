@@ -4,8 +4,8 @@ Game routes for WebApp - bridges with core poker engine.
 """
 
 import logging
-from typing import Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Depends, WebSocket, WebSocketDisconnect
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, HTTPException, Depends, Header, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 import redis.asyncio as aioredis
 
@@ -20,6 +20,22 @@ from app.utils.telegram import verify_session_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/game", tags=["game"])
+
+
+def get_authenticated_user(
+    authorization: Optional[str] = Header(default=None, convert_underscores=False)
+):
+    """Extract and validate the bearer token from the Authorization header."""
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    token = authorization.split(" ", 1)[1].strip()
+    session = verify_session_token(token)
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    return session
 
 # Redis connection (shared with main bot)
 redis_client = aioredis.from_url(
@@ -114,7 +130,7 @@ def serialize_game_state(game: Game) -> Dict:
 @router.get("/state/{game_id}")
 async def get_game_state(
     game_id: str,
-    user_id: int = Depends(verify_session_token)
+    session: Dict[str, Any] = Depends(get_authenticated_user)
 ) -> GameStateResponse:
     """
     Get current game state.
@@ -122,13 +138,13 @@ async def get_game_state(
     Requires valid session token from Telegram auth.
     """
     game = await get_game_from_redis(game_id)
-    
+
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    
+
     # Verify user is part of this game
     player_ids = [p.user_id for p in game.players]
-    if str(user_id) not in player_ids:
+    if str(session["user_id"]) not in player_ids:
         raise HTTPException(status_code=403, detail="Not a player in this game")
     
     return serialize_game_state(game)
@@ -136,7 +152,7 @@ async def get_game_state(
 @router.post("/join")
 async def join_game(
     request: JoinGameRequest,
-    user_id: int = Depends(verify_session_token)
+    session: Dict[str, Any] = Depends(get_authenticated_user)
 ) -> Dict:
     """
     Join an existing game or create new one.
@@ -145,6 +161,7 @@ async def join_game(
     """
     # Fetch player wallet balance from Redis
     kv = ensure_kv(redis_client)
+    user_id = session["user_id"]
     balance_key = f"wallet:{user_id}"
     balance = await kv.get(balance_key) or 0
     
@@ -181,7 +198,7 @@ async def join_game(
 async def player_action(
     game_id: str,
     action: PlayerActionRequest,
-    user_id: int = Depends(verify_session_token)
+    session: Dict[str, Any] = Depends(get_authenticated_user)
 ) -> Dict:
     """
     Execute player action (fold, call, raise, all-in).
@@ -197,6 +214,7 @@ async def player_action(
         raise HTTPException(status_code=400, detail="Game not in active betting round")
     
     # Find player
+    user_id = session["user_id"]
     player = next((p for p in game.players if str(p.user_id) == str(user_id)), None)
     
     if not player:
