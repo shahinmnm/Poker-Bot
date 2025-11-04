@@ -2,7 +2,7 @@ from fastapi import APIRouter, Response, Depends
 from app.dependencies import get_current_user, get_or_create_session, get_redis_client
 from app.models import User
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
 
 @router.post("/login")

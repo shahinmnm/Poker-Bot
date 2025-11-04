@@ -8,7 +8,7 @@ from datetime import datetime
 from app.dependencies import get_current_user, get_redis_client
 from app.models import User
 
-router = APIRouter(prefix="/game", tags=["game"])
+router = APIRouter(tags=["game"])
 
 
 # Request models
