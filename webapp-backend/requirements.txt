@@ -1,17 +1,24 @@
-# FastAPI Core
-fastapi==0.115.4
-uvicorn[standard]==0.32.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
+# FastAPI and web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
 python-multipart==0.0.6
+pydantic==2.5.0
 websockets==12.0
 
-# Redis & Storage
+# Storage
 redis==5.0.1
 
-# Telegram Bot (required by pokerapp/)
-python-telegram-bot==21.7
-httpx==0.28.1
+# Environment and configuration
+python-dotenv==1.0.0
 
-# Additional pokerapp dependencies
-aiofiles==24.1.0
+# Telegram Bot (REQUIRED for shared /pokerapp/ modules)
+python-telegram-bot[job-queue,webhooks]==21.9
+
+# HTTP client (compatible with python-telegram-bot 21.9)
+httpx>=0.27,<0.28
+
+# Async file operations (used by pokerapp)
+aiofiles==23.2.1
+
+# Image processing (used by pokerapp/cards.py)
+Pillow==10.1.0
