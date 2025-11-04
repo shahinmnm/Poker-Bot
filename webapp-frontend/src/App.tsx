@@ -29,7 +29,7 @@ declare global {
 
 type AuthStatus = "idle" | "loading" | "success" | "error";
 
-const AUTH_ENDPOINT = "https://poker.shahin8n.sbs/api/auth/telegram";
+const AUTH_ENDPOINT = "https://poker.shahin8n.sbs/auth/telegram";
 
 interface AuthSuccessResponse {
   success: true;
