@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
 type View = 'lobby' | 'game'
@@ -38,221 +38,208 @@ interface GameState {
 function App() {
   const [view, setView] = useState<View>('lobby')
   const [games, setGames] = useState<Game[]>([])
-  const [selectedGame, setSelectedGame] = useState<string | null>(null)
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [authenticated, setAuthenticated] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
   const [raiseAmount, setRaiseAmount] = useState<number>(0)
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const fetchGames = useCallback(
-    async (force = false) => {
-      if (!authenticated && !force) return
-
-      try {
-        const response = await fetch('/api/game/list', {
-          credentials: 'include'
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-
-        const data = await response.json()
-        setGames(data.games || [])
-        setError(null)
-      } catch (err: any) {
-        setError(`Failed to load games: ${err.message}`)
-        console.error('Fetch games error:', err)
-      }
-    },
-    [authenticated]
-  )
-
-  const fetchGameState = useCallback(async (gameId: string) => {
+  const loadGames = useCallback(async () => {
     try {
-      const response = await fetch(`/api/game/state/${gameId}`, {
+      const response = await fetch('/api/game/list', {
         credentials: 'include'
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setGameState(data)
-        setError(null)
-      } else if (response.status === 404) {
-        setError('Game not found')
-        setSelectedGame(null)
-        setView('lobby')
+      if (!response.ok) {
+        throw new Error(`Failed to load games: ${response.status}`)
       }
+
+      const data = await response.json()
+      const gameList = (Array.isArray(data) ? data : data.games || []) as Game[]
+      setGames(gameList)
+      setError(null)
     } catch (err) {
-      console.error('Fetch game state error:', err)
+      console.error('Failed to load games:', err)
+      setError('❌ Failed to load games')
     }
   }, [])
 
-  const initSession = useCallback(async () => {
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }
-      })
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }
+        })
 
-      if (response.ok) {
+        if (!response.ok) {
+          console.error('❌ Login failed:', response.status)
+          setError('🔒 Authentication failed. Please refresh.')
+          setAuthenticated(false)
+          return
+        }
+
         const data = await response.json()
+        console.log('✅ Session created:', data)
+        setCurrentUserId(data?.user_id ?? null)
         setAuthenticated(true)
-        setCurrentUserId(data.user_id ?? 1)
-        await fetchGames(true)
-      } else {
-        setError('Failed to initialize session')
+        await loadGames()
+      } catch (err) {
+        console.error('❌ Session init error:', err)
+        setError('🔒 Authentication failed. Please refresh.')
+        setAuthenticated(false)
+      } finally {
+        setLoading(false)
       }
-    } catch (err: any) {
-      setError(`Session error: ${err.message}`)
-    } finally {
-      setLoading(false)
     }
-  }, [fetchGames])
 
-  useEffect(() => {
     initSession()
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-    }
-  }, [initSession])
-
-  useEffect(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current)
-      pollingRef.current = null
-    }
-
-    if (selectedGame && authenticated && view === 'game') {
-      fetchGameState(selectedGame)
-
-      pollingRef.current = setInterval(() => {
-        fetchGameState(selectedGame)
-      }, 1500)
-    }
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-    }
-  }, [selectedGame, authenticated, view, fetchGameState])
-
-  const handleJoinGame = async (gameId: string) => {
-    try {
-      const response = await fetch('/api/game/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ game_id: gameId })
-      })
-
-      if (response.ok) {
-        setSelectedGame(gameId)
-        setView('game')
-      } else {
-        throw new Error(`Failed to join: HTTP ${response.status}`)
-      }
-    } catch (err: any) {
-      setError(err.message)
-    }
-  }
+  }, [loadGames])
 
   const handleCreateGame = async () => {
     try {
       const response = await fetch('/api/game/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ stake: '10/20', mode: 'group' })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'group',
+          buy_in: 100
+        })
       })
 
-      if (response.ok) {
-        await fetchGames()
-      } else {
-        throw new Error(`Failed to create: HTTP ${response.status}`)
-      }
-    } catch (err: any) {
-      setError(err.message)
+      if (!response.ok) throw new Error('Failed to create game')
+
+      await loadGames()
+    } catch (err) {
+      console.error('Failed to create game:', err)
+      setError('❌ Failed to create game')
+    }
+  }
+
+  const handleJoinGame = async (gameId: string) => {
+    try {
+      const response = await fetch('/api/game/join', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game_id: gameId })
+      })
+
+      if (!response.ok) throw new Error('Failed to join')
+
+      const state = await response.json()
+      setGameState(state)
+      setView('game')
+      setRaiseAmount(0)
+      setError(null)
+    } catch (err) {
+      console.error('Failed to join game:', err)
+      setError('❌ Failed to join game')
     }
   }
 
   const handleReady = async () => {
-    if (!selectedGame) return
+    if (!gameState) return
 
     try {
       const response = await fetch('/api/game/ready', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ game_id: selectedGame })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game_id: gameState.game_id })
       })
 
-      if (response.ok) {
-        await fetchGameState(selectedGame)
+      if (!response.ok) {
+        throw new Error(`Ready failed: ${response.status}`)
       }
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      console.error('Ready failed:', err)
     }
   }
 
-  const handleAction = async (action: string, amount?: number) => {
-    if (!selectedGame) return
+  const handleAction = async (action: string) => {
+    if (!gameState) return
+
+    if (action === 'raise' && raiseAmount < gameState.big_blind) {
+      setError(`❌ Raise must be at least ${gameState.big_blind}`)
+      return
+    }
+
+    setError(null)
 
     try {
       const response = await fetch('/api/game/action', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          game_id: selectedGame,
+          game_id: gameState.game_id,
           action,
-          amount
+          amount: action === 'raise' ? raiseAmount : undefined
         })
       })
 
-      if (response.ok) {
-        await fetchGameState(selectedGame)
-      } else {
-        const errorData = await response.json()
-        setError(errorData.detail || 'Action failed')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const message =
+          typeof errorData?.detail === 'string'
+            ? errorData.detail
+            : `Action failed: ${response.status}`
+        throw new Error(message)
       }
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      console.error('Action failed:', err)
+      const message = err instanceof Error ? err.message : 'Action failed'
+      setError(`❌ ${message}`)
     }
   }
 
   const handleLeaveGame = async () => {
-    if (!selectedGame) return
+    if (!gameState) return
+
+    const gameId = gameState.game_id
 
     try {
-      await fetch(`/api/game/leave/${selectedGame}`, {
+      await fetch(`/api/game/leave/${gameId}`, {
         method: 'POST',
         credentials: 'include'
       })
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      console.error('Failed to leave game:', err)
+      setError('❌ Failed to leave game')
     } finally {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-
       setView('lobby')
-      setSelectedGame(null)
       setGameState(null)
-      await fetchGames()
+      setRaiseAmount(0)
+      await loadGames()
     }
   }
+
+  const currentGameId = gameState?.game_id
+
+  useEffect(() => {
+    if (!currentGameId || view !== 'game') return
+
+    const poll = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/game/state/${currentGameId}`, {
+          credentials: 'include'
+        })
+
+        if (response.ok) {
+          const state = await response.json()
+          setGameState(state)
+        }
+      } catch (err) {
+        console.error('Poll failed:', err)
+      }
+    }, 1500)
+
+    return () => clearInterval(poll)
+  }, [currentGameId, view])
 
   const isMyTurn = () => {
     if (!gameState || currentUserId == null) return false
@@ -296,7 +283,7 @@ function App() {
     )
   }
 
-  if (view === 'game' && gameState && selectedGame) {
+  if (view === 'game' && gameState) {
     const currentPlayer = getCurrentPlayer()
     const myTurn = isMyTurn()
 
@@ -419,7 +406,7 @@ function App() {
                   max={currentPlayer?.chips ?? 0}
                 />
                 <button
-                  onClick={() => handleAction('raise', raiseAmount)}
+                  onClick={() => handleAction('raise')}
                   className="action-btn raise-btn"
                   disabled={raiseAmount < gameState.big_blind}
                 >
@@ -446,7 +433,7 @@ function App() {
       {error && <div className="error-banner">⚠️ {error}</div>}
 
       <div className="button-group">
-        <button onClick={() => fetchGames()} className="refresh-button">
+        <button onClick={() => loadGames()} className="refresh-button">
           🔄 Refresh
         </button>
         <button onClick={handleCreateGame} className="create-button">
