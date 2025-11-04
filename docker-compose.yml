@@ -2,14 +2,13 @@ version: "3.9"
 
 services:
   redis:
-    build:
-      context: ./docker/redis
-    image: "poker-bot-redis:7.0.2"
+    image: "redis:7.0.2"
     restart: always
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
+    command: "redis-server --save 60 1 --loglevel warning"
 
   bot:
     build: .
@@ -36,13 +35,19 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
       - WEBAPP_SECRET=${WEBAPP_SECRET}
       - TELEGRAM_BOT_TOKEN=${POKERBOT_TOKEN}
-      - CORS_ORIGINS=https://poker.shahin8n.sbs
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - PYTHONPATH=/app
+    volumes:
+      # 🔥 CRITICAL FIX: Share game core with webapp-api
+      - ./pokerapp:/app/pokerapp:ro
+      - ./translations:/app/translations:ro
     depends_on:
       - redis
+      - bot
 
   webapp-frontend:
     build:
@@ -51,6 +56,8 @@ services:
     restart: always
     ports:
       - "127.0.0.1:3000:80"
+    depends_on:
+      - webapp-api
 
 volumes:
   redis_data:
