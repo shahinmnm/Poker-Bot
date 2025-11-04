@@ -5,6 +5,11 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
+class User(BaseModel):
+    id: int
+    username: Optional[str] = None
+
+
 class TelegramAuthRequest(BaseModel):
     init_data: str
 

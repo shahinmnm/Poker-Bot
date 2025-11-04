@@ -5,6 +5,8 @@ import os
 import uuid
 import json
 
+from app.models import User
+
 # Redis client
 _redis_client: Optional[redis.Redis] = None
 
@@ -20,6 +22,11 @@ def get_redis() -> redis.Redis:
             decode_responses=True,
         )
     return _redis_client
+
+
+def get_redis_client() -> redis.Redis:
+    """Alias for dependency compatibility."""
+    return get_redis()
 
 
 # Session store in Redis
@@ -56,7 +63,7 @@ def get_or_create_session(request: Request) -> dict:
     return session
 
 
-async def get_current_user(request: Request) -> int:
-    """Extract user_id from session. Auto-creates session if missing."""
+async def get_current_user(request: Request) -> User:
+    """Extract current user information from the session."""
     session = get_or_create_session(request)
-    return session["user_id"]
+    return User(id=session["user_id"], username=session.get("username"))
