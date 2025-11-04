@@ -1,173 +1,609 @@
-#root {
-  width: min(720px, 100%);
-  margin: 0 auto;
-  padding: 2.5rem 1.5rem 3rem;
+:root {
+  --telegram-bg: var(--tg-theme-bg-color, #ffffff);
+  --telegram-text: var(--tg-theme-text-color, #000000);
+  --telegram-hint: var(--tg-theme-hint-color, #999999);
+  --telegram-button: var(--tg-theme-button-color, #3390ec);
+  --telegram-button-text: var(--tg-theme-button-text-color, #ffffff);
+
+  --color-success: #4caf50;
+  --color-danger: #f44336;
+  --color-warning: #ff9800;
+  --color-primary: #2196f3;
+
+  --card-red: #dc143c;
+  --card-black: #000000;
+  --table-green: #0d5f0d;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--telegram-bg);
+  color: var(--telegram-text);
 }
 
 .app {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
 }
 
-.app__header {
+.app-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1rem;
   text-align: center;
-  color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-.app__title {
-  font-size: 2.4rem;
-  margin: 0;
+.app-header h1 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
 }
 
-.subtitle {
-  margin: 0.5rem 0 0;
-  color: rgba(148, 163, 184, 0.85);
-  font-size: 1rem;
+.user-info {
+  font-size: 0.875rem;
+  opacity: 0.9;
 }
 
-.card {
-  background: rgba(22, 26, 36, 0.85);
-  border-radius: 1.25rem;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
-  padding: 1.75rem;
-  backdrop-filter: blur(18px);
-  color: rgba(226, 232, 240, 0.95);
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
 }
 
-.user-card {
+/* Game List */
+.game-list {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.game-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.game-count {
+  background: var(--telegram-button);
+  color: var(--telegram-button-text);
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.875rem;
+}
+
+.games-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.game-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.game-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.game-card-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.game-stake {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.game-time {
+  color: var(--telegram-hint);
+  font-size: 0.75rem;
+}
+
+.game-card-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.game-host,
+.game-players {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 0.5rem;
 }
 
-.user-card__avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid rgba(148, 163, 184, 0.4);
-  background: rgba(15, 23, 42, 0.6);
-  display: grid;
-  place-items: center;
-  font-size: 1.5rem;
+.join-button {
+  width: 100%;
+  background: var(--telegram-button);
+  color: var(--telegram-button-text);
+  border: none;
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.join-button:active {
+  opacity: 0.8;
+}
+
+/* Game Table */
+.game-table {
+  max-width: 800px;
+  margin: 0 auto;
+  background: var(--table-green);
+  border-radius: 20px;
+  padding: 1.5rem;
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  color: white;
+}
+
+.game-state-badge {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
   font-weight: 600;
 }
 
-.user-card__avatar--placeholder {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.user-card__details {
+.pot-display {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
 }
 
-.user-card__name {
-  margin: 0;
-  font-size: 1.5rem;
+.pot-amount {
+  font-weight: 700;
+  font-size: 1.125rem;
 }
 
-.user-card__username {
-  margin: 0;
-  color: rgba(148, 181, 255, 0.9);
-  font-weight: 500;
-}
-
-.user-card__meta {
-  margin: 0;
+/* Players List */
+.players-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 0.5rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
 }
 
-.user-card__meta div {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
+.player-seat {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.75rem;
+  color: white;
+  position: relative;
+  transition: all 0.3s;
 }
 
-.user-card__meta dt {
+.player-seat.current-turn {
+  background: rgba(255, 215, 0, 0.3);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+}
+
+.player-seat.folded {
+  opacity: 0.5;
+}
+
+.player-avatar {
+  position: relative;
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.turn-indicator {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 1rem;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+.player-info {
+  text-align: center;
+}
+
+.player-name {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.player-stack {
+  font-size: 0.875rem;
+  opacity: 0.9;
+}
+
+.player-bet {
+  text-align: center;
+  margin-top: 0.5rem;
+  background: rgba(255, 215, 0, 0.3);
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
   font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: 0.65;
 }
 
-.user-card__meta dd {
-  margin: 0;
-  font-weight: 600;
-}
-
-.status-card {
+.player-cards {
+  margin-top: 0.5rem;
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.mini-card {
+  font-size: 1.25rem;
+}
+
+/* Community Cards */
+.community-cards {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.cards-container {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.card-slot {
+  width: 60px;
+  height: 84px;
+}
+
+.card-placeholder {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+}
+
+/* Playing Card */
+.playing-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  transition: transform 0.2s;
+}
+
+.playing-card.small {
+  width: 40px;
+  height: 56px;
+  font-size: 1.25rem;
+}
+
+.playing-card.medium {
+  width: 60px;
+  height: 84px;
+  font-size: 1.75rem;
+}
+
+.playing-card.large {
+  width: 70px;
+  height: 98px;
+  font-size: 2rem;
+}
+
+.playing-card.xlarge {
+  width: 90px;
+  height: 126px;
+  font-size: 2.5rem;
+}
+
+.playing-card.red {
+  color: var(--card-red);
+}
+
+.playing-card.black {
+  color: var(--card-black);
+}
+
+/* Player Hand */
+.player-hand {
+  margin-top: auto;
+  text-align: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+}
+
+.hand-label {
+  color: white;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.hand-cards {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.card-back {
+  display: inline-block;
+  font-size: 4rem;
+  opacity: 0.7;
+}
+
+/* Betting Controls */
+.betting-controls {
+  margin-top: 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 0.75rem;
 }
 
-.status {
-  margin: 0;
+.btn {
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 8px;
   font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+  font-size: 0.875rem;
 }
 
-.status--idle {
-  color: rgba(148, 163, 184, 0.85);
+.btn:active {
+  transform: scale(0.95);
 }
 
-.status--loading {
-  color: #f5a524;
+.btn-primary {
+  background: var(--color-primary);
+  color: white;
 }
 
-.status--success {
-  color: #22c55e;
+.btn-secondary {
+  background: #9e9e9e;
+  color: white;
 }
 
-.status--error {
-  color: #f87171;
+.btn-success {
+  background: var(--color-success);
+  color: white;
 }
 
-.payload {
-  margin: 0;
+.btn-danger {
+  background: var(--color-danger);
+  color: white;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Bet Slider */
+.bet-slider-container {
   padding: 1rem;
-  border-radius: 1rem;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(30, 41, 59, 0.7);
-  color: rgba(226, 232, 240, 0.95);
-  font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular,
-    Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.85rem;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
-.error {
-  margin: 0;
-  color: #fda4af;
-  font-weight: 500;
+.bet-amount-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
 }
 
-.info {
-  margin: 0;
-  color: rgba(148, 163, 184, 0.85);
+.bet-value {
+  font-weight: 700;
+  color: var(--color-success);
 }
 
-@media (max-width: 540px) {
-  #root {
-    padding: 1.75rem 1rem 2.5rem;
+.bet-slider {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: #ddd;
+  outline: none;
+  margin-bottom: 1rem;
+}
+
+.bet-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-success);
+  cursor: pointer;
+}
+
+.quick-bet-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.quick-bet-btn {
+  flex: 1;
+  padding: 0.5rem;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+}
+
+.quick-bet-btn:active {
+  background: #e0e0e0;
+}
+
+.slider-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.slider-actions .btn {
+  flex: 1;
+}
+
+/* Waiting Indicator */
+.waiting-indicator {
+  margin-top: 1rem;
+  text-align: center;
+  color: white;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.waiting-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Loading */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 1rem;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-top-color: var(--telegram-button);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loading-message {
+  color: var(--telegram-hint);
+  font-size: 0.875rem;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--telegram-hint);
+}
+
+.empty-state p:first-child {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.empty-hint {
+  font-size: 0.875rem;
+}
+
+/* Error */
+.error-message,
+.auth-error {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-danger);
+}
+
+.auth-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .app-main {
+    padding: 0.5rem;
   }
 
-  .card {
-    padding: 1.5rem;
+  .game-table {
+    padding: 1rem;
   }
 
-  .user-card {
-    align-items: flex-start;
+  .players-list {
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .user-card__avatar {
-    width: 60px;
-    height: 60px;
+  .playing-card.xlarge {
+    width: 70px;
+    height: 98px;
+    font-size: 2rem;
   }
 }
