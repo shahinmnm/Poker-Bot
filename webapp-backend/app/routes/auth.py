@@ -12,7 +12,9 @@ from app.utils import (
     verify_telegram_init_data,
 )
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+# Routes live directly under /auth so that the backend aligns with the
+# Telegram WebApp's expected endpoints (frontend already calls /auth/*).
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 BOT_TOKEN = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
 if not BOT_TOKEN:
