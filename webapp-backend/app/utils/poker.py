@@ -1,217 +1,178 @@
-from __future__ import annotations
-
 import random
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Any, Optional
 
 SUITS = ["♠", "♥", "♦", "♣"]
 RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
 
-
 def create_deck() -> List[str]:
-    """Create a shuffled deck of cards."""
+    """Create shuffled deck"""
     deck = [f"{rank}{suit}" for suit in SUITS for rank in RANKS]
     random.shuffle(deck)
     return deck
 
-
 def deal_cards(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Deal two hole cards to each player and post blinds."""
-    players = state.get("players", [])
-    if not players:
-        return state
-
+    """Deal hole cards and post blinds"""
     deck = create_deck()
-
-    for player in players:
+    
+    for player in state["players"]:
         player["cards"] = [deck.pop(), deck.pop()]
         player["current_bet"] = 0
         player["folded"] = False
-        player.setdefault("status", "active")
-
+    
     state["deck"] = deck
     state["community_cards"] = []
-    state.setdefault("pot", 0)
-
-    player_count = len(players)
-    dealer_idx = state.get("dealer_index", 0) % player_count
-
+    
+    # Post blinds
+    player_count = len(state["players"])
+    dealer_idx = state["dealer_index"]
+    
     sb_idx = (dealer_idx + 1) % player_count
     bb_idx = (dealer_idx + 2) % player_count
-
-    small_blind = int(state.get("small_blind", 0))
-    big_blind = int(state.get("big_blind", 0))
-
-    players[sb_idx]["chips"] -= small_blind
-    players[sb_idx]["current_bet"] = small_blind
-    state["pot"] += small_blind
-
-    players[bb_idx]["chips"] -= big_blind
-    players[bb_idx]["current_bet"] = big_blind
-    state["pot"] += big_blind
-
-    state["current_bet"] = big_blind
+    
+    state["players"][sb_idx]["chips"] -= state["small_blind"]
+    state["players"][sb_idx]["current_bet"] = state["small_blind"]
+    state["pot"] += state["small_blind"]
+    
+    state["players"][bb_idx]["chips"] -= state["big_blind"]
+    state["players"][bb_idx]["current_bet"] = state["big_blind"]
+    state["pot"] += state["big_blind"]
+    
+    state["current_bet"] = state["big_blind"]
     state["last_raiser"] = bb_idx
-
+    
     return state
 
-
-def process_action(state: Dict[str, Any], action: str, amount: Optional[int] = None) -> Dict[str, Any]:
-    """Process a player action such as fold, call, raise, etc."""
-    players = state.get("players", [])
-    if not players:
-        raise ValueError("No players in game")
-
-    current_idx = state.get("current_turn", -1)
-    if current_idx < 0 or current_idx >= len(players):
-        raise ValueError("Invalid turn index")
-
-    player = players[current_idx]
-
+def process_action(
+    state: Dict[str, Any],
+    action: str,
+    amount: Optional[int] = None
+) -> Dict[str, Any]:
+    """Process player action"""
+    current_idx = state["current_turn"]
+    player = state["players"][current_idx]
+    
     if action == "fold":
         player["folded"] = True
         player["status"] = "folded"
-
+        
     elif action == "check":
-        if player.get("current_bet", 0) < state.get("current_bet", 0):
-            raise ValueError("Cannot check - must call or raise")
-
+        if player["current_bet"] < state.get("current_bet", 0):
+            raise ValueError("Cannot check")
+            
     elif action == "call":
-        call_amount = state.get("current_bet", 0) - player.get("current_bet", 0)
-        actual_call = min(call_amount, player.get("chips", 0))
-
-        player["chips"] -= actual_call
-        player["current_bet"] = player.get("current_bet", 0) + actual_call
-        state["pot"] = state.get("pot", 0) + actual_call
-
+        call_amt = state["current_bet"] - player["current_bet"]
+        actual = min(call_amt, player["chips"])
+        
+        player["chips"] -= actual
+        player["current_bet"] += actual
+        state["pot"] += actual
+        
     elif action == "raise":
-        if amount is None:
+        if not amount:
             raise ValueError("Raise amount required")
-
-        call_amount = state.get("current_bet", 0) - player.get("current_bet", 0)
-        total_bet = call_amount + amount
-
-        if player.get("chips", 0) < total_bet:
+            
+        call_amt = state["current_bet"] - player["current_bet"]
+        total = call_amt + amount
+        
+        if player["chips"] < total:
             raise ValueError("Insufficient chips")
-
-        player["chips"] -= total_bet
-        player["current_bet"] = player.get("current_bet", 0) + total_bet
-        state["pot"] = state.get("pot", 0) + total_bet
+        
+        player["chips"] -= total
+        player["current_bet"] += total
+        state["pot"] += total
         state["current_bet"] = player["current_bet"]
         state["last_raiser"] = current_idx
-
+        
     elif action == "all_in":
-        all_in_amount = player.get("chips", 0)
+        all_in_amt = player["chips"]
         player["chips"] = 0
-        player["current_bet"] = player.get("current_bet", 0) + all_in_amount
-        state["pot"] = state.get("pot", 0) + all_in_amount
+        player["current_bet"] += all_in_amt
+        state["pot"] += all_in_amt
         player["status"] = "all_in"
-
-        if player["current_bet"] > state.get("current_bet", 0):
+        
+        if player["current_bet"] > state["current_bet"]:
             state["current_bet"] = player["current_bet"]
             state["last_raiser"] = current_idx
-
-    else:
-        raise ValueError("Unknown action")
-
+    
     state = advance_turn(state)
     return state
 
-
 def advance_turn(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Advance the action to the next player."""
-    players = state.get("players", [])
-    player_count = len(players)
-
-    if player_count == 0:
-        state["current_turn"] = -1
-        return state
-
-    next_idx = (state.get("current_turn", -1) + 1) % player_count
-
+    """Move to next player"""
+    player_count = len(state["players"])
+    next_idx = (state["current_turn"] + 1) % player_count
+    
     attempts = 0
-    while players[next_idx].get("folded") and attempts < player_count:
+    while state["players"][next_idx]["folded"] and attempts < player_count:
         next_idx = (next_idx + 1) % player_count
         attempts += 1
-
+    
     state["current_turn"] = next_idx
-
+    
     if check_round_complete(state):
         state = advance_street(state)
-
+    
     return state
-
 
 def check_round_complete(state: Dict[str, Any]) -> bool:
-    """Determine if the betting round has finished."""
-    players = state.get("players", [])
-    active_players = [player for player in players if not player.get("folded")]
-
-    if len(active_players) <= 1:
+    """Check if betting round complete"""
+    active = [p for p in state["players"] if not p["folded"]]
+    
+    if len(active) <= 1:
         return True
-
+    
     current_bet = state.get("current_bet", 0)
-    last_raiser = state.get("last_raiser", -1)
-
     all_matched = all(
-        player.get("current_bet", 0) == current_bet or player.get("chips", 0) == 0
-        for player in active_players
+        p["current_bet"] == current_bet or p["chips"] == 0
+        for p in active
     )
-
-    return all_matched and state.get("current_turn") == last_raiser
-
+    
+    return all_matched
 
 def advance_street(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Advance the game to the next betting street."""
-    players = state.get("players", [])
-
-    for player in players:
+    """Move to next street"""
+    for player in state["players"]:
         player["current_bet"] = 0
-
+    
     state["current_bet"] = 0
-
-    if state.get("phase") == "pre_flop":
-        state["community_cards"] = [state["deck"].pop() for _ in range(3)]
+    
+    if state["phase"] == "pre_flop":
+        state["community_cards"] = [
+            state["deck"].pop(),
+            state["deck"].pop(),
+            state["deck"].pop()
+        ]
         state["phase"] = "flop"
-
-    elif state.get("phase") == "flop":
+        
+    elif state["phase"] == "flop":
         state["community_cards"].append(state["deck"].pop())
         state["phase"] = "turn"
-
-    elif state.get("phase") == "turn":
+        
+    elif state["phase"] == "turn":
         state["community_cards"].append(state["deck"].pop())
         state["phase"] = "river"
-
-    elif state.get("phase") == "river":
+        
+    elif state["phase"] == "river":
         state["phase"] = "showdown"
         state = determine_winner(state)
-
-    dealer_idx = state.get("dealer_index", 0)
-    player_count = len(players)
-    if player_count > 0:
-        state["current_turn"] = (dealer_idx + 1) % player_count
-    else:
-        state["current_turn"] = -1
-
+    
+    dealer_idx = state["dealer_index"]
+    state["current_turn"] = (dealer_idx + 1) % len(state["players"])
+    
     return state
 
-
 def determine_winner(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Pick a winner and distribute the pot. Simplified for now."""
-    active_players = [player for player in state.get("players", []) if not player.get("folded")]
-
-    if len(active_players) == 1:
-        winner = active_players[0]
-    elif active_players:
-        winner = random.choice(active_players)
+    """Determine winner"""
+    active = [p for p in state["players"] if not p["folded"]]
+    
+    if len(active) == 1:
+        winner = active[0]
     else:
-        state["winner_id"] = None
-        state["pot"] = 0
-        state["phase"] = "finished"
-        return state
-
-    winner["chips"] = winner.get("chips", 0) + state.get("pot", 0)
-    state["winner_id"] = winner.get("id")
+        winner = random.choice(active)
+    
+    winner["chips"] += state["pot"]
+    state["winner_id"] = winner["id"]
     state["pot"] = 0
     state["phase"] = "finished"
-
+    
     return state

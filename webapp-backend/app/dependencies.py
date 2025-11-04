@@ -1,69 +1,112 @@
-from fastapi import Request
-from typing import Optional
-import redis
+import json
 import os
 import uuid
-import json
+from typing import Optional, Tuple
+
+import redis.asyncio as redis
+from fastapi import HTTPException, Request, Response
 
 from app.models import User
 
-# Redis client
-_redis_client: Optional[redis.Redis] = None
+RedisClient = redis.Redis
+
+_session_client: Optional[RedisClient] = None
+SESSION_COOKIE_NAME = "session_id"
+SESSION_PREFIX = "session:"
+SESSION_TTL = int(os.getenv("SESSION_TTL", "86400"))
 
 
-def get_redis() -> redis.Redis:
-    """Get Redis client singleton."""
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = redis.Redis(
+def _generate_username(user_id: int) -> str:
+    return f"Player{user_id}"
+
+
+async def get_redis_client() -> RedisClient:
+    """Return a singleton Redis client instance."""
+    global _session_client
+    if _session_client is None:
+        _session_client = redis.Redis(
             host=os.getenv("REDIS_HOST", "redis"),
             port=int(os.getenv("REDIS_PORT", 6379)),
-            db=0,
-            decode_responses=True,
+            db=int(os.getenv("REDIS_DB", 0)),
+            decode_responses=False,
         )
-    return _redis_client
+    return _session_client
 
 
-def get_redis_client() -> redis.Redis:
-    """Alias for dependency compatibility."""
-    return get_redis()
+async def get_or_create_session(
+    response: Response,
+    redis_client: RedisClient,
+    request: Optional[Request] = None,
+) -> Tuple[str, User]:
+    """Retrieve existing session or create a new one."""
+    session_id: Optional[str] = None
 
-
-# Session store in Redis
-def get_or_create_session(request: Request) -> dict:
-    """Get or create user session - permissive mode."""
-    redis_client = get_redis()
-
-    # Try to get session from cookie
-    session_id = request.cookies.get("session_id")
+    if request:
+        session_id = request.cookies.get(SESSION_COOKIE_NAME)
 
     if session_id:
-        # Try to load existing session
-        session_key = f"session:{session_id}"
-        session_data = redis_client.get(session_key)
+        session_key = f"{SESSION_PREFIX}{session_id}"
+        existing = await redis_client.get(session_key)
+        if existing:
+            data = json.loads(existing)
+            user = User(
+                id=data["user_id"],
+                username=data.get("username"),
+                telegram_id=data.get("telegram_id"),
+            )
+            await redis_client.expire(session_key, SESSION_TTL)
+            response.set_cookie(
+                key=SESSION_COOKIE_NAME,
+                value=session_id,
+                max_age=SESSION_TTL,
+                httponly=True,
+                samesite="lax",
+            )
+            return session_id, user
 
-        if session_data:
-            return json.loads(session_data)
-
-    # Create new session (auto-login for demo)
     session_id = str(uuid.uuid4())
-    user_id = abs(hash(session_id)) % 1_000_000  # Generate consistent user_id
+    user_id = uuid.uuid4().int % 1_000_000_000
+    user = User(id=user_id, username=_generate_username(user_id), telegram_id=None)
 
-    session = {
-        "session_id": session_id,
-        "user_id": user_id,
-        "username": f"Player{user_id}",
-        "created_at": str(uuid.uuid4()),
+    session_data = {
+        "user_id": user.id,
+        "username": user.username,
+        "telegram_id": user.telegram_id,
     }
 
-    # Store in Redis with 24h expiry
-    session_key = f"session:{session_id}"
-    redis_client.setex(session_key, 86400, json.dumps(session))
+    session_key = f"{SESSION_PREFIX}{session_id}"
+    await redis_client.set(session_key, json.dumps(session_data), ex=SESSION_TTL)
 
-    return session
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_id,
+        max_age=SESSION_TTL,
+        httponly=True,
+        samesite="lax",
+    )
+
+    return session_id, user
 
 
 async def get_current_user(request: Request) -> User:
-    """Extract current user information from the session."""
-    session = get_or_create_session(request)
-    return User(id=session["user_id"], username=session.get("username"))
+    """Fetch the current user from the session cookie."""
+    redis_client = await get_redis_client()
+    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    session_key = f"{SESSION_PREFIX}{session_id}"
+    session_data = await redis_client.get(session_key)
+
+    if not session_data:
+        raise HTTPException(status_code=401, detail="Session expired")
+
+    data = json.loads(session_data)
+    user = User(
+        id=data["user_id"],
+        username=data.get("username"),
+        telegram_id=data.get("telegram_id"),
+    )
+
+    return user
