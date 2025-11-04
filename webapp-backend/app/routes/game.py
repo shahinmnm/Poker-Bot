@@ -19,7 +19,7 @@ from pokerapp.winnerdetermination import WinnerDetermination
 from app.utils.telegram import verify_session_token
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/game", tags=["game"])
+router = APIRouter(prefix="/game", tags=["game"])
 
 
 def get_authenticated_user(
