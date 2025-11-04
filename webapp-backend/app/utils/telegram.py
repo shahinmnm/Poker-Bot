@@ -5,10 +5,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import time
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl
+
+import redis
 
 
 def verify_telegram_init_data(
@@ -55,7 +58,20 @@ def verify_telegram_init_data(
 
 
 # Session token storage (Redis-backed in production)
-_session_store: Dict[str, Dict[str, Any]] = {}
+_redis_client: Optional[redis.Redis] = None
+
+
+def get_redis_client() -> redis.Redis:
+    """Get or create Redis client for session storage."""
+
+    global _redis_client
+
+    if _redis_client is None:
+        host = os.getenv("REDIS_HOST", "redis")
+        port = int(os.getenv("REDIS_PORT", "6379"))
+        _redis_client = redis.Redis(host=host, port=port, decode_responses=True)
+
+    return _redis_client
 
 
 def generate_session_token(
@@ -66,14 +82,18 @@ def generate_session_token(
     """Generate a secure session token for an authenticated user."""
 
     token = secrets.token_urlsafe(32)
-    now = time.time()
 
-    _session_store[token] = {
+    # Sessions are persisted for one hour in Redis regardless of the provided TTL
+    ttl_seconds = 3600
+
+    session_data = {
         "user_id": user_id,
         "username": username,
-        "created_at": now,
-        "expires_at": now + ttl_seconds,
+        "created_at": int(time.time()),
     }
+
+    client = get_redis_client()
+    client.setex(f"session:{token}", ttl_seconds, json.dumps(session_data))
 
     return token
 
@@ -84,12 +104,19 @@ def verify_session_token(token: str) -> Optional[Dict[str, Any]]:
     if not token:
         return None
 
-    session = _session_store.get(token)
-    if not session:
+    client = get_redis_client()
+
+    try:
+        raw_session = client.get(f"session:{token}")
+    except redis.RedisError:
         return None
 
-    if time.time() > session["expires_at"]:
-        del _session_store[token]
+    if not raw_session:
+        return None
+
+    try:
+        session = json.loads(raw_session)
+    except json.JSONDecodeError:
         return None
 
     return {
