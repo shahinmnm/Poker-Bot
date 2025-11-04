@@ -8,13 +8,26 @@ from datetime import datetime
 from app.dependencies import get_current_user, get_redis_client
 from app.models import User
 
+
+STAKE_LEVEL_PRESETS = {
+    "micro": {"stake": "5/10", "small_blind": 5, "big_blind": 10},
+    "low": {"stake": "10/20", "small_blind": 10, "big_blind": 20},
+    "medium": {"stake": "25/50", "small_blind": 25, "big_blind": 50},
+    "high": {"stake": "50/100", "small_blind": 50, "big_blind": 100},
+    "premium": {"stake": "100/200", "small_blind": 100, "big_blind": 200},
+}
+
+DEFAULT_STAKE_LEVEL = "micro"
+
 router = APIRouter(tags=["game"])
 
 
 # Request models
 class CreateGameRequest(BaseModel):
-    stake: str
+    stake: Optional[str] = None
+    stake_level: Optional[str] = None
     mode: str = "group"
+    buy_in: Optional[int] = None
     
 
 class JoinGameRequest(BaseModel):
@@ -90,14 +103,44 @@ async def create_game(
     """Create a new game"""
     try:
         game_id = str(uuid.uuid4())
-        
+
+        stake_level = (request.stake_level or "").lower() or None
+        stake_value = request.stake
+
+        if stake_level:
+            preset = STAKE_LEVEL_PRESETS.get(stake_level)
+            if not preset:
+                raise HTTPException(status_code=400, detail="Invalid stake level selected")
+
+            stake_value = preset["stake"]
+            small_blind = preset["small_blind"]
+            big_blind = preset["big_blind"]
+        else:
+            if not stake_value:
+                preset = STAKE_LEVEL_PRESETS[DEFAULT_STAKE_LEVEL]
+                stake_level = DEFAULT_STAKE_LEVEL
+                stake_value = preset["stake"]
+                small_blind = preset["small_blind"]
+                big_blind = preset["big_blind"]
+            else:
+                try:
+                    small_str, big_str = [part.strip() for part in stake_value.split("/")]
+                    small_blind = int(small_str)
+                    big_blind = int(big_str)
+                except (ValueError, AttributeError):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Invalid stake format. Expected 'small/big'."
+                    )
+
         # Store metadata
         meta = {
-            "stake": request.stake,
+            "stake": stake_value,
             "mode": request.mode,
             "status": "waiting",
             "creator_id": user.id,
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
+            "stake_level": stake_level
         }
         
         await redis.set(
@@ -107,7 +150,6 @@ async def create_game(
         )
         
         # Initialize state
-        blinds = request.stake.split("/")
         initial_state = {
             "game_id": game_id,
             "players": [],
@@ -116,8 +158,8 @@ async def create_game(
             "current_turn": -1,
             "phase": "waiting",
             "dealer_index": 0,
-            "small_blind": int(blinds[0]),
-            "big_blind": int(blinds[1]),
+            "small_blind": small_blind,
+            "big_blind": big_blind,
             "ready_players": [],
             "current_bet": 0
         }
