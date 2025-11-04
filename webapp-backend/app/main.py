@@ -56,7 +56,7 @@ app.include_router(game.router, prefix="/api/game", tags=["Game"])
 
 # Include routers WITHOUT prefix (LEGACY COMPATIBILITY)
 app.include_router(auth.router, tags=["Authentication (Legacy)"])
-app.include_router(game.router, tags=["Game (Legacy)"])
+app.include_router(game.router, prefix="/game", tags=["Game (Legacy)"])
 
 # Health check endpoints
 @app.get("/health")
