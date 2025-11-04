@@ -8,9 +8,10 @@ import Loading from '../UI/Loading';
 interface GameListProps {
   sessionToken: string;
   onSelectGame: (gameId: string) => void;
+  refreshToken?: number;
 }
 
-const GameList: React.FC<GameListProps> = ({ sessionToken, onSelectGame }) => {
+const GameList: React.FC<GameListProps> = ({ sessionToken, onSelectGame, refreshToken = 0 }) => {
   const [games, setGames] = useState<GameListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +22,8 @@ const GameList: React.FC<GameListProps> = ({ sessionToken, onSelectGame }) => {
       try {
         setLoading(true);
         const response = await getGameList(sessionToken);
-        setGames(response.games);
+        setGames(response);
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load games');
       } finally {
@@ -32,7 +34,7 @@ const GameList: React.FC<GameListProps> = ({ sessionToken, onSelectGame }) => {
     fetchGames();
     const interval = setInterval(fetchGames, 5_000);
     return () => clearInterval(interval);
-  }, [sessionToken]);
+  }, [sessionToken, refreshToken]);
 
   const handleSelectGame = (gameId: string) => {
     hapticFeedback('light');
@@ -54,7 +56,7 @@ const GameList: React.FC<GameListProps> = ({ sessionToken, onSelectGame }) => {
       {games.length === 0 ? (
         <div className="empty-state">
           <p>🃏 No games available</p>
-          <p className="empty-hint">Start a new game from the Telegram bot!</p>
+          <p className="empty-hint">Start a new game from Telegram or using the form below.</p>
         </div>
       ) : (
         <div className="games-grid">

@@ -4,6 +4,8 @@ Game coordinator - orchestrates engine and betting logic.
 Bridges pure game logic with Telegram bot operations.
 """
 
+import datetime
+import json
 import logging
 from typing import Optional, Tuple, Union
 
@@ -19,6 +21,7 @@ from pokerapp.entities import (
 from pokerapp.notify_utils import LoggerHelper
 from pokerapp.i18n import translation_manager
 from pokerapp.winnerdetermination import WinnerDetermination
+from pokerapp.kvstore import ensure_kv
 
 logger = logging.getLogger(__name__)
 log_helper = LoggerHelper.for_logger(logger)
@@ -30,12 +33,13 @@ class GameCoordinator:
     Replaces complex logic in pokerbotmodel.py
     """
 
-    def __init__(self, view=None):
+    def __init__(self, view=None, kv=None):
         self.engine = PokerEngine()
         self.pot_calculator = SidePotCalculator()
         self.winner_determine = WinnerDetermination()
         self._view = view  # Optional PokerBotViewer for UI updates
         self._chat_id: Optional[int] = None
+        self._kv = ensure_kv(kv) if kv is not None else None
 
     async def _send_or_update_game_state(
         self,
@@ -328,6 +332,61 @@ class GameCoordinator:
         )
 
         return winners_results
+
+    async def register_webapp_game(
+        self, game_id: str, chat_id: int, game: "Game"
+    ) -> None:
+        """Register a game snapshot for discovery by the web frontend."""
+
+        if self._kv is None:
+            logger.debug(
+                "Skipping webapp game registration – no KV backend configured",
+                extra={"game_id": game_id},
+            )
+            return
+
+        stake_config = getattr(game, "stake_config", None)
+        small_blind = getattr(stake_config, "small_blind", None)
+        big_blind = getattr(stake_config, "big_blind", None)
+
+        if small_blind is None:
+            small_blind = getattr(game, "table_stake", 10) or 10
+        if big_blind is None:
+            big_blind = small_blind * 2
+
+        payload = {
+            "game_id": str(game_id),
+            "chat_id": str(chat_id),
+            "mode": getattr(game.mode, "value", str(getattr(game, "mode", "unknown"))),
+            "state": getattr(game.state, "name", "UNKNOWN"),
+            "pot": str(getattr(game, "pot", 0)),
+            "players_count": len(getattr(game, "players", [])),
+            "small_blind": str(small_blind),
+            "big_blind": str(big_blind),
+            "max_players": 8,
+            "created_at": datetime.datetime.utcnow().isoformat(),
+        }
+
+        stake_level = getattr(stake_config, "name", None)
+        if stake_level:
+            payload["stake_level"] = stake_level
+
+        players = getattr(game, "players", [])
+        if players:
+            host_id = getattr(players[0], "user_id", None)
+            if host_id is not None:
+                payload["host"] = str(host_id)
+
+        try:
+            key = f"game:{game_id}:meta"
+            self._kv.set(key, json.dumps(payload), ex=86400)
+            logger.info("Registered game %s for webapp visibility", game_id)
+        except Exception as exc:  # pragma: no cover - Redis failures
+            logger.error(
+                "Failed to register game %s for webapp visibility: %s",
+                game_id,
+                exc,
+            )
 
     def _move_bets_to_pot(self, game: Game) -> None:
         """Move all round bets to main pot (replaces RoundRateModel.to_pot)"""

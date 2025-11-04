@@ -22,6 +22,12 @@ class GameListResponse(BaseModel):
     small_blind: int
     big_blind: int
     status: str
+    mode: str
+    pot: int
+    stake_level: Optional[str] = None
+    created_at: Optional[str] = None
+    chat_id: Optional[str] = None
+    host: Optional[str] = None
 
 
 class PlayerInfo(BaseModel):

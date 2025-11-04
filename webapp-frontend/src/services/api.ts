@@ -45,7 +45,7 @@ export const authenticateWithTelegram = async (initData: string): Promise<AuthRe
 };
 
 // Game endpoints
-export const getGameList = async (token: string): Promise<{ games: GameListItem[]; total: number }> => {
+export const getGameList = async (token: string): Promise<GameListItem[]> => {
   return fetchApi('/game/list', {}, token);
 };
 
@@ -81,6 +81,26 @@ export const leaveGame = async (gameId: string, token: string): Promise<{ succes
     {
       method: 'POST',
       body: JSON.stringify({ game_id: gameId }),
+    },
+    token
+  );
+};
+
+interface CreateGameResponse {
+  game_id: string;
+  status: string;
+}
+
+export const createGame = async (
+  stakeLevel: string,
+  token: string,
+  mode: string = 'private'
+): Promise<CreateGameResponse> => {
+  return fetchApi(
+    '/game/create',
+    {
+      method: 'POST',
+      body: JSON.stringify({ stake_level: stakeLevel, mode }),
     },
     token
   );

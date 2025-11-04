@@ -4,6 +4,7 @@ import { useGame } from './hooks/useGame';
 import { useTelegram } from './hooks/useTelegram';
 import GameList from './components/Game/GameList';
 import GameTable from './components/Game/GameTable';
+import CreateGame from './components/Game/CreateGame';
 import Loading from './components/UI/Loading';
 import { joinGame } from './services/api';
 import './App.css';
@@ -12,6 +13,7 @@ function App() {
   const { isAuthenticated, sessionToken, loading: authLoading } = useAuth();
   const { user, hapticFeedback, showBackButton, hideBackButton } = useTelegram();
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
+  const [listRefreshToken, setListRefreshToken] = useState(0);
   const { gameState, loading: gameLoading, executeAction } = useGame(currentGameId, sessionToken);
 
   const handleSelectGame = async (gameId: string) => {
@@ -48,6 +50,10 @@ function App() {
     }
   };
 
+  const handleGameCreated = () => {
+    setListRefreshToken((value) => value + 1);
+  };
+
   if (authLoading) {
     return <Loading message="Authenticating..." />;
   }
@@ -70,7 +76,14 @@ function App() {
 
       <main className="app-main">
         {!currentGameId ? (
-          <GameList sessionToken={sessionToken!} onSelectGame={handleSelectGame} />
+          <>
+            <CreateGame sessionToken={sessionToken!} onCreated={handleGameCreated} />
+            <GameList
+              sessionToken={sessionToken!}
+              onSelectGame={handleSelectGame}
+              refreshToken={listRefreshToken}
+            />
+          </>
         ) : gameState ? (
           <GameTable gameState={gameState} onAction={handleGameAction} />
         ) : (
