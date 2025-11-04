@@ -79,12 +79,15 @@ def generate_session_token(
     username: Optional[str] = None,
     ttl_seconds: int = 86_400,
 ) -> str:
-    """Generate a secure session token for an authenticated user."""
+    """Generate a secure session token for an authenticated user.
+
+    The TTL is capped at one hour to match the Redis session persistence policy.
+    """
 
     token = secrets.token_urlsafe(32)
 
     # Sessions are persisted for one hour in Redis regardless of the provided TTL
-    ttl_seconds = 3600
+    ttl_seconds = min(ttl_seconds, 3600)
 
     session_data = {
         "user_id": user_id,
