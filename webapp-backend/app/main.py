@@ -24,6 +24,9 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(game.router, prefix="/api/game")
 
+# Temporary compatibility prefixes for legacy frontend routes
+app.include_router(auth.router, prefix="/auth")
+
 
 @app.on_event("startup")
 async def startup():
