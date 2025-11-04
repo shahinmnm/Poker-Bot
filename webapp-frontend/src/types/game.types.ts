@@ -22,11 +22,17 @@ export interface GameState {
 
 export interface GameListItem {
   game_id: string;
-  host: string;
   player_count: number;
   max_players: number;
-  stake: string;
-  created_at: string;
+  small_blind: number;
+  big_blind: number;
+  status: string;
+  mode: string;
+  pot: number;
+  stake_level?: string;
+  created_at?: string;
+  chat_id?: string;
+  host?: string;
 }
 
 export interface AuthResponse {

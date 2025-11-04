@@ -119,7 +119,7 @@ class PokerBotModel:
         self._logger = logging.getLogger(__name__)
 
         # NEW: Replace old logic with coordinator
-        self._coordinator = GameCoordinator(view=view)
+        self._coordinator = GameCoordinator(view=view, kv=self._kv)
         self._stake_config = STAKE_PRESETS[self._cfg.DEFAULT_STAKE_LEVEL]
 
         self._readyMessages = {}
@@ -993,6 +993,7 @@ class PokerBotModel:
             game.reset()
             game.players = valid_players
             game.ready_users = {player.user_id for player in valid_players}
+            game.stake_config = self._stake_config
 
             await self._lobby_manager.delete_lobby(chat_id)
 
@@ -1062,6 +1063,7 @@ class PokerBotModel:
         game.players.sort(key=lambda p: index(old_players_ids, p.user_id))
 
         game.state = GameState.ROUND_PRE_FLOP
+        await self._coordinator.register_webapp_game(game.id, int(chat_id), game)
         await self._divide_cards(game=game, chat_id=chat_id)
 
         game.current_player_index = 1
@@ -2902,6 +2904,7 @@ class PokerBotModel:
 
         # Create game instance
         game = Game()
+        game.id = game_code
         game.mode = GameMode.PRIVATE
         game.players = players
         game.state = GameState.ROUND_PRE_FLOP
@@ -2946,6 +2949,8 @@ class PokerBotModel:
             json.dumps(game_snapshot),
             ex=self._cfg.PRIVATE_GAME_TTL_SECONDS,
         )
+
+        await self._coordinator.register_webapp_game(game_code, chat_id, game)
 
         logger.info(
             "Persisted game snapshot to Redis (key=%s, ttl=%ss)",

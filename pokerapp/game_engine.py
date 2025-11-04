@@ -532,7 +532,7 @@ class GameEngine:
         )
         self._kv = ensure_kv(kv_store)
         self._view = view
-        self._coordinator = coordinator or GameCoordinator()
+        self._coordinator = coordinator or GameCoordinator(view=view, kv=kv_store)
 
         self._hand_number = 0
         self._state_key = ":".join(["game_state", self._game_id])
