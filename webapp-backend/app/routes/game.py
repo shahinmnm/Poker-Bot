@@ -165,9 +165,28 @@ async def create_game(
             "pot": 0,
             "chat_id": "webapp",
             "created_at": datetime.datetime.utcnow().isoformat(),
+            "joined_players": [
+                {
+                    "user_id": str(current_user.get("user_id")),
+                    "username": current_user.get("username", ""),
+                }
+            ],
         }
 
         redis.set(key, json.dumps(payload), ex=86400)
+
+        state_key = f"game:{game_id}:state"
+        redis.hset(
+            state_key,
+            mapping={
+                "status": "waiting",
+                "pot": 0,
+                "current_bet": 0,
+                f"player_{current_user['user_id']}": current_user.get("username", ""),
+                f"chips_{current_user['user_id']}": 1000,
+            },
+        )
+        redis.expire(state_key, 86400)
         logger.info(
             "User %s created webapp game %s with stake %s",
             current_user.get("user_id"),
@@ -203,37 +222,59 @@ async def join_game(
         game_key = f"game:{game_id}:state"
         meta_key = f"game:{game_id}:meta"
 
-        if not redis.exists(game_key):
-            meta_payload = redis.get(meta_key)
-            if not meta_payload:
-                raise HTTPException(status_code=404, detail="Game not found")
+        meta_payload = redis.get(meta_key)
+        if not meta_payload:
+            raise HTTPException(status_code=404, detail="Game not found")
 
-            try:
-                meta = json.loads(meta_payload)
-            except json.JSONDecodeError as exc:
-                logger.error("Corrupt metadata for game %s: %s", game_id, exc)
-                raise HTTPException(status_code=500, detail="Game metadata invalid") from exc
+        try:
+            meta = json.loads(meta_payload)
+        except json.JSONDecodeError as exc:
+            logger.error("Corrupt metadata for game %s: %s", game_id, exc)
+            raise HTTPException(status_code=500, detail="Game metadata invalid") from exc
 
-            meta["players_count"] = _safe_int(meta.get("players_count", 0)) + 1
-            joined = meta.get("joined_players")
-            if not isinstance(joined, list):
-                joined = []
-            if str(user_id) not in joined:
-                joined.append(str(user_id))
-            meta["joined_players"] = joined
-            meta["updated_at"] = datetime.datetime.utcnow().isoformat()
-            redis.set(meta_key, json.dumps(meta), ex=86400)
+        joined_players = meta.get("joined_players")
+        if not isinstance(joined_players, list):
+            joined_players = []
 
-            logger.info("User %s joined webapp game %s", user_id, game_id)
+        # Normalise existing entries to dictionaries
+        normalised_players: list[dict] = []
+        for player in joined_players:
+            if isinstance(player, dict):
+                normalised_players.append(player)
+            else:
+                normalised_players.append({"user_id": str(player), "username": ""})
 
-            return {
-                "game_id": game_id,
-                "status": "joined",
-                "player_count": meta["players_count"],
-            }
+        if not any(str(p.get("user_id")) == str(user_id) for p in normalised_players):
+            normalised_players.append(
+                {
+                    "user_id": str(user_id),
+                    "username": current_user.get("username", ""),
+                }
+            )
+
+        meta["joined_players"] = normalised_players
+        meta["players_count"] = len(normalised_players)
+        meta["updated_at"] = datetime.datetime.utcnow().isoformat()
+        redis.set(meta_key, json.dumps(meta), ex=86400)
 
         player_key = f"player_{user_id}"
-        redis.hset(game_key, player_key, current_user.get("username", ""))
+        chips_key = f"chips_{user_id}"
+        base_mapping = {}
+        if not redis.hexists(game_key, "status"):
+            base_mapping["status"] = meta.get("state", "waiting")
+        if not redis.hexists(game_key, "pot"):
+            base_mapping["pot"] = _safe_int(meta.get("pot", 0))
+        if not redis.hexists(game_key, "current_bet"):
+            base_mapping["current_bet"] = 0
+        redis.hset(
+            game_key,
+            mapping={
+                **base_mapping,
+                player_key: current_user.get("username", ""),
+                chips_key: redis.hget(game_key, chips_key) or 1000,
+            },
+        )
+        redis.expire(game_key, 86400)
 
         game_data = redis.hgetall(game_key)
 
@@ -269,30 +310,59 @@ async def get_game_state(
     """
     try:
         game_key = f"game:{game_id}:state"
+        meta_key = f"game:{game_id}:meta"
 
-        if not redis.exists(game_key):
+        meta_payload = redis.get(meta_key)
+        if not meta_payload:
             raise HTTPException(status_code=404, detail="Game not found")
+
+        try:
+            meta = json.loads(meta_payload)
+        except json.JSONDecodeError as exc:
+            logger.error("Corrupt metadata for game %s: %s", game_id, exc)
+            raise HTTPException(status_code=500, detail="Game metadata invalid") from exc
 
         game_data = redis.hgetall(game_key)
 
         players = []
-        for key, value in game_data.items():
-            if key.startswith("player_"):
-                user_id = int(key.replace("player_", ""))
-                chips_key = f"chips_{user_id}"
-                players.append({
-                    "user_id": user_id,
-                    "username": value,
-                    "chips": int(game_data.get(chips_key, 1000)),
-                    "is_active": True,
-                })
+        if game_data:
+            for key, value in game_data.items():
+                if key.startswith("player_"):
+                    player_user_id = int(key.replace("player_", ""))
+                    chips_key = f"chips_{player_user_id}"
+                    players.append(
+                        {
+                            "user_id": player_user_id,
+                            "username": value,
+                            "chips": int(game_data.get(chips_key, 1000)),
+                            "is_active": True,
+                        }
+                    )
+        else:
+            joined_players = meta.get("joined_players")
+            if isinstance(joined_players, list):
+                for player in joined_players:
+                    if isinstance(player, dict):
+                        try:
+                            player_user_id = int(player.get("user_id"))
+                        except (TypeError, ValueError):
+                            continue
+                        players.append(
+                            {
+                                "user_id": player_user_id,
+                                "username": player.get("username", ""),
+                                "chips": 1000,
+                                "is_active": True,
+                            }
+                        )
 
         response = {
             "game_id": game_id,
-            "status": game_data.get("status", "waiting"),
+            "status": (game_data.get("status") if game_data else None)
+            or meta.get("state", "waiting"),
             "players": players,
-            "current_bet": int(game_data.get("current_bet", 0)),
-            "pot": int(game_data.get("pot", 0)),
+            "current_bet": int(game_data.get("current_bet", 0)) if game_data else 0,
+            "pot": int(game_data.get("pot", 0)) if game_data else _safe_int(meta.get("pot", 0)),
             "community_cards": [],
             "your_cards": [],
             "current_turn_user_id": None,
