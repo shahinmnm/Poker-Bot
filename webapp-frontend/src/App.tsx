@@ -57,7 +57,6 @@ function App() {
 
   const initSession = async () => {
     try {
-      // Try to create/get session
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         credentials: 'include'
@@ -141,7 +140,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ stake: '1/2' })
+        body: JSON.stringify({ stake: "1/2" })
       })
 
       if (response.ok) {
@@ -168,7 +167,7 @@ function App() {
   if (loading) {
     return (
       <div className="container">
-        <div className="loading">Initializing...</div>
+        <div className="loading">⏳ Initializing...</div>
       </div>
     )
   }
@@ -176,7 +175,7 @@ function App() {
   if (!authenticated) {
     return (
       <div className="container">
-        <div className="error">Authentication failed. Please refresh.</div>
+        <div className="error-banner">🔒 Authentication failed. Please refresh.</div>
       </div>
     )
   }
@@ -187,20 +186,20 @@ function App() {
       <div className="container">
         <div className="header">
           <button onClick={handleBackToLobby} className="back-button">
-            ← Back to Lobby
+            ← Back
           </button>
-          <h2>Game: {selectedGame.slice(0, 8)}...</h2>
+          <h2>🎮 Game {selectedGame.slice(0, 8)}...</h2>
         </div>
 
-        {error && <div className="error-banner">{error}</div>}
+        {error && <div className="error-banner">⚠️ {error}</div>}
 
         <div className="game-view">
-          <div className="pot">Pot: ${gameState.pot}</div>
-          <div className="phase">Phase: {gameState.phase}</div>
+          <div className="pot">💰 Pot: ${gameState.pot}</div>
+          <div className="phase">📍 Phase: {gameState.phase}</div>
 
           <div className="players">
-            <h3>Players</h3>
-            {gameState.players.map((p) => (
+            <h3>👥 Players</h3>
+            {gameState.players.map(p => (
               <div key={p.id} className="player">
                 {p.name}: ${p.chips}
               </div>
@@ -209,8 +208,8 @@ function App() {
 
           {gameState.community_cards.length > 0 && (
             <div className="community-cards">
-              <h3>Community Cards</h3>
-              {gameState.community_cards.join(' ')}
+              <h3>🃏 Community Cards</h3>
+              <div>{gameState.community_cards.join(' ')}</div>
             </div>
           )}
         </div>
@@ -223,7 +222,7 @@ function App() {
     <div className="container">
       <h1>🃏 Poker Lobby</h1>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="error-banner">⚠️ {error}</div>}
 
       <div className="button-group">
         <button onClick={fetchGames} className="refresh-button">
@@ -236,16 +235,18 @@ function App() {
 
       <div className="games-list">
         {games.length === 0 ? (
-          <div className="no-games">No games available. Create one!</div>
+          <div className="no-games">
+            No active games.<br />Create one to get started!
+          </div>
         ) : (
-          games.map((game) => (
+          games.map(game => (
             <div
               key={game.id}
               className="game-card"
               onClick={() => handleJoinGame(game.id)}
             >
-              <div className="game-stake">Stake: {game.stake}</div>
-              <div className="game-players">Players: {game.player_count}/9</div>
+              <div className="game-stake">💎 Stake: {game.stake}</div>
+              <div className="game-players">👥 Players: {game.player_count}/9</div>
               <div className="game-id">ID: {game.id.slice(0, 8)}...</div>
             </div>
           ))
