@@ -31,8 +31,17 @@ async def startup():
     logger.info(f"📍 CORS origins: {origins}")
     logger.info("📡 Routes registered:")
     for route in app.routes:
-        if hasattr(route, "path"):
-            logger.info(f"  {route.methods} {route.path}")
+        path = getattr(route, "path", None)
+        if not path:
+            continue
+
+        methods = getattr(route, "methods", None)
+        if methods:
+            method_display = ",".join(sorted(methods))
+        else:
+            method_display = "(no methods)"
+
+        logger.info(f"  {method_display} {path}")
 
 
 @app.get("/health")
