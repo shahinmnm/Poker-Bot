@@ -20,17 +20,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
-app.include_router(auth.router, prefix="/api")
-app.include_router(game.router, prefix="/api")
+# Register routers with proper prefixes
+app.include_router(auth.router, prefix="/api/auth")
+app.include_router(game.router, prefix="/api/game")
 
 
 @app.on_event("startup")
 async def startup():
     logger.info("🚀 Poker WebApp API starting...")
     logger.info(f"📍 CORS origins: {origins}")
+    logger.info("📡 Routes registered:")
+    for route in app.routes:
+        if hasattr(route, "path"):
+            logger.info(f"  {route.methods} {route.path}")
 
 
 @app.get("/health")
 async def health():
+    return {"status": "healthy", "service": "poker-webapp-api"}
+
+
+@app.get("/api/health")
+async def api_health():
     return {"status": "healthy", "service": "poker-webapp-api"}
