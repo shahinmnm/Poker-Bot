@@ -1,11 +1,10 @@
 // webapp-frontend/src/lib/api.ts
 //
-// Tiny, robust fetch wrapper for the Poker WebApp frontend.
+// Thin fetch wrapper for the Poker WebApp frontend.
 // - Adds X-Telegram-Init-Data when embedded in Telegram
 // - Outside Telegram, appends ?user_id=1 so dev flows don't 401
-// - Inside Telegram, if backend still replies 401, RETRY once with ?user_id=1 (demo fallback)
 // - Normalizes tables response shape
-// - Distinguishes 401 ("AUTH_REQUIRED") from real missing endpoints (404)
+// - Distinguishes 401 ("AUTH_REQUIRED") from true errors (404/5xx)
 
 export type Json = Record<string, any>;
 
@@ -13,7 +12,7 @@ const API_BASE =
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) ||
   (typeof window !== "undefined" ? `${window.location.origin}/api` : "/api");
 
-function getTelegramInitData(): string | null {
+export function getTelegramInitData(): string | null {
   try {
     // @ts-ignore - Telegram WebApp injected object
     const tg = (window as any)?.Telegram?.WebApp;
@@ -22,11 +21,6 @@ function getTelegramInitData(): string | null {
     }
   } catch {}
   return null;
-}
-
-async function doFetch(url: string, headers: Headers) {
-  const res = await fetch(url, { headers, credentials: "include" });
-  return res;
 }
 
 async function apiGet<T = Json>(
@@ -48,17 +42,7 @@ async function apiGet<T = Json>(
   const rel = path.replace(/^\/+/, "");
   const url = `${base}/${rel}${usp.toString() ? `?${usp.toString()}` : ""}`;
 
-  // First attempt
-  let res = await doFetch(url, headers);
-
-  // Inside Telegram some backends may not verify init-data yet → try once with user_id=1
-  if (res.status === 401 && initData && !usp.has("user_id")) {
-    const usp2 = new URLSearchParams(usp);
-    usp2.set("user_id", "1");
-    const url2 = `${base}/${rel}?${usp2.toString()}`;
-    res = await doFetch(url2, headers);
-    if ((res as any).__retried !== true) (res as any).__retried = true;
-  }
+  const res = await fetch(url, { headers, credentials: "include" });
 
   if (res.status === 401) {
     const detail = await res.text().catch(() => "");
@@ -99,19 +83,42 @@ export type TableDto = {
 };
 
 export async function apiTables(): Promise<TableDto[]> {
+  // Backend may return either an array or { tables: [...] }
   const data = await apiGet<{ tables?: TableDto[] } | TableDto[]>("tables");
   if (Array.isArray(data)) return data;
   return Array.isArray((data as any)?.tables) ? (data as any).tables : [];
 }
 
-export async function apiUserSettings() {
+export type SettingsDto = {
+  user_id: number;
+  theme: "auto" | "light" | "dark";
+  notifications: boolean;
+  locale: string;
+  currency: "chips" | "bb";
+  experimental: boolean;
+};
+
+export type StatsDto = {
+  user_id: number;
+  hands_played: number;
+  biggest_win: number;
+  biggest_loss: number;
+  win_rate: number; // 0..1
+  last_played: string;
+  streak_days: number;
+  chip_balance: number;
+  rank: string;
+};
+
+export async function apiUserSettings(): Promise<SettingsDto> {
   return apiGet("user/settings");
 }
 
-export async function apiUserStats() {
+export async function apiUserStats(): Promise<StatsDto> {
   return apiGet("user/stats");
 }
 
+// Join table — used by "Join" button handler
 export async function apiJoinTable(tableId: string) {
   const initData = getTelegramInitData();
   const usp = new URLSearchParams();
@@ -122,16 +129,11 @@ export async function apiJoinTable(tableId: string) {
     usp.toString() ? `?${usp.toString()}` : ""
   }`;
 
-  const headers: HeadersInit = {};
-  if (initData) (headers as any)["X-Telegram-Init-Data"] = initData;
-
-  let res = await fetch(url, { method: "POST", headers, credentials: "include" });
-
-  // Telegram but backend still 401 → demo fallback
-  if (res.status === 401 && initData && !usp.has("user_id")) {
-    const url2 = `${base}/tables/${encodeURIComponent(tableId)}/join?user_id=1`;
-    res = await fetch(url2, { method: "POST", headers, credentials: "include" });
-  }
+  const res = await fetch(url, {
+    method: "POST",
+    headers: initData ? { "X-Telegram-Init-Data": initData } : undefined,
+    credentials: "include",
+  });
 
   if (res.status === 401) {
     const detail = await res.text().catch(() => "");
