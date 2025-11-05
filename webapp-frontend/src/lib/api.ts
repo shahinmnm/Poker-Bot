@@ -1,12 +1,44 @@
 // webapp-frontend/src/lib/api.ts
 //
-// Thin fetch wrapper for the Poker WebApp frontend.
-// - Adds X-Telegram-Init-Data when embedded in Telegram
-// - Outside Telegram, appends ?user_id=1 so dev flows don't 401
-// - Normalizes tables response shape
-// - Distinguishes 401 ("AUTH_REQUIRED") from true errors (404/5xx)
+// Frontend API client for Poker WebApp.
+// - Uses Telegram WebApp init data when available
+// - Outside Telegram (browser/dev), auto-adds ?user_id=1 to avoid 401
+// - Normalizes tables payload and exposes typed helpers
+// - Distinguishes AUTH (401) from true missing endpoints (404)
+// - Exports small utilities used by App (theme + init data)
 
 export type Json = Record<string, any>;
+
+export type TableDto = {
+  id: string;
+  name: string;
+  stakes: string;           // "50/100"
+  players_count: number;    // 5
+  max_players: number;      // 9
+  is_private: boolean;      // true/false
+  status: "waiting" | "running";
+};
+
+export type UserSettings = {
+  user_id: number;
+  theme: "auto" | "light" | "dark";
+  notifications: boolean;
+  locale: string;
+  currency: "chips" | "bb";
+  experimental: boolean;
+};
+
+export type UserStats = {
+  user_id: number;
+  hands_played: number;
+  biggest_win: number;
+  biggest_loss: number;
+  win_rate: number; // 0..1
+  last_played: string; // ISO
+  streak_days: number;
+  chip_balance: number;
+  rank: string;
+};
 
 const API_BASE =
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) ||
@@ -14,36 +46,48 @@ const API_BASE =
 
 export function getTelegramInitData(): string | null {
   try {
-    // @ts-ignore - Telegram WebApp injected object
+    // @ts-ignore Telegram injected object
     const tg = (window as any)?.Telegram?.WebApp;
-    if (tg && typeof tg.initData === "string" && tg.initData.length > 0) {
-      return tg.initData;
-    }
+    if (tg && typeof tg.initData === "string" && tg.initData.length > 0) return tg.initData;
   } catch {}
   return null;
 }
 
-async function apiGet<T = Json>(
-  path: string,
-  query?: Record<string, string | number | boolean>
-): Promise<T> {
-  const headers = new Headers({ Accept: "application/json" });
-
-  const initData = getTelegramInitData();
-  if (initData) headers.set("X-Telegram-Init-Data", initData);
-
-  const usp = new URLSearchParams();
-  if (query) for (const [k, v] of Object.entries(query)) usp.set(k, String(v));
-
-  // Outside Telegram, force a dev user so stats/settings won't 401
-  if (!initData && !usp.has("user_id")) usp.set("user_id", "1");
-
+function buildUrl(path: string, query?: Record<string, string | number | boolean>) {
   const base = API_BASE.replace(/\/+$/, "");
   const rel = path.replace(/^\/+/, "");
-  const url = `${base}/${rel}${usp.toString() ? `?${usp.toString()}` : ""}`;
+  const usp = new URLSearchParams();
 
-  const res = await fetch(url, { headers, credentials: "include" });
+  if (query) {
+    for (const [k, v] of Object.entries(query)) usp.set(k, String(v));
+  }
 
+  // Dev fallback outside Telegram
+  const hasTg = !!getTelegramInitData();
+  if (!hasTg && !usp.has("user_id")) usp.set("user_id", "1");
+
+  return `${base}/${rel}${usp.toString() ? `?${usp.toString()}` : ""}`;
+}
+
+async function request<T = Json>(
+  method: "GET" | "POST",
+  path: string,
+  query?: Record<string, string | number | boolean>,
+  body?: any
+): Promise<T> {
+  const headers = new Headers({ Accept: "application/json" });
+  const initData = getTelegramInitData();
+  if (initData) headers.set("X-Telegram-Init-Data", initData);
+  if (method === "POST") headers.set("Content-Type", "application/json");
+
+  const res = await fetch(buildUrl(path, query), {
+    method,
+    headers,
+    credentials: "include",
+    body: method === "POST" && body != null ? JSON.stringify(body) : undefined,
+  });
+
+  // Distinguish common cases for better UI messaging
   if (res.status === 401) {
     const detail = await res.text().catch(() => "");
     const err: any = new Error("AUTH_REQUIRED");
@@ -51,7 +95,13 @@ async function apiGet<T = Json>(
     err.detail = detail;
     throw err;
   }
-
+  if (res.status === 404) {
+    const detail = await res.text().catch(() => "");
+    const err: any = new Error("NOT_FOUND");
+    err.code = 404;
+    err.detail = detail;
+    throw err;
+  }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     const err: any = new Error(`HTTP_${res.status}`);
@@ -62,94 +112,53 @@ async function apiGet<T = Json>(
 
   const ct = res.headers.get("content-type") || "";
   if (!/application\/json/i.test(ct)) return {} as T;
-
   return (await res.json()) as T;
 }
 
-// ---- Public API used by the UI ----
-
-export async function apiHealth() {
-  return apiGet<{ status: string; time: string }>("health");
+export function apiHealth() {
+  return request<{ status: string; time: string }>("GET", "health");
 }
 
-export type TableDto = {
-  id: string;
-  name: string;
-  stakes: string;
-  players_count: number;
-  max_players: number;
-  is_private: boolean;
-  status: "waiting" | "running";
-};
-
 export async function apiTables(): Promise<TableDto[]> {
-  // Backend may return either an array or { tables: [...] }
-  const data = await apiGet<{ tables?: TableDto[] } | TableDto[]>("tables");
+  const data = await request<{ tables?: TableDto[] } | TableDto[]>("GET", "tables");
   if (Array.isArray(data)) return data;
   return Array.isArray((data as any)?.tables) ? (data as any).tables : [];
 }
 
-export type SettingsDto = {
-  user_id: number;
-  theme: "auto" | "light" | "dark";
-  notifications: boolean;
-  locale: string;
-  currency: "chips" | "bb";
-  experimental: boolean;
-};
-
-export type StatsDto = {
-  user_id: number;
-  hands_played: number;
-  biggest_win: number;
-  biggest_loss: number;
-  win_rate: number; // 0..1
-  last_played: string;
-  streak_days: number;
-  chip_balance: number;
-  rank: string;
-};
-
-export async function apiUserSettings(): Promise<SettingsDto> {
-  return apiGet("user/settings");
+export function apiUserSettings(query?: { user_id?: number | string }) {
+  return request<UserSettings>("GET", "user/settings", query);
 }
 
-export async function apiUserStats(): Promise<StatsDto> {
-  return apiGet("user/stats");
+export function apiUserStats(query?: { user_id?: number | string }) {
+  return request<UserStats>("GET", "user/stats", query);
 }
 
-// Join table — used by "Join" button handler
-export async function apiJoinTable(tableId: string) {
-  const initData = getTelegramInitData();
-  const usp = new URLSearchParams();
-  if (!initData) usp.set("user_id", "1");
+export function apiJoinTable(tableId: string, query?: { user_id?: number | string }) {
+  return request<Json>("POST", `tables/${encodeURIComponent(tableId)}/join`, query);
+}
 
-  const base = API_BASE.replace(/\/+$/, "");
-  const url = `${base}/tables/${encodeURIComponent(tableId)}/join${
-    usp.toString() ? `?${usp.toString()}` : ""
-  }`;
+/* -------- Telegram theme helpers for App -------- */
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: initData ? { "X-Telegram-Init-Data": initData } : undefined,
-    credentials: "include",
-  });
+export function detectTelegramColorScheme(): "light" | "dark" | "auto" {
+  try {
+    // @ts-ignore
+    const tg = (window as any)?.Telegram?.WebApp;
+    if (!tg) return "auto";
+    const cs: string | undefined = tg.colorScheme;
+    if (cs === "light" || cs === "dark") return cs;
+  } catch {}
+  return "auto";
+}
 
-  if (res.status === 401) {
-    const detail = await res.text().catch(() => "");
-    const err: any = new Error("AUTH_REQUIRED");
-    err.code = 401;
-    err.detail = detail;
-    throw err;
+export function watchTelegramTheme(cb: (scheme: "light" | "dark" | "auto") => void) {
+  try {
+    // @ts-ignore
+    const tg = (window as any)?.Telegram?.WebApp;
+    if (!tg) return () => {};
+    const handler = () => cb(detectTelegramColorScheme());
+    tg.onEvent?.("themeChanged", handler);
+    return () => tg.offEvent?.("themeChanged", handler);
+  } catch {
+    return () => {};
   }
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    const err: any = new Error(`HTTP_${res.status}`);
-    err.code = res.status;
-    err.detail = detail;
-    throw err;
-  }
-
-  const ct = res.headers.get("content-type") || "";
-  return /application\/json/i.test(ct) ? await res.json() : {};
 }
