@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { haptics } from '../utils/uiEnhancers';
 
 /**
  * LobbyAndGame.tsx
@@ -103,9 +104,14 @@ const Row: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value
   </div>
 );
 
-const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, style, ...rest }) => (
+// Buttons trigger a light click haptic automatically
+const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, style, onClick, ...rest }) => (
   <button
     {...rest}
+    onClick={(e) => {
+      haptics.click();
+      onClick?.(e);
+    }}
     style={{
       padding: '10px 12px',
       borderRadius: 12,
@@ -122,9 +128,11 @@ const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ child
   </button>
 );
 
-const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ style, ...rest }) => (
+// Inputs/Selects give subtle selection feedback on change
+const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ style, onChange, ...rest }) => (
   <input
     {...rest}
+    onChange={(e) => { haptics.selection(); onChange?.(e); }}
     style={{
       width: '100%',
       padding: '10px 12px',
@@ -139,9 +147,10 @@ const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ style, .
   />
 );
 
-const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ style, children, ...rest }) => (
+const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ style, onChange, children, ...rest }) => (
   <select
     {...rest}
+    onChange={(e) => { haptics.selection(); onChange?.(e); }}
     style={{
       width: '100%',
       padding: '10px 12px',
@@ -242,10 +251,12 @@ export const LobbyPanel: React.FC<Props> = ({ sessionToken }) => {
     if (res.ok) {
       saveActiveTable(tableId);
       setMessage('Joined table ✅ Open the Game tab to play.');
+      haptics.notification('success');
     } else {
       // graceful: still allow local join
       saveActiveTable(tableId);
       setMessage('Joined locally (server not ready). Open the Game tab to play.');
+      haptics.notification('warning');
     }
   };
 
@@ -262,12 +273,14 @@ export const LobbyPanel: React.FC<Props> = ({ sessionToken }) => {
     if (res.ok && res.data) {
       setTables(prev => [res.data!, ...prev]);
       setMessage('Table created ✅ You can join it now.');
+      haptics.notification('success');
     } else {
       // graceful create: synthesize local
       const id = `t${Math.floor(Math.random() * 9000) + 1000}`;
       const newTable: TableSummary = { id, name, bb: Number(bb), maxPlayers: Number(maxPlayers), seated: 1, private: isPrivate };
       setTables(prev => [newTable, ...prev]);
       setMessage('Table created locally (server not ready).');
+      haptics.notification('warning');
     }
     setCreating(false);
   };
@@ -284,7 +297,11 @@ export const LobbyPanel: React.FC<Props> = ({ sessionToken }) => {
 
       <div style={{ display: 'grid', gap: 8 }}>
         <div style={{ fontSize: 18, fontWeight: 800 }}>Find a table</div>
-        <Input placeholder="Search by name, stake, visibility…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <Input
+          placeholder="Search by name, stake, visibility…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
       </div>
 
       <Card>
@@ -328,7 +345,11 @@ export const LobbyPanel: React.FC<Props> = ({ sessionToken }) => {
             </Select>
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-            <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={isPrivate}
+              onChange={(e) => { setIsPrivate(e.target.checked); haptics.selection(); }}
+            />
             Private (invite-only)
           </label>
           <Button type="submit" disabled={creating}>{creating ? 'Creating…' : 'Create table'}</Button>
@@ -382,9 +403,15 @@ export const GamePanel: React.FC<Props> = ({ sessionToken, userId, username }) =
     setDetail(null);
     setTableId(null);
     setMsg('You left the table.');
+    haptics.notification('warning');
   };
 
   const quickAction = async (action: 'check' | 'call' | 'fold' | 'bet') => {
+    // Lightweight haptic accent depending on action
+    if (action === 'bet') haptics.impact('medium');
+    else if (action === 'fold') haptics.impact('soft');
+    else haptics.click();
+
     setMsg(`Action: ${action.toUpperCase()} (demo)`);
     // Future: POST /api/tables/:id/action {action, amount?}
   };
@@ -478,7 +505,7 @@ const LobbyAndGame: React.FC<Props> = (props) => {
         background: 'var(--tg-theme-bg-color, #0f0f0f)',
       }}>
         <button
-          onClick={() => setTab('lobby')}
+          onClick={() => { setTab('lobby'); haptics.selection(); }}
           style={{
             padding: '10px 12px', borderRadius: 12,
             border: '1px solid rgba(255,255,255,0.12)',
@@ -489,7 +516,7 @@ const LobbyAndGame: React.FC<Props> = (props) => {
           }}
         >🏠 Lobby</button>
         <button
-          onClick={() => setTab('game')}
+          onClick={() => { setTab('game'); haptics.selection(); }}
           style={{
             padding: '10px 12px', borderRadius: 12,
             border: '1px solid rgba(255,255,255,0.12)',
