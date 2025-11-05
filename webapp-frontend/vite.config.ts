@@ -1,3 +1,6 @@
+// Minimal typing so tsc doesn't require @types/node for this config file.
+declare const process: { env: Record<string, string | undefined> };
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -50,7 +53,6 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: mode !== 'production',
-      // Keep things simple; no code splitting tricks required for the mini-app
     },
 
     // Some libs look for process.env in the browser; this keeps them calm.
