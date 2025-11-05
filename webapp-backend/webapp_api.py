@@ -1,35 +1,19 @@
 """
-webapp_api.py  — FastAPI backend for the Poker Telegram mini-app.
+webapp_api.py — FastAPI backend for the Poker Telegram mini-app (PROD auth)
 
-Endpoints (all JSON):
-  GET  /api/user/stats
-  GET  /api/user/settings
-  POST /api/user/settings
-  POST /api/user/bonus
+What’s new in this version (File 5):
+  • Proper Telegram initData verification (no permissive dev auth by default)
+  • Uses env POKERBOT_TOKEN for HMAC validation (see README/.env)
+  • Same endpoints:
+      GET  /api/user/stats
+      GET  /api/user/settings
+      POST /api/user/settings
+      POST /api/user/bonus
+  • Same SQLite schema; DB default lives at repo root ../poker.db
 
-Auth model (dev-friendly):
-- Front-end sends Authorization: Bearer <Telegram initData> (string).
-- For production, replace dev parsing with proper Telegram initData verification:
-  https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
-
-Repo-aware notes (IMPORTANT):
-- This file belongs under:  webapp-backend/webapp_api.py
-- Because the folder name has a hyphen, import paths like "webapp-backend.webapp_api:app"
-  will NOT work. Run uvicorn from inside the directory instead:
-
-  cd webapp-backend
-  uvicorn webapp_api:app --reload --port 8080
-
-SQLite file:
-- Default location: repo root (../poker.db relative to this file), so both bot & API can share it.
-- Override with env var POKER_DB_PATH if you prefer a different location.
-
-Front-end:
-- The React mini-app (Stats / Account panels) already calls:
-    GET  /api/user/stats
-    GET  /api/user/settings
-    POST /api/user/settings
-    POST /api/user/bonus
+Docs followed:
+  - https://core.telegram.org/bots/webapps  (validate initData on server) 
+  - Init-data verification: HMAC-SHA256 with secret derived from "WebAppData". 
 """
 
 from __future__ import annotations
@@ -38,16 +22,27 @@ import json
 import os
 import random
 import sqlite3
+import hmac
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Tuple
+from urllib.parse import parse_qsl
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-import urllib.parse
 
-# ---------- Paths & DB ----------
+# ---------- Config & Paths ----------
+
+# Bot token required for Telegram initData verification
+BOT_TOKEN = os.environ.get("POKERBOT_TOKEN") or os.environ.get("BOT_TOKEN") or ""
+
+# Set to "1" or "true" to allow local dev fallback (?user_id=) if you really need it.
+ALLOW_DEV_FALLBACK = os.environ.get("POKER_DEV_ALLOW_FALLBACK", "0").lower() in {"1", "true", "yes"}
+
+# Max age for initData auth_date (seconds). Default 1 hour.
+INITDATA_MAX_AGE = int(os.environ.get("POKER_INITDATA_MAX_AGE", "3600"))
 
 # Default DB in repo root (../poker.db relative to this file)
 _DEFAULT_DB = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "poker.db"))
@@ -128,8 +123,73 @@ def ensure_user(conn: sqlite3.Connection, user_id: int, username: Optional[str])
         )
         conn.commit()
 
+# ---------- Telegram initData verification ----------
 
-# ---------- Dev Auth Helpers ----------
+class InitDataError(HTTPException):
+    pass
+
+
+def _derive_secret_key(bot_token: str, constant: bytes = b"WebAppData") -> bytes:
+    """
+    Derive secret key for WebApp initData verification:
+      secret = HMAC_SHA256(key="WebAppData", msg=bot_token)
+    """
+    return hmac.new(constant, bot_token.encode("utf-8"), hashlib.sha256).digest()
+
+
+def _calc_data_check_hash(secret_key: bytes, data_check_string: str) -> str:
+    return hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _build_data_check_string(qs_pairs: Dict[str, str]) -> str:
+    """
+    Sort all pairs (except 'hash') by key (asc) and join as "k=v" lines.
+    """
+    items = [(k, v) for k, v in qs_pairs.items() if k != "hash"]
+    items.sort(key=lambda x: x[0])
+    return "\n".join(f"{k}={v}" for k, v in items)
+
+
+def verify_init_data(init_data_raw: str, bot_token: str, max_age_seconds: int = 3600) -> Dict[str, str]:
+    """
+    Validates Telegram WebApp initData string per docs.
+    Returns parsed dict (keys are already percent-decoded) if valid; else raises.
+    """
+    if not bot_token:
+        raise InitDataError(status_code=500, detail="Server misconfig: POKERBOT_TOKEN is not set")
+
+    # Parse the raw querystring exactly as delivered by Telegram
+    try:
+        parsed = dict(parse_qsl(init_data_raw, keep_blank_values=True, strict_parsing=True))
+    except Exception:
+        raise InitDataError(status_code=400, detail="Invalid initData format")
+
+    init_hash = parsed.get("hash")
+    if not init_hash:
+        raise InitDataError(status_code=400, detail="Missing hash in initData")
+
+    # Build the data_check_string and compute expected hash
+    secret = _derive_secret_key(bot_token)
+    dcs = _build_data_check_string(parsed)
+    expected_hash = _calc_data_check_hash(secret, dcs)
+
+    # Timing-safe compare
+    if not hmac.compare_digest(expected_hash, init_hash):
+        raise InitDataError(status_code=401, detail="Bad initData signature")
+
+    # Optional freshness check via auth_date
+    try:
+        auth_date = int(parsed.get("auth_date", "0"))
+    except ValueError:
+        auth_date = 0
+    if auth_date:
+        now = int(datetime.now(timezone.utc).timestamp())
+        if now - auth_date > max_age_seconds:
+            raise InitDataError(status_code=401, detail="initData expired")
+
+    return parsed
+
+# ---------- Auth dependency ----------
 
 @dataclass
 class AuthedUser:
@@ -137,59 +197,51 @@ class AuthedUser:
     username: Optional[str] = None
 
 
-def _parse_user_from_initdata(init_data: str) -> Tuple[Optional[int], Optional[str]]:
-    """
-    Parse Telegram WebApp initData and extract user.id and user.username.
-    Dev-only convenience; replace with strict verification for production.
-    initData looks like: "query_id=...&user=%7B...%7D&auth_date=...&hash=..."
-    """
-    try:
-        parts = urllib.parse.parse_qs(init_data, keep_blank_values=True)
-        user_raw = parts.get("user", [None])[0]
-        if not user_raw:
-            return None, None
-        user_json = json.loads(user_raw)  # it's URL-decoded JSON from TG
-        uid = int(user_json.get("id")) if user_json.get("id") is not None else None
-        uname = user_json.get("username")
-        return uid, uname
-    except Exception:
-        return None, None
-
-
 async def get_authed_user(
     request: Request,
     authorization: Optional[str] = Header(default=None),
 ) -> AuthedUser:
     """
-    Dev behavior:
-      - Try Authorization: Bearer <initData>
-      - Fallback to ?user_id=<int>
-      - Final fallback: user #1 'demo'
+    Production: require Authorization: Bearer <window.Telegram.WebApp.initData>
+    Dev fallback (?user_id=) only if ALLOW_DEV_FALLBACK=1.
     """
-    uid: Optional[int] = None
-    uname: Optional[str] = None
-
     if authorization and authorization.lower().startswith("bearer "):
-        token = authorization.split(" ", 1)[1].strip()
-        uid, uname = _parse_user_from_initdata(token)
+        init_data_raw = authorization.split(" ", 1)[1].strip()
+        parsed = verify_init_data(init_data_raw, BOT_TOKEN, INITDATA_MAX_AGE)
+        # "user" comes JSON-encoded in initData "user={...}" (already decoded by parse_qsl)
+        # In WebApp initData it's plain JSON string value.
+        user_json_raw = parsed.get("user")
+        user_id: Optional[int] = None
+        username: Optional[str] = None
+        if user_json_raw:
+            try:
+                user_obj = json.loads(user_json_raw)
+                if "id" in user_obj:
+                    user_id = int(user_obj["id"])
+                username = user_obj.get("username")
+            except Exception:
+                pass
+        if not user_id:
+            raise InitDataError(status_code=400, detail="No user.id in initData")
+        conn = get_conn()
+        ensure_user(conn, user_id, username)
+        conn.close()
+        return AuthedUser(id=user_id, username=username)
 
-    if uid is None:
+    # Dev-only escape hatch
+    if ALLOW_DEV_FALLBACK:
         try:
             q_uid = request.query_params.get("user_id")
             if q_uid:
-                uid = int(q_uid)
+                user_id = int(q_uid)
+                conn = get_conn()
+                ensure_user(conn, user_id, "demo")
+                conn.close()
+                return AuthedUser(id=user_id, username="demo")
         except Exception:
-            uid = None
+            pass
 
-    if uid is None:
-        uid = 1
-        uname = uname or "demo"
-
-    conn = get_conn()
-    ensure_user(conn, uid, uname)
-    conn.close()
-    return AuthedUser(id=uid, username=uname)
-
+    raise InitDataError(status_code=401, detail="Authorization required")
 
 # ---------- Schemas ----------
 
@@ -221,12 +273,11 @@ class BonusOut(BaseModel):
     next_claim_at: Optional[str] = None
     message: Optional[str] = None
 
-
 # ---------- FastAPI ----------
 
-app = FastAPI(title="Poker WebApp API", version="1.0.0")
+app = FastAPI(title="Poker WebApp API", version="1.1.0")
 
-# CORS: during development you can allow all; restrict in prod.
+# CORS: allow your frontend origin(s) during development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get("POKER_CORS_ORIGINS", "*").split(","),
@@ -238,7 +289,6 @@ app.add_middleware(
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
-
 
 # ---------- Endpoints ----------
 
@@ -363,11 +413,9 @@ def claim_bonus(user: AuthedUser = Depends(get_authed_user)) -> BonusOut:
 
     return BonusOut(success=True, amount=amount, next_claim_at=(now + timedelta(hours=24)).isoformat(), message="Bonus claimed!")
 
-
 # ---------- Demo seeding (optional) ----------
 
 def _seed_demo_progress(user_id: int = 1) -> None:
-    """Optional helper to seed some believable stats."""
     conn = get_conn()
     ensure_user(conn, user_id, "demo")
     cur = conn.cursor()
@@ -385,15 +433,14 @@ def _seed_demo_progress(user_id: int = 1) -> None:
     conn.commit()
     conn.close()
 
+# ---------- Entrypoint ----------
 
 if __name__ == "__main__":
-    # Initialize DB and optionally seed a demo user on first run
     if not os.path.exists(DB_PATH):
         init_db()
         _seed_demo_progress(1)
 
-    # IMPORTANT: Run from INSIDE webapp-backend due to hyphen in folder name.
-    # Example:
+    # IMPORTANT: run from INSIDE webapp-backend
     #   cd webapp-backend
     #   uvicorn webapp_api:app --reload --port 8080
     import uvicorn
