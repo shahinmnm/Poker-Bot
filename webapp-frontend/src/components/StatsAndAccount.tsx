@@ -1,195 +1,213 @@
 // webapp-frontend/src/components/StatsAndAccount.tsx
 import React, { useEffect, useState } from "react";
-import {
-  apiUserSettings,
-  apiUserStats,
-  SettingsDto,
-  StatsDto,
-} from "../lib/api";
+import { apiUserSettings, apiUserStats, UserSettings, UserStats } from "../lib/api";
 import {
   BadgeCheckIcon,
   BellIcon,
   ChartIcon,
+  CoinsIcon,
   CogIcon,
   FlameIcon,
-  PlusIcon,
+  PercentIcon,
   ShieldIcon,
   TrophyIcon,
+  UserIcon,
   WalletIcon,
 } from "./icons";
 
-export const StatsPanel: React.FC = () => {
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<StatsDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
+type Load<T> =
+  | { status: "idle" | "loading" }
+  | { status: "ready"; data: T }
+  | { status: "error"; code?: number; message?: string };
 
-  async function refresh() {
-    setLoading(true);
-    setError(null);
-    try {
-      const s = await apiUserStats();
-      setStats(s);
-    } catch (e: any) {
-      if (e?.code === 401) {
-        setError(
-          "Open inside Telegram for your personal stats (authentication required)."
-        );
-      } else {
-        setError("Failed to load stats.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
+export function StatsPanel() {
+  const [state, setState] = useState<Load<UserStats>>({ status: "loading" });
 
   useEffect(() => {
-    refresh();
+    let alive = true;
+    (async () => {
+      try {
+        const data = await apiUserStats();
+        if (!alive) return;
+        setState({ status: "ready", data });
+      } catch (e: any) {
+        if (!alive) return;
+        setState({ status: "error", code: e?.code, message: e?.message || String(e) });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  return (
-    <section className="panel">
-      <header className="panel-header">
-        <div className="title">
-          <TrophyIcon className="icon" /> Player Stats
-        </div>
-        <button className="btn ghost" onClick={refresh} disabled={loading}>
-          ↻ Refresh
-        </button>
-      </header>
+  if (state.status === "loading") return <div className="card muted">Loading stats…</div>;
 
-      {error && <div className="alert warn">{error}</div>}
-
-      {loading ? (
-        <div className="muted">Loading…</div>
-      ) : stats ? (
-        <div className="grid two">
-          <div className="stat">
-            <div className="stat-label">
-              <BadgeCheckIcon className="icon sm" /> Rank
-            </div>
-            <div className="stat-value">{stats.rank}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-label">
-              <FlameIcon className="icon sm" /> Streak
-            </div>
-            <div className="stat-value">{stats.streak_days} days</div>
-          </div>
-
-          <div className="stat">
-            <div className="stat-label">
-              <ChartIcon className="icon sm" /> Win rate
-            </div>
-            <div className="stat-value">{Math.round(stats.win_rate * 100)}%</div>
-          </div>
-          <div className="stat">
-            <div className="stat-label">
-              <WalletIcon className="icon sm" /> Chip balance
-            </div>
-            <div className="stat-value">{stats.chip_balance.toLocaleString()}</div>
-          </div>
-
-          <div className="stat">
-            <div className="stat-label">Hands played</div>
-            <div className="stat-value">{stats.hands_played}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-label">Best / Worst</div>
-            <div className="stat-value">
-              {stats.biggest_win.toLocaleString()} • {stats.biggest_loss.toLocaleString()}
-            </div>
+  if (state.status === "error") {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <div className="title">
+            <TrophyIcon className="icon" /> Player Stats
           </div>
         </div>
-      ) : (
-        <div className="muted">No stats available.</div>
-      )}
-    </section>
-  );
-};
-
-export const AccountPanel: React.FC = () => {
-  const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState<SettingsDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function refresh() {
-    setLoading(true);
-    setError(null);
-    try {
-      const s = await apiUserSettings();
-      setSettings(s);
-    } catch (e: any) {
-      if (e?.code === 401) {
-        setError(
-          "Open inside Telegram for full features and authentication (ACCOUNT)."
-        );
-      } else {
-        setError("Failed to load account settings.");
-      }
-    } finally {
-      setLoading(false);
-    }
+        <div className="alert warn">
+          {state.code === 404
+            ? "Server stats endpoint not found — expose /api/user/stats."
+            : state.code === 401
+            ? "Open inside Telegram to authenticate and see your real stats."
+            : "Could not load stats. Check server logs."}
+        </div>
+      </div>
+    );
   }
 
+  const s = state.data;
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <div className="title">
+          <TrophyIcon className="icon" /> {s.rank}
+        </div>
+      </div>
+
+      <div className="grid two">
+        <div className="stat">
+          <div className="stat-label">
+            <ChartIcon className="icon sm" /> Hands played
+          </div>
+          <div className="stat-value">{s.hands_played.toLocaleString()}</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">
+            <PercentIcon className="icon sm" /> Win rate
+          </div>
+          <div className="stat-value">{Math.round(s.win_rate * 100)}%</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">
+            <FlameIcon className="icon sm" /> Current streak
+          </div>
+          <div className="stat-value">{s.streak_days} days</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">
+            <CoinsIcon className="icon sm" /> Chip balance
+          </div>
+          <div className="stat-value">{s.chip_balance.toLocaleString()}</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="kv">
+          <div className="kv-k">Best win</div>
+          <div className="kv-v">{s.biggest_win.toLocaleString()}</div>
+        </div>
+        <div className="kv">
+          <div className="kv-k">Worst loss</div>
+          <div className="kv-v">{s.biggest_loss.toLocaleString()}</div>
+        </div>
+        <div className="kv">
+          <div className="kv-k">Last played</div>
+          <div className="kv-v">{new Date(s.last_played).toLocaleString()}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AccountPanel() {
+  const [state, setState] = useState<Load<UserSettings>>({ status: "loading" });
+
   useEffect(() => {
-    refresh();
+    let alive = true;
+    (async () => {
+      try {
+        const data = await apiUserSettings();
+        if (!alive) return;
+        setState({ status: "ready", data });
+      } catch (e: any) {
+        if (!alive) return;
+        setState({ status: "error", code: e?.code, message: e?.message || String(e) });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
+  if (state.status === "loading") return <div className="card muted">Loading account…</div>;
+
+  if (state.status === "error") {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <div className="title">
+            <UserIcon className="icon" /> Account & Settings
+          </div>
+        </div>
+        <div className="alert warn">
+          {state.code === 404
+            ? "Server settings endpoint not found — implement /api/user/settings."
+            : state.code === 401
+            ? "Open inside Telegram to authenticate and load your profile."
+            : "Could not load account. Check server logs."}
+        </div>
+      </div>
+    );
+  }
+
+  const p = state.data;
   return (
-    <section className="panel">
-      <header className="panel-header">
+    <div className="panel">
+      <div className="panel-header">
         <div className="title">
-          <CogIcon className="icon" /> Account & Settings
+          <UserIcon className="icon" /> @{p.user_id} • Account & Settings
         </div>
-        <button className="btn ghost" onClick={refresh} disabled={loading}>
-          ↻ Refresh
-        </button>
-      </header>
+      </div>
 
-      {error && <div className="alert warn">{error}</div>}
-
-      {loading ? (
-        <div className="muted">Loading…</div>
-      ) : settings ? (
-        <div className="card stack">
-          <div className="kv">
-            <div className="kv-k">User ID</div>
-            <div className="kv-v">{settings.user_id}</div>
+      <div className="grid two">
+        <div className="stat">
+          <div className="stat-label">
+            <BadgeCheckIcon className="icon sm" /> Locale
           </div>
-          <div className="kv">
-            <div className="kv-k">Locale</div>
-            <div className="kv-v">{settings.locale}</div>
-          </div>
-          <div className="kv">
-            <div className="kv-k">Theme</div>
-            <div className="kv-v">{settings.theme}</div>
-          </div>
-          <div className="kv">
-            <div className="kv-k">Notifications</div>
-            <div className="kv-v">
-              <BellIcon className="icon sm" /> {settings.notifications ? "On" : "Off"}
-            </div>
-          </div>
-          <div className="kv">
-            <div className="kv-k">Currency</div>
-            <div className="kv-v">{settings.currency}</div>
-          </div>
-          <div className="kv">
-            <div className="kv-k">Experimental</div>
-            <div className="kv-v">{settings.experimental ? "Enabled" : "Disabled"}</div>
-          </div>
-
-          <div className="muted small">
-            <ShieldIcon className="icon sm" /> Tip: Change your device theme; when your
-            theme is <b>auto</b> the app follows Light/Dark automatically.
-          </div>
-          <button className="btn">
-            <PlusIcon className="icon" /> Manage preferences
-          </button>
+          <div className="stat-value">{p.locale}</div>
         </div>
-      ) : (
-        <div className="muted">No account data.</div>
-      )}
-    </section>
+        <div className="stat">
+          <div className="stat-label">
+            <BellIcon className="icon sm" /> Notifications
+          </div>
+          <div className="stat-value">{p.notifications ? "On" : "Off"}</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">
+            <WalletIcon className="icon sm" /> Currency
+          </div>
+          <div className="stat-value">{p.currency}</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">
+            <ShieldIcon className="icon sm" /> Experimental
+          </div>
+          <div className="stat-value">{p.experimental ? "Enabled" : "Disabled"}</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="kv">
+          <div className="kv-k">Theme</div>
+          <div className="kv-v">{p.theme}</div>
+        </div>
+        <div className="kv">
+          <div className="kv-k">User ID</div>
+          <div className="kv-v">{p.user_id}</div>
+        </div>
+        <div className="kv">
+          <div className="kv-k">Preferences</div>
+          <div className="kv-v">
+            <CogIcon className="icon sm" /> Manage from Telegram client settings
+          </div>
+        </div>
+      </div>
+    </div>
   );
-};
+}
