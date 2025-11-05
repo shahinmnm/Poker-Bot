@@ -1,19 +1,24 @@
 """
 webapp_api.py — FastAPI backend for the Poker Telegram mini-app (PROD auth)
 
-What’s new in this version (File 5):
-  • Proper Telegram initData verification (no permissive dev auth by default)
-  • Uses env POKERBOT_TOKEN for HMAC validation (see README/.env)
-  • Same endpoints:
-      GET  /api/user/stats
-      GET  /api/user/settings
-      POST /api/user/settings
-      POST /api/user/bonus
+Version 1.2.0 (File 10)
+  • Keeps production-grade Telegram initData verification
+  • Mounts the tables router at /api/tables (from tables_api.py / File 9)
   • Same SQLite schema; DB default lives at repo root ../poker.db
 
-Docs followed:
-  - https://core.telegram.org/bots/webapps  (validate initData on server) 
-  - Init-data verification: HMAC-SHA256 with secret derived from "WebAppData". 
+Endpoints:
+  - GET  /api/user/stats
+  - GET  /api/user/settings
+  - POST /api/user/settings
+  - POST /api/user/bonus
+  - (mounted) /api/tables/*
+
+Auth docs:
+  https://core.telegram.org/bots/webapps  (validate initData on server)
+
+Run (from inside this folder):
+  cd webapp-backend
+  uvicorn webapp_api:app --reload --port 8080
 """
 
 from __future__ import annotations
@@ -26,7 +31,7 @@ import hmac
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 from urllib.parse import parse_qsl
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -209,7 +214,6 @@ async def get_authed_user(
         init_data_raw = authorization.split(" ", 1)[1].strip()
         parsed = verify_init_data(init_data_raw, BOT_TOKEN, INITDATA_MAX_AGE)
         # "user" comes JSON-encoded in initData "user={...}" (already decoded by parse_qsl)
-        # In WebApp initData it's plain JSON string value.
         user_json_raw = parsed.get("user")
         user_id: Optional[int] = None
         username: Optional[str] = None
@@ -275,7 +279,7 @@ class BonusOut(BaseModel):
 
 # ---------- FastAPI ----------
 
-app = FastAPI(title="Poker WebApp API", version="1.1.0")
+app = FastAPI(title="Poker WebApp API", version="1.2.0")
 
 # CORS: allow your frontend origin(s) during development
 app.add_middleware(
@@ -290,7 +294,7 @@ app.add_middleware(
 def _startup() -> None:
     init_db()
 
-# ---------- Endpoints ----------
+# ---------- User Endpoints ----------
 
 @app.get("/api/user/stats", response_model=StatsOut)
 def get_stats(user: AuthedUser = Depends(get_authed_user)) -> StatsOut:
@@ -413,32 +417,22 @@ def claim_bonus(user: AuthedUser = Depends(get_authed_user)) -> BonusOut:
 
     return BonusOut(success=True, amount=amount, next_claim_at=(now + timedelta(hours=24)).isoformat(), message="Bonus claimed!")
 
-# ---------- Demo seeding (optional) ----------
+# ---------- Mount tables router (/api/tables) ----------
 
-def _seed_demo_progress(user_id: int = 1) -> None:
-    conn = get_conn()
-    ensure_user(conn, user_id, "demo")
-    cur = conn.cursor()
-    dist = {
-        "High Card": 110, "Pair": 96, "Two Pair": 58, "Three of a Kind": 28,
-        "Straight": 18, "Flush": 14, "Full House": 12, "Four of a Kind": 5,
-        "Straight Flush": 1
-    }
-    cur.execute("""
-        UPDATE stats SET
-          hands_played=?, hands_won=?, total_profit=?, biggest_pot_won=?,
-          avg_stake=?, current_streak=?, hand_distribution=?
-        WHERE user_id=?
-    """, (342, 97, 1520, 640, 2, 3, json.dumps(dist), user_id))
-    conn.commit()
-    conn.close()
+# NOTE: import placed AFTER helpers & app exist to avoid circular-import issues.
+from tables_api import router as tables_router  # type: ignore
+
+app.include_router(tables_router)
 
 # ---------- Entrypoint ----------
 
 if __name__ == "__main__":
     if not os.path.exists(DB_PATH):
         init_db()
-        _seed_demo_progress(1)
+        # Optional: seed demo user on first run
+        conn = get_conn()
+        ensure_user(conn, 1, "demo")
+        conn.close()
 
     # IMPORTANT: run from INSIDE webapp-backend
     #   cd webapp-backend
