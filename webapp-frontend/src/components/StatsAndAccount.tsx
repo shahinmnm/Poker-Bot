@@ -1,280 +1,368 @@
-import React, { useEffect, useMemo, useState } from "react";
+// webapp-frontend/src/components/StatsAndAccount.tsx
+//
+// Named exports: StatsPanel, AccountPanel
+// - Reads stats via apiUserStats()
+// - Reads settings via apiUserSettings()
+// - Friendly handling for 401 (AUTH_REQUIRED) and other HTTP errors
+// - Imports ONLY icons that exist in ./icons.tsx
+
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { apiUserSettings, apiUserStats } from "../lib/api";
 import {
   BadgeCheckIcon,
   BellIcon,
   ChartIcon,
-  CogIcon,
-  FlameIcon,
-  GlobeIcon,
-  PlusIcon,
+  CoinsIcon,
+  PercentIcon,
+  SettingsIcon,
   ShieldIcon,
+  TrophyIcon,
+  UserIcon,
   WalletIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
 } from "./icons";
 
-// -------------------------------------------------------------
-// Stats + Account settings panel for Poker WebApp.
-// Fetches:
-//   - GET /api/user/settings
-//   - GET /api/user/stats
-// (Dev fallback adds ?user_id=1 outside Telegram.)
-// -------------------------------------------------------------
-
-type SettingsDto = {
-  user_id: number;
-  theme: "auto" | "dark" | "light";
-  notifications: boolean;
-  locale: string;
-  currency: "chips" | "usd";
-  experimental: boolean;
-};
+/* ------------ Types (match backend responses you showed) ------------ */
 
 type StatsDto = {
   user_id: number;
   hands_played: number;
   biggest_win: number;
-  biggest_loss: number; // negative
+  biggest_loss: number;
   win_rate: number; // 0..1
-  last_played: string; // ISO
+  last_played: string; // ISO string
   streak_days: number;
   chip_balance: number;
   rank: string;
 };
 
-type FetchResult<T> = { ok: boolean; data?: T; status: number };
+type SettingsDto = {
+  user_id: number;
+  theme: "auto" | "light" | "dark";
+  notifications: boolean;
+  locale: string;
+  currency: string; // "chips"
+  experimental: boolean;
+};
 
-// Detect Telegram WebApp context
-function getTelegramInitData(): string | null {
-  try {
-    // @ts-ignore
-    const tg = (window as any)?.Telegram?.WebApp;
-    if (tg && typeof tg.initData === "string" && tg.initData.length > 0) {
-      return tg.initData;
-    }
-  } catch {}
-  return null;
+/* ------------------------- Small UI primitives ------------------------- */
+
+function PanelShell(props: { title: React.ReactNode; children: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <section className="w-full max-w-3xl mx-auto rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/40 backdrop-blur p-4 md:p-6 shadow-sm">
+      <header className="flex items-center justify-between gap-3 mb-4">
+        <h2 className="text-base md:text-lg font-semibold flex items-center gap-2">{props.title}</h2>
+        {props.right}
+      </header>
+      <div>{props.children}</div>
+    </section>
+  );
 }
 
-// Centralized fetch helper with dev identity fallback.
-// - Append ?user_id=1 when not inside Telegram
-// - Include Telegram init header when present
-async function safeFetch<T>(
-  path: string,
-  opts: RequestInit,
-  token?: string | null
-): Promise<{ ok: boolean; data?: T; status: number }> {
+function StatCard(props: { label: string; value: React.ReactNode; icon?: React.ReactNode; hint?: string }) {
+  return (
+    <div className="rounded-xl border border-black/10 dark:border-white/10 p-4 bg-black/[0.02] dark:bg-white/[0.04]">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs opacity-70">{props.label}</div>
+        {props.icon}
+      </div>
+      <div className="text-lg font-semibold">{props.value}</div>
+      {props.hint ? <div className="text-xs opacity-70 mt-1">{props.hint}</div> : null}
+    </div>
+  );
+}
+
+function Button(
+  props: React.ButtonHTMLAttributes<HTMLButtonElement> & { left?: React.ReactNode; variant?: "soft" | "plain" }
+) {
+  const { className = "", left, variant = "soft", children, ...rest } = props;
+  const base =
+    "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium border transition active:translate-y-[0.5px]";
+  const soft =
+    "border-black/10 dark:border-white/15 bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.10]";
+  const plain = "border-transparent hover:bg-black/[0.05] dark:hover:bg-white/[0.06]";
+  return (
+    <button {...rest} className={`${base} ${variant === "plain" ? plain : soft} ${className}`}>
+      {left}
+      {children}
+    </button>
+  );
+}
+
+/* ------------------------------ Helpers ------------------------------ */
+
+function pct(n: number) {
+  if (!isFinite(n)) return "—";
+  return `${Math.round(n * 100)}%`;
+}
+function fmtNumber(n: number) {
   try {
-    const base = typeof window !== "undefined" ? window.location.origin : "";
-    const url = new URL(path, base);
-
-    const isTelegram = !!(window as any)?.Telegram?.WebApp?.initData;
-    if (!isTelegram && !url.searchParams.has("user_id")) {
-      url.searchParams.set("user_id", "1");
-    }
-
-    const headers = new Headers(opts.headers as any);
-    if (token) headers.set("X-Telegram-Init-Data", token);
-
-    const res = await fetch(url.toString(), {
-      ...opts,
-      credentials: "include",
-      headers,
-    });
-
-    const ct = res.headers.get("content-type") || "";
-    const isJson = /application\/json/i.test(ct);
-    const data = isJson ? await res.json().catch(() => ({})) : ({} as any);
-
-    return { ok: res.ok, data, status: res.status };
-  } catch (e) {
-    console.warn("safeFetch failed", e);
-    return { ok: false, status: 0 };
+    return new Intl.NumberFormat().format(n);
+  } catch {
+    return String(n);
+  }
+}
+function fmtDate(s: string) {
+  try {
+    const d = new Date(s);
+    return d.toLocaleString();
+  } catch {
+    return s;
   }
 }
 
-export default function StatsAndAccount() {
-  const initData = useMemo(getTelegramInitData, []);
-  const [settings, setSettings] = useState<SettingsDto | null>(null);
-  const [stats, setStats] = useState<StatsDto | null>(null);
+/* ------------------------------- StatsPanel ------------------------------- */
 
-  const [serverAvailable, setServerAvailable] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
+type StatsState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "loaded"; data: StatsDto }
+  | { kind: "error"; code?: number; message: string };
 
-  const [message, setMessage] = useState<string | null>(null);
+export function StatsPanel(props: any) {
+  const [state, setState] = useState<StatsState>({ kind: "idle" });
+
+  const load = useCallback(async () => {
+    setState({ kind: "loading" });
+    try {
+      const data = (await apiUserStats()) as StatsDto;
+      setState({ kind: "loaded", data });
+    } catch (err: any) {
+      if (err?.code === 401) {
+        setState({
+          kind: "error",
+          code: 401,
+          message: "Authentication required. Open inside Telegram (or use dev fallback user_id=1).",
+        });
+      } else if (typeof err?.code === "number") {
+        setState({ kind: "error", code: err.code, message: `Server error (HTTP ${err.code}).` });
+      } else {
+        setState({ kind: "error", message: "Network error while loading stats." });
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    load();
+  }, [load]);
 
-    (async () => {
-      setLoading(true);
-      setMessage(null);
-
-      const [settingsRes, statsRes] = await Promise.all([
-        safeFetch<SettingsDto>("/api/user/settings", { method: "GET" }, initData),
-        safeFetch<StatsDto>("/api/user/stats", { method: "GET" }, initData),
-      ]);
-
-      if (cancelled) return;
-
-      if (settingsRes.ok) setSettings(settingsRes.data as SettingsDto);
-      if (statsRes.ok) setStats(statsRes.data as StatsDto);
-
-      // If either is 404, show "endpoint missing" banner.
-      // Otherwise, if both are OK, mark serverAvailable = true.
-      if (settingsRes.ok && statsRes.ok) {
-        setServerAvailable(true);
-      } else if (settingsRes.status === 404 || statsRes.status === 404) {
-        setServerAvailable(false);
-      } else {
-        setServerAvailable(null);
-      }
-
-      setLoading(false);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [initData]);
-
-  function fmtPct(p: number) {
-    const clamped = Math.max(0, Math.min(1, p || 0));
-    return `${(clamped * 100).toFixed(1)}%`;
-  }
-
-  function fmtChips(n: number) {
-    return `${n.toLocaleString()} chips`;
-  }
-
-  async function claimDailyBonus() {
-    setMessage(null);
-    const res = await safeFetch<{ ok?: boolean; message?: string }>(
-      "/api/user/bonus",
-      { method: "POST" },
-      initData
-    );
-    if (res.ok) {
-      setMessage("Daily bonus claimed!");
-    } else if (res.status === 404) {
-      setMessage("Bonus endpoint not implemented yet.");
-    } else if (res.status === 401) {
-      setMessage("Unauthorized (401). In Telegram the identity is automatic; dev mode attaches user_id=1.");
-    } else {
-      setMessage(`Failed to claim bonus (HTTP ${res.status || "ERR"}).`);
+  const body = useMemo(() => {
+    if (state.kind === "idle" || state.kind === "loading") {
+      return <div className="flex items-center justify-center h-32 text-sm opacity-70">Loading stats…</div>;
     }
-  }
+    if (state.kind === "error") {
+      return (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-red-300/40 bg-red-50/60 dark:bg-red-900/20 p-3 text-sm">
+            <div className="font-medium">Couldn’t load stats</div>
+            <div className="opacity-80">
+              {state.message}
+              {state.code ? ` (code ${state.code})` : null}
+            </div>
+          </div>
+          <Button onClick={load}>Try again</Button>
+        </div>
+      );
+    }
+
+    const s = state.data;
+    const winrateUp = s.win_rate >= 0.5;
+
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <StatCard
+          label="Rank"
+          value={
+            <span className="inline-flex items-center gap-2">
+              <BadgeCheckIcon className="w-5 h-5 opacity-80" />
+              {s.rank}
+            </span>
+          }
+          hint={`Streak: ${s.streak_days} day${s.streak_days === 1 ? "" : "s"}`}
+        />
+        <StatCard
+          label="Hands Played"
+          value={fmtNumber(s.hands_played)}
+          icon={<ChartIcon className="w-5 h-5 opacity-60" />}
+          hint={`Last played: ${fmtDate(s.last_played)}`}
+        />
+        <StatCard
+          label="Win Rate"
+          value={
+            <span className="inline-flex items-center gap-1">
+              {winrateUp ? (
+                <TrendingUpIcon className="w-5 h-5 opacity-70" />
+              ) : (
+                <TrendingDownIcon className="w-5 h-5 opacity-70" />
+              )}
+              {pct(s.win_rate)}
+            </span>
+          }
+          icon={<PercentIcon className="w-5 h-5 opacity-60" />}
+          hint={winrateUp ? "On a heater" : "Variance happens"}
+        />
+        <StatCard
+          label="Chip Balance"
+          value={
+            <span className="inline-flex items-center gap-2">
+              <CoinsIcon className="w-5 h-5 opacity-80" />
+              {fmtNumber(s.chip_balance)} {/** currency is "chips" */}
+            </span>
+          }
+          hint={`Best win: ${fmtNumber(s.biggest_win)} • Worst loss: ${fmtNumber(s.biggest_loss)}`}
+        />
+      </div>
+    );
+  }, [state, load]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <header className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
-          <ChartIcon className="w-5 h-5" /> Your Stats
-        </h2>
-        {serverAvailable === false && (
-          <span className="text-xs text-amber-500">
-            Server settings/stats endpoints not found — using defaults. Add /api/user/settings and /api/user/stats.
-          </span>
-        )}
-      </header>
+    <PanelShell
+      title={
+        <span className="inline-flex items-center gap-2">
+          <TrophyIcon className="w-5 h-5 opacity-70" />
+          Player Stats
+        </span>
+      }
+      right={<Button onClick={load}>Refresh</Button>}
+    >
+      {body}
+    </PanelShell>
+  );
+}
 
-      {loading ? (
-        <div className="text-sm opacity-70">Loading…</div>
-      ) : (
-        <>
-          <section className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-xl border border-white/10 p-4 bg-white/5">
-              <div className="flex items-center gap-2 text-sm opacity-70">
-                <WalletIcon className="w-4 h-4" />
-                Balance
-              </div>
-              <div className="mt-1 text-2xl font-semibold">
-                {stats ? fmtChips(stats.chip_balance) : "—"}
-              </div>
+/* ------------------------------ AccountPanel ------------------------------ */
 
-              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-lg p-3 bg-white/5 border border-white/10">
-                  <div className="opacity-70">Hands played</div>
-                  <div className="font-medium">{stats?.hands_played ?? "—"}</div>
-                </div>
-                <div className="rounded-lg p-3 bg-white/5 border border-white/10">
-                  <div className="opacity-70">Win rate</div>
-                  <div className="font-medium">{stats ? fmtPct(stats.win_rate) : "—"}</div>
-                </div>
-                <div className="rounded-lg p-3 bg-white/5 border border-white/10">
-                  <div className="opacity-70">Biggest win</div>
-                  <div className="font-medium">
-                    {stats ? fmtChips(stats.biggest_win) : "—"}
-                  </div>
-                </div>
-                <div className="rounded-lg p-3 bg-white/5 border border-white/10">
-                  <div className="opacity-70">Biggest loss</div>
-                  <div className="font-medium">
-                    {stats ? fmtChips(stats.biggest_loss) : "—"}
-                  </div>
-                </div>
-              </div>
+type SettingsState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "loaded"; data: SettingsDto }
+  | { kind: "error"; code?: number; message: string };
 
-              {stats?.rank && (
-                <div className="mt-3 inline-flex items-center gap-2 text-xs rounded-lg px-2 py-1 border border-white/20">
-                  <BadgeCheckIcon className="w-4 h-4" />
-                  Rank: {stats.rank}
-                </div>
-              )}
+export function AccountPanel(props: any) {
+  const [state, setState] = useState<SettingsState>({ kind: "idle" });
+
+  const load = useCallback(async () => {
+    setState({ kind: "loading" });
+    try {
+      const data = (await apiUserSettings()) as SettingsDto;
+      setState({ kind: "loaded", data });
+    } catch (err: any) {
+      if (err?.code === 401) {
+        setState({
+          kind: "error",
+          code: 401,
+          message: "Authentication required. Open inside Telegram (or use dev fallback user_id=1).",
+        });
+      } else if (typeof err?.code === "number") {
+        setState({ kind: "error", code: err.code, message: `Server error (HTTP ${err.code}).` });
+      } else {
+        setState({ kind: "error", message: "Network error while loading settings." });
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const body = useMemo(() => {
+    if (state.kind === "idle" || state.kind === "loading") {
+      return <div className="flex items-center justify-center h-32 text-sm opacity-70">Loading settings…</div>;
+    }
+    if (state.kind === "error") {
+      return (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-red-300/40 bg-red-50/60 dark:bg-red-900/20 p-3 text-sm">
+            <div className="font-medium">Couldn’t load account settings</div>
+            <div className="opacity-80">
+              {state.message}
+              {state.code ? ` (code ${state.code})` : null}
             </div>
+          </div>
+          <Button onClick={load}>Try again</Button>
+        </div>
+      );
+    }
 
-            <div className="rounded-xl border border-white/10 p-4 bg-white/5">
-              <div className="flex items-center gap-2 text-sm opacity-70">
-                <CogIcon className="w-4 h-4" />
-                Account Settings
-              </div>
+    const s = state.data;
 
-              <div className="mt-3 grid gap-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="opacity-70">Theme</span>
-                  <span className="font-medium">{settings?.theme ?? "auto"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="opacity-70 flex items-center gap-1">
-                    <BellIcon className="w-4 h-4" /> Notifications
-                  </span>
-                  <span className="font-medium">{settings?.notifications ? "On" : "Off"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="opacity-70 flex items-center gap-1">
-                    <GlobeIcon className="w-4 h-4" /> Locale
-                  </span>
-                  <span className="font-medium">{settings?.locale ?? "en"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="opacity-70 flex items-center gap-1">
-                    <ShieldIcon className="w-4 h-4" /> Experimental
-                  </span>
-                  <span className="font-medium">{settings?.experimental ? "Enabled" : "Disabled"}</span>
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center justify-between">
-                <button
-                  onClick={claimDailyBonus}
-                  className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2"
-                >
-                  <PlusIcon className="w-4 h-4" />
-                  Claim Daily Bonus
-                </button>
-                <div className="text-xs opacity-70 flex items-center gap-1">
-                  <FlameIcon className="w-4 h-4" />
-                  Streak: {stats?.streak_days ?? 0} days
-                </div>
-              </div>
+    return (
+      <div className="grid grid-cols-1 gap-3">
+        <div className="rounded-xl border border-black/10 dark:border-white/10 p-4 bg-black/[0.02] dark:bg-white/[0.04] space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="font-medium flex items-center gap-2">
+              <UserIcon className="w-5 h-5 opacity-70" />
+              Profile
             </div>
-          </section>
+            <span className="text-xs opacity-70">User ID: {s.user_id}</span>
+          </div>
+          <div className="text-sm opacity-80">Locale: {s.locale}</div>
+        </div>
 
-          {message && (
-            <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm">
-              {message}
+        <div className="rounded-xl border border-black/10 dark:border-white/10 p-4 bg-black/[0.02] dark:bg-white/[0.04] space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="font-medium flex items-center gap-2">
+              <SettingsIcon className="w-5 h-5 opacity-70" />
+              Preferences
             </div>
-          )}
-        </>
-      )}
-    </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="opacity-80">Theme</span>
+              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-black/10 dark:border-white/10">
+                {s.theme}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="opacity-80">Notifications</span>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-black/10 dark:border-white/10">
+                <BellIcon className="w-4 h-4 opacity-70" />
+                {s.notifications ? "On" : "Off"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="opacity-80">Currency</span>
+              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-black/10 dark:border-white/10">
+                <WalletIcon className="w-4 h-4 opacity-70" />
+                {s.currency}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="opacity-80">Experimental</span>
+              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-black/10 dark:border-white/10">
+                <ShieldIcon className="w-4 h-4 opacity-70" />
+                {s.experimental ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-black/10 dark:border-white/10 p-4 bg-black/[0.02] dark:bg-white/[0.04] space-y-2">
+          <div className="font-medium flex items-center gap-2">
+            <CoinsIcon className="w-5 h-5 opacity-70" />
+            Tips
+          </div>
+          <ul className="text-sm opacity-80 list-disc pl-5 space-y-1">
+            <li>Change theme in your device settings; the app follows Light/Dark when theme is set to <b>auto</b>.</li>
+            <li>Open inside Telegram for full features and authentication.</li>
+          </ul>
+        </div>
+      </div>
+    );
+  }, [state, load]);
+
+  return (
+    <PanelShell
+      title={
+        <span className="inline-flex items-center gap-2">
+          <SettingsIcon className="w-5 h-5 opacity-70" />
+          Account
+        </span>
+      }
+      right={<Button onClick={load}>Refresh</Button>}
+    >
+      {body}
+    </PanelShell>
   );
 }
