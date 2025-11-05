@@ -3,121 +3,69 @@ import React, { useEffect, useMemo, useState } from "react";
 import { LobbyPanel, GamePanel } from "./components/LobbyAndGame";
 import { StatsPanel, AccountPanel } from "./components/StatsAndAccount";
 import { CardsIcon, LayoutIcon, TrophyIcon, UserIcon } from "./components/icons";
-import { getTelegramInitData } from "./lib/api";
+import {
+  detectTelegramColorScheme,
+  getTelegramInitData,
+  watchTelegramTheme,
+} from "./lib/api";
 import "./app.css";
 
-/**
- * Root app with swipeable top tabs and panels.
- * - Tabs are horizontally scrollable (swipe on mobile).
- * - Theme reacts to device mode (prefers-color-scheme) and Telegram theme.
- */
 type TabKey = "lobby" | "game" | "stats" | "account";
 
-function useTelegramTheme() {
-  const [theme, setTheme] = useState<"light" | "dark" | "auto">("auto");
-  useEffect(() => {
-    // @ts-ignore
-    const tg = (window as any)?.Telegram?.WebApp;
-    if (!tg) return;
-    try {
-      const scheme = tg.colorScheme as "light" | "dark" | undefined;
-      if (scheme) {
-        document.documentElement.dataset.tg = scheme;
-        setTheme("auto"); // let CSS pick via [data-tg]
-      }
-      tg.onEvent?.("themeChanged", () => {
-        const sc = tg.colorScheme as "light" | "dark" | undefined;
-        if (sc) document.documentElement.dataset.tg = sc;
-      });
-      tg.ready?.();
-    } catch {}
-  }, []);
-  return theme;
-}
+const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+  { key: "lobby", label: "Lobby", icon: <LayoutIcon className="icon" /> },
+  { key: "game", label: "Game", icon: <CardsIcon className="icon" /> },
+  { key: "stats", label: "Stats", icon: <TrophyIcon className="icon" /> },
+  { key: "account", label: "Account", icon: <UserIcon className="icon" /> },
+];
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>("lobby");
-  const [currentTableId, setCurrentTableId] = useState<string | null>(null);
-  useTelegramTheme();
 
-  // Show a tiny footer about Telegram presence/auth
-  const shellNote = useMemo(() => {
-    const inTg = !!getTelegramInitData();
-    return inTg
-      ? `Telegram WebApp ready`
-      : `Running standalone (dev). Open inside Telegram for auth.`;
+  // Sync Telegram theme to CSS vars for readable dark/light text
+  useEffect(() => {
+    const root = document.documentElement;
+    function apply(s: "light" | "dark" | "auto") {
+      root.setAttribute("data-tg", s === "auto" ? "" : s);
+    }
+    apply(detectTelegramColorScheme());
+    const off = watchTelegramTheme(apply);
+    return () => off();
+  }, []);
+
+  // Helpful banner in dev if not in Telegram
+  const devInfo = useMemo(() => {
+    if (getTelegramInitData()) return null;
+    return "Running outside Telegram — using dev user_id=1 for API.";
   }, []);
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="tabs scroller" role="tablist" aria-label="Main sections">
-          <TabButton
-            active={tab === "lobby"}
-            onClick={() => setTab("lobby")}
-            icon={<CardsIcon className="icon" />}
-            label="Lobby"
-          />
-          <TabButton
-            active={tab === "game"}
-            onClick={() => setTab("game")}
-            icon={<LayoutIcon className="icon" />}
-            label="Game"
-          />
-          <TabButton
-            active={tab === "stats"}
-            onClick={() => setTab("stats")}
-            icon={<TrophyIcon className="icon" />}
-            label="Stats"
-          />
-          <TabButton
-            active={tab === "account"}
-            onClick={() => setTab("account")}
-            icon={<UserIcon className="icon" />}
-            label="Account"
-          />
+      <div className="topbar">
+        <div className="tabs scroller">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              className={`tab ${tab === t.key ? "active" : ""}`}
+              onClick={() => setTab(t.key)}
+            >
+              {t.icon}
+              <span className="tab-label">{t.label}</span>
+            </button>
+          ))}
         </div>
-      </header>
+      </div>
 
       <main className="content">
-        {tab === "lobby" && (
-          <LobbyPanel
-            onJoinSuccess={(tableId) => {
-              setCurrentTableId(tableId);
-              setTab("game");
-            }}
-          />
-        )}
-        {tab === "game" && <GamePanel currentTableId={currentTableId} />}
+        {tab === "lobby" && <LobbyPanel />}
+        {tab === "game" && <GamePanel />}
         {tab === "stats" && <StatsPanel />}
         {tab === "account" && <AccountPanel />}
       </main>
 
-      <footer className="footer">{shellNote}</footer>
+      <footer className="footer">
+        {devInfo ? devInfo : "Telegram WebApp ready"}
+      </footer>
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick(): void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      className={`tab ${active ? "active" : ""}`}
-      onClick={onClick}
-      role="tab"
-      aria-selected={active}
-    >
-      {icon}
-      <span className="tab-label">{label}</span>
-    </button>
   );
 }
