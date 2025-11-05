@@ -2,7 +2,6 @@
 //
 // Lightweight icon set for the Poker WebApp.
 // - All icons are 24x24, stroke-based, using currentColor.
-// - No external deps.
 // - Export names match component imports elsewhere.
 
 import * as React from "react";
@@ -174,7 +173,7 @@ export const ArrowRightIcon = (props: IconProps) => (
   </BaseSvg>
 );
 
-/* --- Newly added / used by StatsAndAccount --- */
+/* --- Extras used by settings panel --- */
 
 export const PlusIcon = (props: IconProps) => (
   <BaseSvg {...props}>
@@ -198,14 +197,11 @@ export const WalletIcon = (props: IconProps) => (
 
 export const GlobeIcon = (props: IconProps) => (
   <BaseSvg {...props}>
-    <circle cx="12" cy="12" r="9" />
-    {/* Equator */}
-    <path d="M3 12h18" />
-    {/* Meridians (stylized) */}
-    <path d="M12 3a15 15 0 0 1 0 18" />
-    <path d="M12 3a15 15 0 0 0 0 18" />
+    <circle cx="12" cy="12" r="10" />
+    <path d="M2 12h20" />
+    <path d="M12 2a15 15 0 0 0 0 20a15 15 0 0 0 0-20Z" />
   </BaseSvg>
 );
 
-/* --- Aliases --- */
+/* --- Alias --- */
 export const SettingsIcon = CogIcon;
