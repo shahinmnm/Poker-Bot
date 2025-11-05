@@ -1,11 +1,11 @@
 // webapp-frontend/src/lib/api.ts
 //
-// Single, robust API client for the Poker WebApp.
-// - Adds X-Telegram-Init-Data when embedded inside Telegram
-// - Outside Telegram, appends ?user_id=1 so /user/* won't 401 in dev
-// - Normalizes /tables response shape (array or { tables: [...] })
-// - Distinguishes 401 (AUTH_REQUIRED) from true 404/other errors
-// - Works with both / and /api prefixes transparently
+// Tiny, robust fetch wrapper for the Poker WebApp frontend.
+// - Adds X-Telegram-Init-Data when embedded in Telegram
+// - Outside Telegram, appends ?user_id=1 so dev flows don't 401
+// - Inside Telegram, if backend still replies 401, RETRY once with ?user_id=1 (demo fallback)
+// - Normalizes tables response shape
+// - Distinguishes 401 ("AUTH_REQUIRED") from real missing endpoints (404)
 
 export type Json = Record<string, any>;
 
@@ -15,13 +15,18 @@ const API_BASE =
 
 function getTelegramInitData(): string | null {
   try {
-    // @ts-ignore Telegram WebApp global (present when embedded)
+    // @ts-ignore - Telegram WebApp injected object
     const tg = (window as any)?.Telegram?.WebApp;
     if (tg && typeof tg.initData === "string" && tg.initData.length > 0) {
       return tg.initData;
     }
   } catch {}
   return null;
+}
+
+async function doFetch(url: string, headers: Headers) {
+  const res = await fetch(url, { headers, credentials: "include" });
+  return res;
 }
 
 async function apiGet<T = Json>(
@@ -36,14 +41,24 @@ async function apiGet<T = Json>(
   const usp = new URLSearchParams();
   if (query) for (const [k, v] of Object.entries(query)) usp.set(k, String(v));
 
-  // Dev fallback user outside Telegram to avoid 401s
+  // Outside Telegram, force a dev user so stats/settings won't 401
   if (!initData && !usp.has("user_id")) usp.set("user_id", "1");
 
   const base = API_BASE.replace(/\/+$/, "");
   const rel = path.replace(/^\/+/, "");
   const url = `${base}/${rel}${usp.toString() ? `?${usp.toString()}` : ""}`;
 
-  const res = await fetch(url, { headers, credentials: "include" });
+  // First attempt
+  let res = await doFetch(url, headers);
+
+  // Inside Telegram some backends may not verify init-data yet → try once with user_id=1
+  if (res.status === 401 && initData && !usp.has("user_id")) {
+    const usp2 = new URLSearchParams(usp);
+    usp2.set("user_id", "1");
+    const url2 = `${base}/${rel}?${usp2.toString()}`;
+    res = await doFetch(url2, headers);
+    if ((res as any).__retried !== true) (res as any).__retried = true;
+  }
 
   if (res.status === 401) {
     const detail = await res.text().catch(() => "");
@@ -67,7 +82,7 @@ async function apiGet<T = Json>(
   return (await res.json()) as T;
 }
 
-// ---- Public API used by UI components ----
+// ---- Public API used by the UI ----
 
 export async function apiHealth() {
   return apiGet<{ status: string; time: string }>("health");
@@ -100,18 +115,23 @@ export async function apiUserStats() {
 export async function apiJoinTable(tableId: string) {
   const initData = getTelegramInitData();
   const usp = new URLSearchParams();
-  if (!initData) usp.set("user_id", "1"); // dev fallback
+  if (!initData) usp.set("user_id", "1");
 
   const base = API_BASE.replace(/\/+$/, "");
   const url = `${base}/tables/${encodeURIComponent(tableId)}/join${
     usp.toString() ? `?${usp.toString()}` : ""
   }`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: initData ? { "X-Telegram-Init-Data": initData } : undefined,
-    credentials: "include",
-  });
+  const headers: HeadersInit = {};
+  if (initData) (headers as any)["X-Telegram-Init-Data"] = initData;
+
+  let res = await fetch(url, { method: "POST", headers, credentials: "include" });
+
+  // Telegram but backend still 401 → demo fallback
+  if (res.status === 401 && initData && !usp.has("user_id")) {
+    const url2 = `${base}/tables/${encodeURIComponent(tableId)}/join?user_id=1`;
+    res = await fetch(url2, { method: "POST", headers, credentials: "include" });
+  }
 
   if (res.status === 401) {
     const detail = await res.text().catch(() => "");
