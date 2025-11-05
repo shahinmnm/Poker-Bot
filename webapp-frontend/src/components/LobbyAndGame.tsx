@@ -1,274 +1,234 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { ChipIcon, CrownIcon, LockIcon, PlayIcon, UsersIcon } from "./icons";
+// webapp-frontend/src/components/LobbyAndGame.tsx
+import React from "react";
+import {
+  apiHealth,
+  apiTables,
+  apiUserSettings,
+  apiUserStats,
+  apiJoinTable,
+  type TableDto,
+} from "../lib/api";
 
-// -------------------------------------------------------------
-// Lobby + Table preview + Join flow for Poker WebApp mini-app.
-// This component fetches:
-//   - /api/tables
-// and POSTs:
-//   - /api/tables/{table_id}/join
-//
-// IMPORTANT: Outside Telegram we auto-attach ?user_id=1 so the
-// backend doesn't 401 during local/dev testing.
-// -------------------------------------------------------------
-
-type TableDto = {
-  id: string;
-  name: string;
-  stakes: string;
-  players_count: number;
-  max_players: number;
-  is_private: boolean;
-  status: "waiting" | "running";
-};
-
-type FetchResult<T> = { ok: boolean; data?: T; status: number };
-
-// Detect Telegram WebApp context
-function getTelegramInitData(): string | null {
-  try {
-    // @ts-ignore injected by Telegram
-    const tg = (window as any)?.Telegram?.WebApp;
-    if (tg && typeof tg.initData === "string" && tg.initData.length > 0) {
-      return tg.initData;
-    }
-  } catch {}
-  return null;
-}
-
-// Tiny fetch helper with dev identity fallback.
-// - If outside Telegram, append ?user_id=1 (if not present)
-// - Always include credentials and JSON handling
-async function safeFetch<T>(
-  path: string,
-  opts: RequestInit,
-  token?: string | null
-): Promise<{ ok: boolean; data?: T; status: number }> {
-  try {
-    const base = typeof window !== "undefined" ? window.location.origin : "";
-    const url = new URL(path, base);
-
-    const isTelegram = !!(window as any)?.Telegram?.WebApp?.initData;
-    if (!isTelegram && !url.searchParams.has("user_id")) {
-      url.searchParams.set("user_id", "1");
-    }
-
-    const headers = new Headers(opts.headers as any);
-    if (token) headers.set("X-Telegram-Init-Data", token);
-
-    const res = await fetch(url.toString(), {
-      ...opts,
-      credentials: "include",
-      headers,
-    });
-
-    const ct = res.headers.get("content-type") || "";
-    const isJson = /application\/json/i.test(ct);
-    const data = isJson ? await res.json().catch(() => ({})) : ({} as any);
-
-    return { ok: res.ok, data, status: res.status };
-  } catch (e) {
-    console.warn("safeFetch failed", e);
-    return { ok: false, status: 0 };
-  }
-}
+type LoadState<T> =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; data: T }
+  | { status: "error"; code?: number; detail?: string };
 
 export default function LobbyAndGame() {
-  const [tables, setTables] = useState<TableDto[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [serverTables, setServerTables] = useState<boolean | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [joining, setJoining] = useState<string | null>(null);
-  const [joinMsg, setJoinMsg] = useState<string | null>(null);
+  const [health, setHealth] = React.useState<LoadState<{ status: string; time: string }>>({
+    status: "idle",
+  });
+  const [tables, setTables] = React.useState<LoadState<TableDto[]>>({ status: "idle" });
+  const [settings, setSettings] = React.useState<LoadState<any>>({ status: "idle" });
+  const [stats, setStats] = React.useState<LoadState<any>>({ status: "idle" });
+  const [joining, setJoining] = React.useState<string | null>(null);
 
-  const initData = useMemo(getTelegramInitData, []);
+  const isTelegram = React.useMemo(() => {
+    try {
+      // @ts-ignore Telegram WebApp global
+      return Boolean((window as any)?.Telegram?.WebApp?.initData?.length);
+    } catch {
+      return false;
+    }
+  }, []);
 
-  // Fetch tables
-  useEffect(() => {
+  React.useEffect(() => {
     let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      setJoinMsg(null);
 
-      const res = await safeFetch<{ tables?: TableDto[] } | TableDto[]>(
-        "/api/tables",
-        { method: "GET" },
-        initData
-      );
+    async function loadAll() {
+      setHealth({ status: "loading" });
+      setTables({ status: "loading" });
+      setSettings({ status: "loading" });
+      setStats({ status: "loading" });
 
-      if (cancelled) return;
+      // Load in parallel, but handle independently
+      const jobs = [
+        (async () => {
+          try {
+            const h = await apiHealth();
+            if (!cancelled) setHealth({ status: "ready", data: h });
+          } catch (e: any) {
+            if (!cancelled)
+              setHealth({ status: "error", code: e?.code, detail: e?.detail || String(e) });
+          }
+        })(),
+        (async () => {
+          try {
+            const t = await apiTables();
+            if (!cancelled) setTables({ status: "ready", data: t });
+          } catch (e: any) {
+            if (!cancelled)
+              setTables({ status: "error", code: e?.code, detail: e?.detail || String(e) });
+          }
+        })(),
+        (async () => {
+          try {
+            const s = await apiUserSettings();
+            if (!cancelled) setSettings({ status: "ready", data: s });
+          } catch (e: any) {
+            if (e?.message === "AUTH_REQUIRED") {
+              if (!cancelled) setSettings({ status: "error", code: 401, detail: "AUTH_REQUIRED" });
+            } else if (!cancelled) {
+              setSettings({ status: "error", code: e?.code, detail: e?.detail || String(e) });
+            }
+          }
+        })(),
+        (async () => {
+          try {
+            const s = await apiUserStats();
+            if (!cancelled) setStats({ status: "ready", data: s });
+          } catch (e: any) {
+            if (e?.message === "AUTH_REQUIRED") {
+              if (!cancelled) setStats({ status: "error", code: 401, detail: "AUTH_REQUIRED" });
+            } else if (!cancelled) {
+              setStats({ status: "error", code: e?.code, detail: e?.detail || String(e) });
+            }
+          }
+        })(),
+      ];
 
-      if (res.ok) {
-        const payload = res.data ?? {};
-        const list = Array.isArray(payload)
-          ? (payload as TableDto[])
-          : Array.isArray((payload as any).tables)
-          ? ((payload as any).tables as TableDto[])
-          : [];
-        setTables(list);
-        setServerTables(true);
-      } else {
-        // Only mark endpoint missing if it's truly 404/Not Found.
-        // Other statuses (401, 500, etc.) shouldn't claim "missing".
-        if (res.status === 404) {
-          setServerTables(false);
-          // show a small hint but don't block UI
-          setError(
-            "Server tables endpoint not found — using local mock data. Implement: /api/tables"
-          );
-          setTables([
-            {
-              id: "pub-1",
-              name: "Main Lobby",
-              stakes: "50/100",
-              players_count: 5,
-              max_players: 9,
-              is_private: false,
-              status: "waiting",
-            },
-            {
-              id: "grp-777",
-              name: "Friends Table",
-              stakes: "10/20",
-              players_count: 3,
-              max_players: 6,
-              is_private: true,
-              status: "waiting",
-            },
-          ]);
-        } else {
-          // Generic error (incl. 401 in dev, server hiccups, etc.)
-          setError(
-            `Failed to load tables (HTTP ${res.status || "ERR"}). Retrying or refreshing may help.`
-          );
-          setTables([]);
-          setServerTables(null);
-        }
-      }
+      await Promise.all(jobs);
+    }
 
-      setLoading(false);
-    })();
-
+    loadAll();
     return () => {
       cancelled = true;
     };
-  }, [initData]);
+  }, []);
 
   async function onJoin(tableId: string) {
-    setJoining(tableId);
-    setJoinMsg(null);
     try {
-      const res = await safeFetch<{ ok?: boolean; message?: string }>(
-        `/api/tables/${encodeURIComponent(tableId)}/join`,
-        { method: "POST" },
-        initData
-      );
-      if (res.ok) {
-        setJoinMsg(`You joined "${tableId}" successfully.`);
-      } else {
-        if (res.status === 404) {
-          setJoinMsg(
-            `Join route /api/tables/${tableId}/join is missing (404). Please expose it in the API.`
-          );
-        } else if (res.status === 401) {
-          setJoinMsg(
-            "Unauthorized (401). In Telegram the init data will be used automatically; in dev we attach user_id=1."
-          );
-        } else {
-          setJoinMsg(`Failed to join (HTTP ${res.status}).`);
-        }
-      }
+      setJoining(tableId);
+      await apiJoinTable(tableId);
+      // Reload tables after a (simulated) join
+      const t = await apiTables();
+      setTables({ status: "ready", data: t });
     } catch (e: any) {
-      setJoinMsg(e?.message || "Join failed.");
+      alert(
+        e?.code === 401
+          ? "You need to open this Mini App inside Telegram to join tables."
+          : `Join failed: ${e?.detail || e?.message || e}`
+      );
     } finally {
       setJoining(null);
-      // small refresh of table list
-      const res = await safeFetch<{ tables?: TableDto[] } | TableDto[]>(
-        "/api/tables",
-        { method: "GET" },
-        initData
-      );
-      if (res.ok) {
-        const payload = res.data ?? {};
-        const list = Array.isArray(payload)
-          ? (payload as TableDto[])
-          : Array.isArray((payload as any).tables)
-          ? ((payload as any).tables as TableDto[])
-          : [];
-        setTables(list);
-      }
     }
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <header className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
-          <CrownIcon className="w-5 h-5" /> Tables
-        </h2>
-        {serverTables === false && (
-          <span className="text-xs text-amber-500">
-            Using local mock data (add /api/tables to backend)
-          </span>
-        )}
-      </header>
+    <div className="mx-auto max-w-5xl p-4 text-[var(--fg,#e5e7eb)]">
+      {/* Status bar */}
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <Card title="Server">
+          {health.status === "ready" ? (
+            <div className="text-sm">
+              <div className="font-medium">OK</div>
+              <div className="opacity-70">{health.data.time}</div>
+            </div>
+          ) : health.status === "loading" ? (
+            <div className="opacity-70 text-sm">Checking…</div>
+          ) : health.status === "error" ? (
+            <div className="text-sm text-red-400">
+              Error {health.code || ""} {health.detail || ""}
+            </div>
+          ) : null}
+        </Card>
 
-      {error && (
-        <div className="rounded-lg p-3 bg-red-500/10 border border-red-500/30 text-red-200 text-sm">
-          {error}
-        </div>
-      )}
+        <Card title="Settings">
+          {settings.status === "ready" ? (
+            <pre className="text-xs opacity-90">{JSON.stringify(settings.data, null, 2)}</pre>
+          ) : settings.status === "loading" ? (
+            <div className="opacity-70 text-sm">Loading…</div>
+          ) : settings.status === "error" && settings.code === 401 ? (
+            <div className="text-yellow-400 text-sm">
+              Not authenticated. Outside Telegram we auto-use <code>user_id=1</code>.
+              If you still see this, ensure <code>VITE_API_URL</code> is correct and your Nginx
+              <code>/api</code> rewrite is active.
+            </div>
+          ) : settings.status === "error" ? (
+            <div className="text-sm text-red-400">
+              Error {settings.code || ""} {settings.detail || ""}
+            </div>
+          ) : null}
+        </Card>
 
-      {loading ? (
-        <div className="text-sm opacity-60">Loading tables…</div>
-      ) : tables && tables.length > 0 ? (
-        <div className="grid gap-2">
-          {tables.map((t) => (
-            <div
-              key={t.id}
-              className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4 flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                {t.is_private ? (
-                  <LockIcon className="w-5 h-5 opacity-70" />
-                ) : (
-                  <UsersIcon className="w-5 h-5 opacity-70" />
-                )}
-                <div>
-                  <div className="font-medium">{t.name}</div>
-                  <div className="text-xs opacity-70">
-                    Stakes {t.stakes} · {t.players_count}/{t.max_players} ·{" "}
+        <Card title="Stats">
+          {stats.status === "ready" ? (
+            <pre className="text-xs opacity-90">{JSON.stringify(stats.data, null, 2)}</pre>
+          ) : stats.status === "loading" ? (
+            <div className="opacity-70 text-sm">Loading…</div>
+          ) : stats.status === "error" && stats.code === 401 ? (
+            <div className="text-yellow-400 text-sm">Stats need identity (Telegram or dev fallback).</div>
+          ) : stats.status === "error" ? (
+            <div className="text-sm text-red-400">
+              Error {stats.code || ""} {stats.detail || ""}
+            </div>
+          ) : null}
+        </Card>
+      </div>
+
+      {/* Lobby */}
+      <SectionTitle>Lobby</SectionTitle>
+      <div className="grid gap-3 md:grid-cols-2">
+        {tables.status === "ready" ? (
+          tables.data.length ? (
+            tables.data.map((t) => (
+              <div
+                key={t.id}
+                className="rounded-2xl p-4 shadow border border-[var(--card-border,#2a2a2a)] bg-[var(--card-bg,#111318)]"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold">{t.name}</div>
+                  <span className="text-xs px-2 py-0.5 rounded-full border opacity-80">
                     {t.status === "running" ? "Running" : "Waiting"}
-                  </div>
+                  </span>
+                </div>
+                <div className="mt-2 text-sm opacity-80">
+                  Stakes: {t.stakes} • Players: {t.players_count}/{t.max_players}{" "}
+                  {t.is_private ? "• Private" : ""}
+                </div>
+                <div className="mt-3">
+                  <button
+                    className="px-3 py-1.5 rounded-lg border shadow-sm text-sm disabled:opacity-50"
+                    disabled={joining === t.id}
+                    onClick={() => onJoin(t.id)}
+                  >
+                    {joining === t.id ? "Joining…" : "Join"}
+                  </button>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="opacity-70">No tables available.</div>
+          )
+        ) : tables.status === "loading" ? (
+          <div className="opacity-70">Loading tables…</div>
+        ) : (
+          <div className="text-red-400">
+            Failed to load tables {tables.code ? `(HTTP ${tables.code})` : ""}. {tables.detail || ""}
+          </div>
+        )}
+      </div>
 
-              <button
-                disabled={joining === t.id}
-                onClick={() => onJoin(t.id)}
-                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 border border-white/20 hover:border-white/40"
-              >
-                <PlayIcon className="w-4 h-4" />
-                {joining === t.id ? "Joining…" : "Join"}
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-sm opacity-60">No tables.</div>
-      )}
-
-      {joinMsg && (
-        <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm">
-          {joinMsg}
+      {!isTelegram && (
+        <div className="mt-6 text-xs opacity-60">
+          Tip: open this Mini App inside Telegram to use your real identity. In dev, we use{" "}
+          <code>user_id=1</code> automatically.
         </div>
       )}
-
-      <footer className="flex items-center gap-2 text-xs opacity-70">
-        <ChipIcon className="w-4 h-4" />
-        <span>Dark/Light follows device. Account settings saved on server.</span>
-      </footer>
     </div>
   );
+}
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl p-4 shadow border border-[var(--card-border,#2a2a2a)] bg-[var(--card-bg,#111318)]">
+      <div className="text-xs uppercase tracking-wide opacity-60">{title}</div>
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="mt-6 mb-3 text-lg font-semibold">{children}</h2>;
 }
