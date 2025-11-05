@@ -295,4 +295,216 @@ export const LobbyPanel: React.FC<Props> = ({ sessionToken }) => {
               gridTemplateColumns: '1fr auto',
               gap: 8,
               padding: '10px 0',
-              borderBottom: '1px dashed rgb
+              borderBottom: '1px dashed rgba(255,255,255,0.12)'
+            }}>
+              <div>
+                <div style={{ fontWeight: 800 }}>{t.name} {t.private ? '🔒' : ''}</div>
+                <div style={{ fontSize: 12, opacity: 0.75 }}>
+                  {fmtNum(t.seated)}/{fmtNum(t.maxPlayers)} seated • {fmtNum(t.bb)} BB
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Button onClick={() => join(t.id)} style={{ whiteSpace: 'nowrap' }}>Join</Button>
+              </div>
+            </div>
+          ))}
+          {filtered.length === 0 && <div style={{ opacity: 0.7, fontSize: 13 }}>No tables match your filter.</div>}
+        </div>
+      </Card>
+
+      <Card>
+        <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 8 }}>Create a table</div>
+        <form onSubmit={create} style={{ display: 'grid', gap: 8 }}>
+          <Input placeholder="Table name" value={name} onChange={(e) => setName(e.target.value)} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <Select value={String(bb)} onChange={(e) => setBb(Number(e.target.value))}>
+              <option value="1">1 BB</option>
+              <option value="2">2 BB</option>
+              <option value="5">5 BB</option>
+            </Select>
+            <Select value={String(maxPlayers)} onChange={(e) => setMaxPlayers(Number(e.target.value))}>
+              <option value="6">6-max</option>
+              <option value="9">9-max</option>
+            </Select>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+            <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
+            Private (invite-only)
+          </label>
+          <Button type="submit" disabled={creating}>{creating ? 'Creating…' : 'Create table'}</Button>
+        </form>
+      </Card>
+
+      {message && (
+        <Card style={{ background: 'rgba(46,204,113,0.12)', border: '1px solid rgba(46,204,113,0.35)' }}>
+          {message}
+        </Card>
+      )}
+    </div>
+  );
+};
+
+/** ---------- GamePanel ---------- */
+
+export const GamePanel: React.FC<Props> = ({ sessionToken, userId, username }) => {
+  const [tableId, setTableId] = useState<string | null>(loadActiveTable());
+  const [detail, setDetail] = useState<TableDetail | null>(null);
+  const [serverAvailable, setServerAvailable] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTableId(loadActiveTable());
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!tableId) { setDetail(null); setLoading(false); return; }
+      setLoading(true);
+      const res = await safeFetch<TableDetail>(`/api/tables/${encodeURIComponent(tableId)}`, { method: 'GET' }, sessionToken);
+      if (!mounted) return;
+      if (res.ok && res.data) {
+        setDetail(res.data);
+        setServerAvailable(true);
+      } else {
+        // fallback mock
+        setDetail(mockDetail(tableId));
+        setServerAvailable(false);
+      }
+      setLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [tableId, sessionToken]);
+
+  const leave = () => {
+    saveActiveTable(null);
+    setDetail(null);
+    setTableId(null);
+    setMsg('You left the table.');
+  };
+
+  const quickAction = async (action: 'check' | 'call' | 'fold' | 'bet') => {
+    setMsg(`Action: ${action.toUpperCase()} (demo)`);
+    // Future: POST /api/tables/:id/action {action, amount?}
+  };
+
+  if (!tableId) {
+    return (
+      <div style={{ padding: 12 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Game</div>
+        <Card>
+          You’re not seated at a table yet. Join one from the Lobby.
+        </Card>
+        {msg && <Card style={{ marginTop: 8, background: 'rgba(46,204,113,0.12)', border: '1px solid rgba(46,204,113,0.35)' }}>{msg}</Card>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 12, display: 'grid', gap: 12 }}>
+      {!serverAvailable && (
+        <Card style={{ background: 'rgba(255, 199, 0, 0.12)', border: '1px solid rgba(255, 199, 0, 0.35)' }}>
+          Live game endpoint not found — showing demo HUD. Implement <code>/api/tables/:id</code> for real-time data.
+        </Card>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>{detail?.name || 'Table'}</div>
+          <div style={{ fontSize: 12, opacity: 0.75 }}>
+            {detail ? `${detail.seated}/${detail.maxPlayers} seated • ${fmtNum(detail.bb)} BB` : '—'}
+          </div>
+        </div>
+        <Button onClick={leave}>Leave</Button>
+      </div>
+
+      {loading ? (
+        <Card>Loading table…</Card>
+      ) : (
+        <>
+          <Card>
+            <Row label="Stage" value={detail?.stage || 'idle'} />
+            <Row label="Dealer" value={detail?.dealer || '—'} />
+            <Row label="Pot" value={chips(detail?.pot || 0)} />
+          </Card>
+
+          <Card>
+            <div style={{ fontWeight: 800, marginBottom: 8 }}>Players</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {(detail?.players || []).map(p => (
+                <div key={p.id} style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto',
+                  gap: 8,
+                  borderBottom: '1px dashed rgba(255,255,255,0.12)',
+                  paddingBottom: 6
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{p.name}{p.name === 'You' || p.id === userId ? ' (you)' : ''}</div>
+                    <div style={{ fontSize: 12, opacity: 0.75 }}>{p.sittingOut ? 'Sitting out' : 'Active'}</div>
+                  </div>
+                  <div style={{ fontWeight: 700 }}>{chips(p.stack)}</div>
+                </div>
+              ))}
+              {(!detail?.players || detail.players.length === 0) && <div style={{ opacity: 0.7, fontSize: 13 }}>No players yet.</div>}
+            </div>
+          </Card>
+
+          <Card>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              <Button onClick={() => quickAction('check')}>Check</Button>
+              <Button onClick={() => quickAction('call')}>Call</Button>
+              <Button onClick={() => quickAction('fold')}>Fold</Button>
+              <Button onClick={() => quickAction('bet')}>Bet</Button>
+            </div>
+            {msg && <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>{msg}</div>}
+          </Card>
+        </>
+      )}
+    </div>
+  );
+};
+
+/** ---------- Optional combined wrapper (not used by App.tsx directly) ---------- */
+
+const LobbyAndGame: React.FC<Props> = (props) => {
+  const [tab, setTab] = useState<'lobby' | 'game'>('lobby');
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 10,
+        position: 'sticky', top: 0, zIndex: 2,
+        background: 'var(--tg-theme-bg-color, #0f0f0f)',
+      }}>
+        <button
+          onClick={() => setTab('lobby')}
+          style={{
+            padding: '10px 12px', borderRadius: 12,
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: tab === 'lobby'
+              ? 'linear-gradient(180deg, rgba(40,40,40,0.9), rgba(20,20,20,0.9))'
+              : 'var(--tg-theme-secondary-bg-color, rgba(255,255,255,0.04))',
+            color: 'var(--tg-theme-text-color, #fff)', fontWeight: 800,
+          }}
+        >🏠 Lobby</button>
+        <button
+          onClick={() => setTab('game')}
+          style={{
+            padding: '10px 12px', borderRadius: 12,
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: tab === 'game'
+              ? 'linear-gradient(180deg, rgba(40,40,40,0.9), rgba(20,20,20,0.9))'
+              : 'var(--tg-theme-secondary-bg-color, rgba(255,255,255,0.04))',
+            color: 'var(--tg-theme-text-color, #fff)', fontWeight: 800,
+          }}
+        >🃏 Game</button>
+      </div>
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {tab === 'lobby' ? <LobbyPanel {...props} /> : <GamePanel {...props} />}
+      </div>
+    </div>
+  );
+};
+
+export default LobbyAndGame;
