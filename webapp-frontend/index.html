@@ -1,16 +1,39 @@
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<!doctype html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="description" content="Telegram Poker mini-app" />
+    <!-- Keep subpath deployments (Telegram hosting) happy -->
+    <base href="./" />
+    <!-- Fallback theme; real colors come from Telegram CSS vars -->
+    <meta name="theme-color" content="#0f0f0f" />
 
-    <!-- ✅ Telegram WebApp SDK -->
+    <title>Poker Mini-App</title>
+
+    <!-- Telegram WebApp script (provides window.Telegram.WebApp) -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-    <title>Texas Poker</title>
+    <!-- Optional: minimal CSS so you see a dark background instantly.
+         The React app (main.tsx) injects fuller globals at runtime. -->
+    <style>
+      html, body, #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        background: var(--tg-theme-bg-color, #0f0f0f);
+        color: var(--tg-theme-text-color, #ffffff);
+      }
+    </style>
   </head>
   <body>
+    <noscript>Enable JavaScript to run the Poker mini-app.</noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
