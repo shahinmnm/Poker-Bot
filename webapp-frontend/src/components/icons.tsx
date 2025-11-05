@@ -174,7 +174,7 @@ export const ArrowRightIcon = (props: IconProps) => (
   </BaseSvg>
 );
 
-/* --- Newly added to satisfy StatsAndAccount imports --- */
+/* --- Newly added / used by StatsAndAccount --- */
 
 export const PlusIcon = (props: IconProps) => (
   <BaseSvg {...props}>
@@ -193,6 +193,17 @@ export const WalletIcon = (props: IconProps) => (
     <rect x="3" y="7" width="18" height="12" rx="2" />
     <path d="M21 10h-6a2 2 0 0 0 0 4h6v-4Z" />
     <circle cx="15.5" cy="12" r="0.5" />
+  </BaseSvg>
+);
+
+export const GlobeIcon = (props: IconProps) => (
+  <BaseSvg {...props}>
+    <circle cx="12" cy="12" r="9" />
+    {/* Equator */}
+    <path d="M3 12h18" />
+    {/* Meridians (stylized) */}
+    <path d="M12 3a15 15 0 0 1 0 18" />
+    <path d="M12 3a15 15 0 0 0 0 18" />
   </BaseSvg>
 );
 
