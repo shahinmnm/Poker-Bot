@@ -1,113 +1,168 @@
 // webapp-frontend/src/components/LobbyAndGame.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { apiTables, apiJoinTable, TableDto } from "../lib/api";
+import { apiJoinTable, apiTables, TableDto } from "../lib/api";
 import {
+  ArrowRightIcon,
   CardsIcon,
+  CoinsIcon,
   LockIcon,
   PlayIcon,
   UsersIcon,
-  CoinsIcon,
 } from "./icons";
 
-type LoadState<T> = { status: "idle" | "loading" | "ready" | "error"; data?: T; error?: any };
+type LobbyProps = {
+  onJoinSuccess(tableId: string): void;
+};
 
-export function LobbyPanel() {
-  const [state, setState] = useState<LoadState<TableDto[]>>({ status: "idle" });
+export const LobbyPanel: React.FC<LobbyProps> = ({ onJoinSuccess }) => {
+  const [loading, setLoading] = useState(true);
+  const [tables, setTables] = useState<TableDto[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
 
-  const refresh = async () => {
-    setState({ status: "loading" });
+  async function refresh() {
+    setLoading(true);
+    setError(null);
     try {
-      const rows = await apiTables();
-      setState({ status: "ready", data: rows });
+      const data = await apiTables();
+      setTables(data);
     } catch (e: any) {
-      setState({ status: "error", error: e });
-    }
-  };
-
-  useEffect(() => { refresh(); }, []);
-
-  const rows = state.data ?? [];
-
-  const body = (
-    <div className="stack">
-      {state.status === "error" && (
-        <div className={`banner ${state.error?.code === 404 ? "" : "error"}`}>
-          {state.error?.code === 404
-            ? <>Server tables endpoint not found — using local mock data. Implement: <code>/api/tables</code></>
-            : <>Couldn’t load tables ({String(state.error?.code || "")}).</>}
-        </div>
-      )}
-
-      <div className="card stack">
-        <div className="section-title"><CardsIcon /> Tables Lobby</div>
-        <button className="btn ghost" onClick={refresh}>↻ Refresh</button>
-
-        <div className="list">
-          {rows.map((t) => (
-            <div key={t.id} className="list-item">
-              <div className="kv">
-                <div className="value">{t.name}</div>
-                <div className="small">
-                  {t.is_private ? <>Private <LockIcon /></> : "Public"} · {t.status === "running" ? "Running" : "Waiting"}
-                </div>
-                <div className="small">
-                  <CoinsIcon style={{verticalAlign:"-2px"}}/> {t.stakes} · <UsersIcon style={{verticalAlign:"-2px"}}/> {t.players_count}/{t.max_players}
-                </div>
-                <div className="small">ID: {t.id}</div>
-              </div>
-              <div>
-                {t.status === "running" ? (
-                  <button className="btn" onClick={() => alert("Spectate stub")}>▶ Spectate</button>
-                ) : (
-                  <button className="btn primary" onClick={() => join(t.id)}>Join</button>
-                )}
-              </div>
-            </div>
-          ))}
-          {rows.length === 0 && <div className="small">No tables available.</div>}
-        </div>
-      </div>
-
-      <div className="card stack">
-        <div className="section-title"><LockIcon /> Create a table</div>
-        <div className="grid-2">
-          <input className="list-item" placeholder="Friends Table" />
-          <select className="list-item"><option>1 BB</option><option>2 BB</option><option>5 BB</option></select>
-          <select className="list-item"><option>6-max</option><option>9-max</option></select>
-          <label className="list-item" style={{gap:8, alignItems:"center"}}>
-            <input type="checkbox" defaultChecked /> Private (invite-only)
-          </label>
-        </div>
-        <button className="btn primary">Create table</button>
-        <div className="small">This is a UI shell; wire to your backend when ready.</div>
-      </div>
-    </div>
-  );
-
-  async function join(id: string) {
-    try {
-      await apiJoinTable(id);
-      alert(`Joined ${id} (demo)`);
-    } catch (e: any) {
-      if (e?.code === 401) alert("Authentication required. Open inside Telegram or enable dev fallback.");
-      else alert(`Join failed (${e?.code || "error"})`);
+      setError(e?.message || "Failed to load tables");
+    } finally {
+      setLoading(false);
     }
   }
 
-  return body;
-}
+  useEffect(() => {
+    refresh();
+  }, []);
 
-export function GamePanel() {
+  const visible = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return tables;
+    return tables.filter((t) =>
+      [t.name, t.stakes, t.is_private ? "private" : "public", t.status]
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [tables, filter]);
+
+  async function handleJoin(t: TableDto) {
+    try {
+      setError(null);
+      await apiJoinTable(t.id);
+      onJoinSuccess(t.id);
+    } catch (e: any) {
+      if (e?.code === 401) {
+        setError(
+          "Sign in inside Telegram to join tables (AUTH_REQUIRED). Open this WebApp from your bot."
+        );
+      } else {
+        setError(`Join failed: ${e?.message || "unknown error"}`);
+      }
+    }
+  }
+
   return (
-    <div className="stack">
+    <section className="panel">
+      <header className="panel-header">
+        <div className="title">
+          <CardsIcon className="icon" /> Tables Lobby
+        </div>
+        <button className="btn ghost" onClick={refresh} disabled={loading}>
+          ↻ Refresh
+        </button>
+      </header>
+
       <div className="card">
-        <div className="section-title"><PlayIcon /> Game</div>
-        <p className="small" style={{lineHeight:1.6}}>
-          Game surface coming here. Your core Telegram-bot engine runs gameplay; this panel
-          is a mini-app surface for table HUD, actions, and stats. Hook this to your real-time
-          channel when ready.
+        <input
+          className="input"
+          placeholder="Search by name, stake, visibility…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          inputMode="search"
+        />
+      </div>
+
+      {error && <div className="alert warn">{error}</div>}
+
+      {loading ? (
+        <div className="muted">Loading tables…</div>
+      ) : visible.length === 0 ? (
+        <div className="muted">No tables match your search.</div>
+      ) : (
+        <ul className="list">
+          {visible.map((t) => (
+            <li key={t.id} className="row">
+              <div className="row-main">
+                <div className="row-title">
+                  {t.name}{" "}
+                  {t.is_private ? (
+                    <span title="Private table">
+                      <LockIcon className="icon sm" />
+                    </span>
+                  ) : null}
+                </div>
+                <div className="row-sub">
+                  <CoinsIcon className="icon sm" /> {t.stakes} &nbsp;·&nbsp;
+                  <UsersIcon className="icon sm" /> {t.players_count}/{t.max_players}
+                  &nbsp;·&nbsp; {t.is_private ? "Private" : "Public"}
+                  &nbsp;·&nbsp; {t.status === "running" ? "Running" : "Waiting"}
+                  &nbsp;·&nbsp; ID: {t.id}
+                </div>
+              </div>
+              <div className="row-cta">
+                <button
+                  className="btn"
+                  onClick={() => handleJoin(t)}
+                  disabled={t.is_private || t.status === "running"}
+                  title={
+                    t.is_private
+                      ? "Invite-only"
+                      : t.status === "running"
+                      ? "Game is already running"
+                      : "Join this table"
+                  }
+                >
+                  <PlayIcon className="icon" />
+                  Join
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};
+
+type GameProps = {
+  currentTableId?: string | null;
+};
+
+export const GamePanel: React.FC<GameProps> = ({ currentTableId }) => {
+  return (
+    <section className="panel">
+      <header className="panel-header">
+        <div className="title">
+          <PlayIcon className="icon" /> Game
+        </div>
+        {currentTableId ? (
+          <div className="chip">
+            Table <ArrowRightIcon className="icon sm" /> {currentTableId}
+          </div>
+        ) : (
+          <div className="muted">Join a table from the Lobby to start.</div>
+        )}
+      </header>
+
+      <div className="card">
+        <p className="muted">
+          Game surface placeholder. Render your real-time table HUD/actions here and
+          attach to your channel (WebSocket/long-poll/Telegram callbacks).
         </p>
       </div>
-    </div>
+    </section>
   );
-}
+};
