@@ -1,144 +1,133 @@
 // webapp-frontend/src/components/LobbyAndGame.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { apiJoinTable, apiTables, TableDto } from "../lib/api";
-import { CardsIcon, LockIcon, PlayIcon, UsersIcon } from "./icons";
+import {
+  PlayIcon,
+  LockIcon,
+  UsersIcon,
+  CoinsIcon,
+  TrophyIcon,
+} from "./icons";
 
-type FetchState<T> =
-  | { status: "idle" | "loading" }
-  | { status: "ready"; data: T }
-  | { status: "error"; code?: number; message?: string };
+type LobbyProps = {
+  onOpenGame?: () => void;
+};
 
-export function LobbyPanel() {
-  const [query, setQuery] = useState("");
+type GameProps = {
+  onBackToLobby?: () => void;
+};
+
+export function LobbyPanel(props: LobbyProps) {
+  const [tables, setTables] = useState<TableDto[]>([]);
+  const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState<string | null>(null);
-  const [state, setState] = useState<FetchState<TableDto[]>>({ status: "loading" });
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      setLoading(true);
+      const data = await apiTables();
+      setTables(data);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.code === 401 ? "Sign in required" : (e?.message || "Failed to fetch tables"));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const tables = await apiTables();
-        if (!alive) return;
-        setState({ status: "ready", data: tables });
-      } catch (e: any) {
-        if (!alive) return;
-        setState({ status: "error", code: e?.code, message: e?.message || String(e) });
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+    load();
   }, []);
 
-  const filtered = useMemo(() => {
-    if (state.status !== "ready") return [];
-    const q = query.trim().toLowerCase();
-    if (!q) return state.data;
-    return state.data.filter((t) => {
-      const vis = t.is_private ? "private" : "public";
-      const s = `${t.name} ${t.stakes} ${vis} ${t.players_count}/${t.max_players} ${t.status}`.toLowerCase();
-      return s.includes(q);
-    });
-  }, [state, query]);
-
-  async function join(tableId: string) {
+  async function handleJoin(tableId: string) {
     try {
       setJoining(tableId);
       await apiJoinTable(tableId);
-      // In a real app: navigate to Game tab or open table HUD
-      alert(`Joined ${tableId} (server acknowledged).`);
+      setError(null);
+      // After successful join, move to "Game"
+      props.onOpenGame?.();
     } catch (e: any) {
-      if (e?.code === 401) alert("Please open the app inside Telegram to authenticate.");
-      else if (e?.code === 404) alert("Join endpoint not found on server.");
-      else alert(`Join failed: ${e?.message || e}`);
+      setError(e?.code === 401 ? "Sign in required" : (e?.message || "Failed to join"));
     } finally {
       setJoining(null);
     }
   }
 
+  const sorted = useMemo(() => {
+    return [...tables].sort((a, b) => {
+      // running first, then waiting
+      if (a.status !== b.status)
+        return a.status === "running" ? -1 : 1;
+      // more players first
+      if (a.players_count !== b.players_count)
+        return b.players_count - a.players_count;
+      return a.name.localeCompare(b.name);
+    });
+  }, [tables]);
+
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <div className="title">
-          <CardsIcon className="icon" /> Tables Lobby
-        </div>
+    <div className="card">
+      <div className="h">
+        <TrophyIcon width={18} height={18} />
+        <span>Lobby</span>
+        <span className="sub">{tables.length} tables</span>
       </div>
 
-      <input
-        className="input"
-        placeholder="Search by name, stake, visibility…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="hr" />
 
-      {state.status === "loading" && <div className="card muted">Loading tables…</div>}
-      {state.status === "error" && (
-        <div className="alert warn">
-          {state.code === 404
-            ? "Server tables endpoint not found — implement /api/tables on your backend."
-            : "Could not load tables. Check network/server logs."}
+      {loading && <div className="pill">Loading tables…</div>}
+      {error && <div className="pill" style={{ color: "var(--error)" }}>{error}</div>}
+      {!loading && !error && (
+        <div className="list" role="list">
+          {sorted.map((t) => (
+            <div key={t.id} className="item" role="listitem" aria-label={`${t.name} ${t.stakes}`}>
+              <div>
+                <h4>
+                  {t.is_private && <LockIcon width={16} height={16} style={{ marginRight: 6, opacity: .8 }} />}
+                  {t.name}
+                </h4>
+                <div className="meta">
+                  <span title="stakes"><CoinsIcon width={14} height={14} style={{ marginRight: 4 }} /> {t.stakes}</span>
+                  {" · "}
+                  <span title="players"><UsersIcon width={14} height={14} style={{ marginRight: 4 }} /> {t.players_count}/{t.max_players}</span>
+                  {" · "}
+                  <span title="status" style={{ textTransform: "capitalize" }}>{t.status}</span>
+                </div>
+              </div>
+              <button
+                className="btn"
+                onClick={() => handleJoin(t.id)}
+                disabled={!!joining}
+                aria-busy={joining === t.id}
+              >
+                <PlayIcon width={16} height={16} />
+                {joining === t.id ? "Joining…" : "Join"}
+              </button>
+            </div>
+          ))}
         </div>
-      )}
-
-      {state.status === "ready" && (
-        <ul className="list">
-          {filtered.map((t) => {
-            const vis = t.is_private ? (
-              <>
-                <LockIcon className="icon sm" /> Private
-              </>
-            ) : (
-              "Public"
-            );
-
-            return (
-              <li key={t.id} className="row">
-                <div className="row-main">
-                  <div className="row-title">{t.name}</div>
-                  <div className="row-sub">
-                    <span>{vis}</span>
-                    <span>{t.status[0].toUpperCase() + t.status.slice(1)}</span>
-                    <span>
-                      💰 {t.stakes}
-                    </span>
-                    <span>
-                      <UsersIcon className="icon sm" /> {t.players_count}/{t.max_players}
-                    </span>
-                    <span className="chip">ID: {t.id}</span>
-                  </div>
-                </div>
-                <div className="row-cta">
-                  <button
-                    className="btn"
-                    disabled={joining === t.id}
-                    onClick={() => join(t.id)}
-                    title="Join table"
-                  >
-                    <PlayIcon className="icon sm" />
-                    {joining === t.id ? "Joining…" : "Join"}
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
       )}
     </div>
   );
 }
 
-export function GamePanel() {
+export function GamePanel(props: GameProps) {
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <div className="title">
-          <PlayIcon className="icon" /> Game
-        </div>
+    <div className="card">
+      <div className="h">
+        <TrophyIcon width={18} height={18} />
+        <span>Game</span>
+        <span className="sub">Texas Hold’em</span>
       </div>
-
-      <div className="card">
-        This is the mini-app game surface. When your real-time channel is ready, mount your table HUD
-        and actions here (spectators, hand history, timers, etc).
+      <div className="hr" />
+      <div style={{ color: "var(--text-dim)" }}>
+        You’ve joined a table. Your Telegram mini-app can render the table UI here.
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <button className="tab-btn" onClick={props.onBackToLobby}>
+          Back to Lobby
+        </button>
       </div>
     </div>
   );
