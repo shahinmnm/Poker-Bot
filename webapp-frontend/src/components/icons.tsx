@@ -1,8 +1,9 @@
 // webapp-frontend/src/components/icons.tsx
 //
-// Tiny, dependency-free icon set for the Poker WebApp.
-// All icons use currentColor and 24x24 viewport.
-// Add or remove exports to match your imports elsewhere.
+// Lightweight icon set for the Poker WebApp.
+// - All icons are 24x24, stroke-based, using currentColor.
+// - No external deps.
+// - Export names match component imports elsewhere.
 
 import * as React from "react";
 
@@ -27,6 +28,8 @@ function BaseSvg(props: IconProps) {
     </svg>
   );
 }
+
+/* --- Core set used across the app --- */
 
 export const BadgeCheckIcon = (props: IconProps) => (
   <BaseSvg {...props}>
@@ -113,7 +116,8 @@ export const UserIcon = (props: IconProps) => (
   </BaseSvg>
 );
 
-/** Poker-ish extras that some components use */
+/* --- Utility & poker-themed extras --- */
+
 export const CardsIcon = (props: IconProps) => (
   <BaseSvg {...props}>
     <rect x="3" y="4" width="8" height="12" rx="2" />
@@ -141,7 +145,6 @@ export const TrendingDownIcon = (props: IconProps) => (
   </BaseSvg>
 );
 
-/** Utility extras some views may import */
 export const LockIcon = (props: IconProps) => (
   <BaseSvg {...props}>
     <rect x="4" y="11" width="16" height="9" rx="2" />
@@ -171,5 +174,27 @@ export const ArrowRightIcon = (props: IconProps) => (
   </BaseSvg>
 );
 
-// Alias if any component expects SettingsIcon
+/* --- Newly added to satisfy StatsAndAccount imports --- */
+
+export const PlusIcon = (props: IconProps) => (
+  <BaseSvg {...props}>
+    <path d="M12 5v14M5 12h14" />
+  </BaseSvg>
+);
+
+export const ShieldIcon = (props: IconProps) => (
+  <BaseSvg {...props}>
+    <path d="M12 3l7 4v6a7 7 0 0 1-7 7 7 7 0 0 1-7-7V7l7-4Z" />
+  </BaseSvg>
+);
+
+export const WalletIcon = (props: IconProps) => (
+  <BaseSvg {...props}>
+    <rect x="3" y="7" width="18" height="12" rx="2" />
+    <path d="M21 10h-6a2 2 0 0 0 0 4h6v-4Z" />
+    <circle cx="15.5" cy="12" r="0.5" />
+  </BaseSvg>
+);
+
+/* --- Aliases --- */
 export const SettingsIcon = CogIcon;
