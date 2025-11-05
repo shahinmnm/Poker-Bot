@@ -1,22 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import StatsAndAccount, { StatsPanel, AccountPanel } from './components/StatsAndAccount';
+import { LobbyPanel, GamePanel } from './components/LobbyAndGame';
+import { StatsPanel, AccountPanel } from './components/StatsAndAccount';
 
 /**
  * App.tsx
  * Top-level container for the Telegram Poker mini-app.
  *
- * Features
- *  - Four tabs: Lobby | Game | Stats | Account
- *  - Uses Telegram WebApp context to read user/session
- *  - Dark/Light theme adapts via Telegram theme variables and prefers-color-scheme
- *  - Keeps mini-app size unchanged (fills parent; no global viewport hacks)
- *  - Zero external CSS dependency; inline styles respect WebApp theme
+ * Tabs:
+ *  - Lobby  : table list + create/join flow (real endpoints if present, graceful mock if not)
+ *  - Game   : active table HUD (uses selected table from Lobby)
+ *  - Stats  : player stats panel (calls /api/user/stats)
+ *  - Account: settings + daily bonus (calls /api/user/settings, /api/user/bonus)
  *
- * How it works
- *  - We read window.Telegram.WebApp?.initDataUnsafe for user info
- *  - We treat initData string as a bearer `sessionToken` (customize if your backend differs)
- *  - The existing app content (if any) can live under Lobby/Game stubs for now
- *    (replace the placeholders with your real components at your pace)
+ * Theme:
+ *  - Auto-adapts to Telegram WebApp theme variables with device fallback
+ * Size:
+ *  - Fills parent; no viewport hacks or global size changes
  */
 
 /** Minimal types for Telegram WebApp */
@@ -66,7 +65,7 @@ const useTelegramEnv = () => {
   }, []);
 
   const user = webapp?.initDataUnsafe?.user;
-  // NOTE: You may want to validate/parse initData server-side; here we pass as-is for demo.
+  // NOTE: In production your backend should validate initData; here we pass along for API auth.
   const sessionToken = webapp?.initData || null;
 
   return {
@@ -91,7 +90,7 @@ const App: React.FC = () => {
     if (typeof window !== 'undefined' && window.matchMedia) {
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
-    return true; // default to dark for poker vibe
+    return true; // poker-friendly default
   }, [webapp?.colorScheme]);
 
   // Optional: nudge header/background to match theme params if available
@@ -100,56 +99,12 @@ const App: React.FC = () => {
     try {
       // @ts-expect-error: Telegram may accept color keys here
       webapp.setHeaderColor?.('bg_color');
-      // If you want a custom background, uncomment below:
+      // If you want a custom background color instead of TG theme:
       // webapp.setBackgroundColor?.(isDark ? '#0f0f0f' : '#f7f7f7');
     } catch {
       /* noop */
     }
   }, [webapp, isDark]);
-
-  // Basic placeholders for Lobby/Game to avoid compile errors.
-  // Replace these with your real components/screens at any time.
-  const LobbyView = (
-    <div style={{ padding: 12 }}>
-      <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Lobby</div>
-      <div style={{ fontSize: 13, opacity: 0.75 }}>
-        Create or join private games, invite friends, and browse active tables.
-      </div>
-      <div style={{
-        marginTop: 12,
-        padding: 12,
-        borderRadius: 12,
-        background: 'var(--tg-theme-secondary-bg-color, rgba(255,255,255,0.04))',
-        border: '1px solid rgba(255,255,255,0.12)'
-      }}>
-        <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.6 }}>
-          <li>Quick Match (6-max, 1/2 BB)</li>
-          <li>Friends Table (Invite-only)</li>
-          <li>Deep Stack (2/5 BB)</li>
-        </ul>
-      </div>
-    </div>
-  );
-
-  const GameView = (
-    <div style={{ padding: 12 }}>
-      <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Game</div>
-      <div style={{ fontSize: 13, opacity: 0.75 }}>
-        Your active table appears here. Replace this with your real table UI.
-      </div>
-      <div style={{
-        marginTop: 12,
-        padding: 12,
-        borderRadius: 12,
-        background: 'var(--tg-theme-secondary-bg-color, rgba(255,255,255,0.04))',
-        border: '1px solid rgba(255,255,255,0.12)'
-      }}>
-        <div style={{ fontSize: 12, opacity: 0.8 }}>
-          Tip: enable “Four-color deck” in Account → Settings for faster suit recognition.
-        </div>
-      </div>
-    </div>
-  );
 
   // Shared container styles — keep size within parent (no viewport forcing)
   const appStyles: React.CSSProperties = {
@@ -214,8 +169,22 @@ const App: React.FC = () => {
 
       {/* Content area */}
       <div style={{ flex: 1, overflow: 'auto' }}>
-        {tab === 'lobby' && LobbyView}
-        {tab === 'game' && GameView}
+        {tab === 'lobby' && (
+          <LobbyPanel
+            sessionToken={sessionToken}
+            userId={userId}
+            username={username}
+          />
+        )}
+
+        {tab === 'game' && (
+          <GamePanel
+            sessionToken={sessionToken}
+            userId={userId}
+            username={username}
+          />
+        )}
+
         {tab === 'stats' && (
           <StatsPanel
             sessionToken={sessionToken}
@@ -223,6 +192,7 @@ const App: React.FC = () => {
             username={username}
           />
         )}
+
         {tab === 'account' && (
           <AccountPanel
             sessionToken={sessionToken}
