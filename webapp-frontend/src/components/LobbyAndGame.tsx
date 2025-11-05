@@ -1,537 +1,274 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { haptics } from '../utils/uiEnhancers';
+import React, { useEffect, useMemo, useState } from "react";
+import { ChipIcon, CrownIcon, LockIcon, PlayIcon, UsersIcon } from "./icons";
 
-/**
- * LobbyAndGame.tsx
- *
- * Adds:
- *  - LobbyPanel: browse active tables, quick filter, create new table, join
- *  - GamePanel: shows the selected table (from localStorage) with minimal HUD
- *
- * Backend (optional, graceful if missing):
- *  - GET  /api/tables                  -> list tables [{id,name,bb,maxPlayers,seated,private}]
- *  - POST /api/tables                  -> create {name, bb, maxPlayers, private}
- *  - POST /api/tables/:id/join         -> join table
- *  - GET  /api/tables/:id              -> table details
- *
- * If these endpoints are not available yet, panels use a local mock dataset
- * and still let the user “join” (stored in localStorage as activeTableId).
- *
- * Props to pass (mirrors other panels in this project):
- *  - sessionToken: string | null
- *  - userId: number | null
- *  - username: string | null
- */
+// -------------------------------------------------------------
+// Lobby + Table preview + Join flow for Poker WebApp mini-app.
+// This component fetches:
+//   - /api/tables
+// and POSTs:
+//   - /api/tables/{table_id}/join
+//
+// IMPORTANT: Outside Telegram we auto-attach ?user_id=1 so the
+// backend doesn't 401 during local/dev testing.
+// -------------------------------------------------------------
 
-type Nullable<T> = T | null;
-
-type TableSummary = {
+type TableDto = {
   id: string;
   name: string;
-  bb: number;          // big blind (chip unit)
-  maxPlayers: number;  // seats
-  seated: number;      // occupied seats
-  private: boolean;    // invite-only?
+  stakes: string;
+  players_count: number;
+  max_players: number;
+  is_private: boolean;
+  status: "waiting" | "running";
 };
 
-type TableDetail = TableSummary & {
-  // Extend with simple HUD info (for display in GamePanel)
-  pot?: number;
-  dealer?: string;
-  stage?: 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'idle';
-  players?: Array<{ id: number; name: string; stack: number; sittingOut?: boolean }>;
-};
+type FetchResult<T> = { ok: boolean; data?: T; status: number };
 
-type CreateTablePayload = {
-  name: string;
-  bb: number;
-  maxPlayers: number;
-  private: boolean;
-};
+// Detect Telegram WebApp context
+function getTelegramInitData(): string | null {
+  try {
+    // @ts-ignore injected by Telegram
+    const tg = (window as any)?.Telegram?.WebApp;
+    if (tg && typeof tg.initData === "string" && tg.initData.length > 0) {
+      return tg.initData;
+    }
+  } catch {}
+  return null;
+}
 
-type Props = {
-  sessionToken: Nullable<string>;
-  userId: Nullable<number>;
-  username: Nullable<string>;
-};
-
-/** ---------- Utilities ---------- */
-
-const fmtNum = (n: number | undefined | null, digits = 0) =>
-  typeof n === 'number' && !Number.isNaN(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : '—';
-
-const chips = (n: number | undefined | null) => (typeof n === 'number' ? `${fmtNum(n)} 🪙` : '—');
-
+// Tiny fetch helper with dev identity fallback.
+// - If outside Telegram, append ?user_id=1 (if not present)
+// - Always include credentials and JSON handling
 async function safeFetch<T>(
   path: string,
   opts: RequestInit,
-  token?: string | null,
+  token?: string | null
 ): Promise<{ ok: boolean; data?: T; status: number }> {
   try {
-    const res = await fetch(path, {
+    const base = typeof window !== "undefined" ? window.location.origin : "";
+    const url = new URL(path, base);
+
+    const isTelegram = !!(window as any)?.Telegram?.WebApp?.initData;
+    if (!isTelegram && !url.searchParams.has("user_id")) {
+      url.searchParams.set("user_id", "1");
+    }
+
+    const headers = new Headers(opts.headers as any);
+    if (token) headers.set("X-Telegram-Init-Data", token);
+
+    const res = await fetch(url.toString(), {
       ...opts,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(opts.headers || {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      credentials: 'include',
+      credentials: "include",
+      headers,
     });
-    if (!res.ok) return { ok: false, status: res.status };
-    const data = (await res.json()) as T;
-    return { ok: true, data, status: res.status };
-  } catch {
+
+    const ct = res.headers.get("content-type") || "";
+    const isJson = /application\/json/i.test(ct);
+    const data = isJson ? await res.json().catch(() => ({})) : ({} as any);
+
+    return { ok: res.ok, data, status: res.status };
+  } catch (e) {
+    console.warn("safeFetch failed", e);
     return { ok: false, status: 0 };
   }
 }
 
-const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
-  <div style={{
-    padding: 12,
-    borderRadius: 12,
-    background: 'var(--tg-theme-secondary-bg-color, rgba(255,255,255,0.04))',
-    border: '1px solid rgba(255,255,255,0.12)',
-    ...style
-  }}>
-    {children}
-  </div>
-);
-
-const Row: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, margin: '6px 0' }}>
-    <div style={{ opacity: 0.8, fontSize: 13 }}>{label}</div>
-    <div style={{ fontWeight: 600, fontSize: 13 }}>{value}</div>
-  </div>
-);
-
-// Buttons trigger a light click haptic automatically
-const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, style, onClick, ...rest }) => (
-  <button
-    {...rest}
-    onClick={(e) => {
-      haptics.click();
-      onClick?.(e);
-    }}
-    style={{
-      padding: '10px 12px',
-      borderRadius: 12,
-      border: '1px solid rgba(255,255,255,0.12)',
-      background: 'linear-gradient(180deg, rgba(40,40,40,0.9), rgba(20,20,20,0.9))',
-      color: 'var(--tg-theme-text-color, #fff)',
-      fontWeight: 800,
-      fontSize: 14,
-      boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
-      ...style,
-    }}
-  >
-    {children}
-  </button>
-);
-
-// Inputs/Selects give subtle selection feedback on change
-const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ style, onChange, ...rest }) => (
-  <input
-    {...rest}
-    onChange={(e) => { haptics.selection(); onChange?.(e); }}
-    style={{
-      width: '100%',
-      padding: '10px 12px',
-      borderRadius: 10,
-      border: '1px solid rgba(255,255,255,0.2)',
-      background: 'transparent',
-      color: 'inherit',
-      outline: 'none',
-      fontSize: 14,
-      ...style,
-    }}
-  />
-);
-
-const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ style, onChange, children, ...rest }) => (
-  <select
-    {...rest}
-    onChange={(e) => { haptics.selection(); onChange?.(e); }}
-    style={{
-      width: '100%',
-      padding: '10px 12px',
-      borderRadius: 10,
-      border: '1px solid rgba(255,255,255,0.2)',
-      background: 'transparent',
-      color: 'inherit',
-      outline: 'none',
-      fontSize: 14,
-      ...style,
-    }}
-  >
-    {children}
-  </select>
-);
-
-/** ---------- Mock data (used when backend endpoints are missing) ---------- */
-
-const MOCK_TABLES: TableSummary[] = [
-  { id: 't1', name: 'Quick Match', bb: 2, maxPlayers: 6, seated: 4, private: false },
-  { id: 't2', name: 'Friends Only', bb: 1, maxPlayers: 9, seated: 3, private: true },
-  { id: 't3', name: 'Deep Stack', bb: 5, maxPlayers: 6, seated: 5, private: false },
-];
-
-function mockDetail(id: string): TableDetail {
-  const base = MOCK_TABLES.find(t => t.id === id) || MOCK_TABLES[0];
-  return {
-    ...base,
-    pot: Math.floor(Math.random() * 200) + 40,
-    dealer: ['Alice', 'Bob', 'Dana', 'Eve'][Math.floor(Math.random() * 4)],
-    stage: ['preflop', 'flop', 'turn', 'river', 'showdown'][Math.floor(Math.random() * 5)] as TableDetail['stage'],
-    players: [
-      { id: 11, name: 'Alice', stack: 180 },
-      { id: 12, name: 'Bob', stack: 220 },
-      { id: 13, name: 'You', stack: 200 },
-      { id: 14, name: 'Dana', stack: 150 },
-    ].slice(0, base.seated),
-  };
-}
-
-/** ---------- Local storage for game selection ---------- */
-
-const ACTIVE_TABLE_KEY = 'activeTableId';
-
-function saveActiveTable(id: string | null) {
-  if (id) localStorage.setItem(ACTIVE_TABLE_KEY, id);
-  else localStorage.removeItem(ACTIVE_TABLE_KEY);
-}
-
-function loadActiveTable(): string | null {
-  return localStorage.getItem(ACTIVE_TABLE_KEY);
-}
-
-/** ---------- LobbyPanel ---------- */
-
-export const LobbyPanel: React.FC<Props> = ({ sessionToken }) => {
-  const [tables, setTables] = useState<TableSummary[]>([]);
-  const [filter, setFilter] = useState('');
-  const [serverAvailable, setServerAvailable] = useState(true);
-  const [creating, setCreating] = useState(false);
-
-  const [name, setName] = useState('Friends Table');
-  const [bb, setBb] = useState(1);
-  const [maxPlayers, setMaxPlayers] = useState(6);
-  const [isPrivate, setIsPrivate] = useState(true);
-  const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const res = await safeFetch<TableSummary[]>('/api/tables', { method: 'GET' }, sessionToken);
-      if (!mounted) return;
-      if (res.ok && Array.isArray(res.data)) {
-        setTables(res.data);
-        setServerAvailable(true);
-      } else {
-        // fallback to mock
-        setTables(MOCK_TABLES);
-        setServerAvailable(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [sessionToken]);
-
-  const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return tables;
-    return tables.filter(t =>
-      t.name.toLowerCase().includes(q) ||
-      String(t.bb).includes(q) ||
-      (t.private ? 'private' : 'public').includes(q)
-    );
-  }, [tables, filter]);
-
-  const join = async (tableId: string) => {
-    setMessage(null);
-    const res = await safeFetch(`/api/tables/${encodeURIComponent(tableId)}/join`, { method: 'POST' }, sessionToken);
-    if (res.ok) {
-      saveActiveTable(tableId);
-      setMessage('Joined table ✅ Open the Game tab to play.');
-      haptics.notification('success');
-    } else {
-      // graceful: still allow local join
-      saveActiveTable(tableId);
-      setMessage('Joined locally (server not ready). Open the Game tab to play.');
-      haptics.notification('warning');
-    }
-  };
-
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreating(true);
-    setMessage(null);
-    const payload: CreateTablePayload = { name, bb: Number(bb), maxPlayers: Number(maxPlayers), private: isPrivate };
-    const res = await safeFetch<TableSummary>('/api/tables', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }, sessionToken);
-
-    if (res.ok && res.data) {
-      setTables(prev => [res.data!, ...prev]);
-      setMessage('Table created ✅ You can join it now.');
-      haptics.notification('success');
-    } else {
-      // graceful create: synthesize local
-      const id = `t${Math.floor(Math.random() * 9000) + 1000}`;
-      const newTable: TableSummary = { id, name, bb: Number(bb), maxPlayers: Number(maxPlayers), seated: 1, private: isPrivate };
-      setTables(prev => [newTable, ...prev]);
-      setMessage('Table created locally (server not ready).');
-      haptics.notification('warning');
-    }
-    setCreating(false);
-  };
-
-  return (
-    <div style={{ padding: 12, display: 'grid', gap: 12 }}>
-      {!serverAvailable && (
-        <Card style={{ background: 'rgba(255, 199, 0, 0.12)', border: '1px solid rgba(255, 199, 0, 0.35)' }}>
-          Server tables endpoint not found — using local mock data.
-          Implement:
-          <code style={{ marginLeft: 6 }}>/api/tables</code>
-        </Card>
-      )}
-
-      <div style={{ display: 'grid', gap: 8 }}>
-        <div style={{ fontSize: 18, fontWeight: 800 }}>Find a table</div>
-        <Input
-          placeholder="Search by name, stake, visibility…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
-      </div>
-
-      <Card>
-        <div style={{ display: 'grid', gap: 8 }}>
-          {filtered.map(t => (
-            <div key={t.id} style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr auto',
-              gap: 8,
-              padding: '10px 0',
-              borderBottom: '1px dashed rgba(255,255,255,0.12)'
-            }}>
-              <div>
-                <div style={{ fontWeight: 800 }}>{t.name} {t.private ? '🔒' : ''}</div>
-                <div style={{ fontSize: 12, opacity: 0.75 }}>
-                  {fmtNum(t.seated)}/{fmtNum(t.maxPlayers)} seated • {fmtNum(t.bb)} BB
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Button onClick={() => join(t.id)} style={{ whiteSpace: 'nowrap' }}>Join</Button>
-              </div>
-            </div>
-          ))}
-          {filtered.length === 0 && <div style={{ opacity: 0.7, fontSize: 13 }}>No tables match your filter.</div>}
-        </div>
-      </Card>
-
-      <Card>
-        <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 8 }}>Create a table</div>
-        <form onSubmit={create} style={{ display: 'grid', gap: 8 }}>
-          <Input placeholder="Table name" value={name} onChange={(e) => setName(e.target.value)} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <Select value={String(bb)} onChange={(e) => setBb(Number(e.target.value))}>
-              <option value="1">1 BB</option>
-              <option value="2">2 BB</option>
-              <option value="5">5 BB</option>
-            </Select>
-            <Select value={String(maxPlayers)} onChange={(e) => setMaxPlayers(Number(e.target.value))}>
-              <option value="6">6-max</option>
-              <option value="9">9-max</option>
-            </Select>
-          </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-            <input
-              type="checkbox"
-              checked={isPrivate}
-              onChange={(e) => { setIsPrivate(e.target.checked); haptics.selection(); }}
-            />
-            Private (invite-only)
-          </label>
-          <Button type="submit" disabled={creating}>{creating ? 'Creating…' : 'Create table'}</Button>
-        </form>
-      </Card>
-
-      {message && (
-        <Card style={{ background: 'rgba(46,204,113,0.12)', border: '1px solid rgba(46,204,113,0.35)' }}>
-          {message}
-        </Card>
-      )}
-    </div>
-  );
-};
-
-/** ---------- GamePanel ---------- */
-
-export const GamePanel: React.FC<Props> = ({ sessionToken, userId, username }) => {
-  const [tableId, setTableId] = useState<string | null>(loadActiveTable());
-  const [detail, setDetail] = useState<TableDetail | null>(null);
-  const [serverAvailable, setServerAvailable] = useState(true);
+export default function LobbyAndGame() {
+  const [tables, setTables] = useState<TableDto[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [serverTables, setServerTables] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [joining, setJoining] = useState<string | null>(null);
+  const [joinMsg, setJoinMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    setTableId(loadActiveTable());
-  }, []);
+  const initData = useMemo(getTelegramInitData, []);
 
+  // Fetch tables
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
     (async () => {
-      if (!tableId) { setDetail(null); setLoading(false); return; }
       setLoading(true);
-      const res = await safeFetch<TableDetail>(`/api/tables/${encodeURIComponent(tableId)}`, { method: 'GET' }, sessionToken);
-      if (!mounted) return;
-      if (res.ok && res.data) {
-        setDetail(res.data);
-        setServerAvailable(true);
+      setError(null);
+      setJoinMsg(null);
+
+      const res = await safeFetch<{ tables?: TableDto[] } | TableDto[]>(
+        "/api/tables",
+        { method: "GET" },
+        initData
+      );
+
+      if (cancelled) return;
+
+      if (res.ok) {
+        const payload = res.data ?? {};
+        const list = Array.isArray(payload)
+          ? (payload as TableDto[])
+          : Array.isArray((payload as any).tables)
+          ? ((payload as any).tables as TableDto[])
+          : [];
+        setTables(list);
+        setServerTables(true);
       } else {
-        // fallback mock
-        setDetail(mockDetail(tableId));
-        setServerAvailable(false);
+        // Only mark endpoint missing if it's truly 404/Not Found.
+        // Other statuses (401, 500, etc.) shouldn't claim "missing".
+        if (res.status === 404) {
+          setServerTables(false);
+          // show a small hint but don't block UI
+          setError(
+            "Server tables endpoint not found — using local mock data. Implement: /api/tables"
+          );
+          setTables([
+            {
+              id: "pub-1",
+              name: "Main Lobby",
+              stakes: "50/100",
+              players_count: 5,
+              max_players: 9,
+              is_private: false,
+              status: "waiting",
+            },
+            {
+              id: "grp-777",
+              name: "Friends Table",
+              stakes: "10/20",
+              players_count: 3,
+              max_players: 6,
+              is_private: true,
+              status: "waiting",
+            },
+          ]);
+        } else {
+          // Generic error (incl. 401 in dev, server hiccups, etc.)
+          setError(
+            `Failed to load tables (HTTP ${res.status || "ERR"}). Retrying or refreshing may help.`
+          );
+          setTables([]);
+          setServerTables(null);
+        }
       }
+
       setLoading(false);
     })();
-    return () => { mounted = false; };
-  }, [tableId, sessionToken]);
 
-  const leave = () => {
-    saveActiveTable(null);
-    setDetail(null);
-    setTableId(null);
-    setMsg('You left the table.');
-    haptics.notification('warning');
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [initData]);
 
-  const quickAction = async (action: 'check' | 'call' | 'fold' | 'bet') => {
-    // Lightweight haptic accent depending on action
-    if (action === 'bet') haptics.impact('medium');
-    else if (action === 'fold') haptics.impact('soft');
-    else haptics.click();
-
-    setMsg(`Action: ${action.toUpperCase()} (demo)`);
-    // Future: POST /api/tables/:id/action {action, amount?}
-  };
-
-  if (!tableId) {
-    return (
-      <div style={{ padding: 12 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Game</div>
-        <Card>
-          You’re not seated at a table yet. Join one from the Lobby.
-        </Card>
-        {msg && <Card style={{ marginTop: 8, background: 'rgba(46,204,113,0.12)', border: '1px solid rgba(46,204,113,0.35)' }}>{msg}</Card>}
-      </div>
-    );
+  async function onJoin(tableId: string) {
+    setJoining(tableId);
+    setJoinMsg(null);
+    try {
+      const res = await safeFetch<{ ok?: boolean; message?: string }>(
+        `/api/tables/${encodeURIComponent(tableId)}/join`,
+        { method: "POST" },
+        initData
+      );
+      if (res.ok) {
+        setJoinMsg(`You joined "${tableId}" successfully.`);
+      } else {
+        if (res.status === 404) {
+          setJoinMsg(
+            `Join route /api/tables/${tableId}/join is missing (404). Please expose it in the API.`
+          );
+        } else if (res.status === 401) {
+          setJoinMsg(
+            "Unauthorized (401). In Telegram the init data will be used automatically; in dev we attach user_id=1."
+          );
+        } else {
+          setJoinMsg(`Failed to join (HTTP ${res.status}).`);
+        }
+      }
+    } catch (e: any) {
+      setJoinMsg(e?.message || "Join failed.");
+    } finally {
+      setJoining(null);
+      // small refresh of table list
+      const res = await safeFetch<{ tables?: TableDto[] } | TableDto[]>(
+        "/api/tables",
+        { method: "GET" },
+        initData
+      );
+      if (res.ok) {
+        const payload = res.data ?? {};
+        const list = Array.isArray(payload)
+          ? (payload as TableDto[])
+          : Array.isArray((payload as any).tables)
+          ? ((payload as any).tables as TableDto[])
+          : [];
+        setTables(list);
+      }
+    }
   }
 
   return (
-    <div style={{ padding: 12, display: 'grid', gap: 12 }}>
-      {!serverAvailable && (
-        <Card style={{ background: 'rgba(255, 199, 0, 0.12)', border: '1px solid rgba(255, 199, 0, 0.35)' }}>
-          Live game endpoint not found — showing demo HUD. Implement <code>/api/tables/:id</code> for real-time data.
-        </Card>
-      )}
+    <div className="flex flex-col gap-3">
+      <header className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <CrownIcon className="w-5 h-5" /> Tables
+        </h2>
+        {serverTables === false && (
+          <span className="text-xs text-amber-500">
+            Using local mock data (add /api/tables to backend)
+          </span>
+        )}
+      </header>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>{detail?.name || 'Table'}</div>
-          <div style={{ fontSize: 12, opacity: 0.75 }}>
-            {detail ? `${detail.seated}/${detail.maxPlayers} seated • ${fmtNum(detail.bb)} BB` : '—'}
-          </div>
+      {error && (
+        <div className="rounded-lg p-3 bg-red-500/10 border border-red-500/30 text-red-200 text-sm">
+          {error}
         </div>
-        <Button onClick={leave}>Leave</Button>
-      </div>
+      )}
 
       {loading ? (
-        <Card>Loading table…</Card>
-      ) : (
-        <>
-          <Card>
-            <Row label="Stage" value={detail?.stage || 'idle'} />
-            <Row label="Dealer" value={detail?.dealer || '—'} />
-            <Row label="Pot" value={chips(detail?.pot || 0)} />
-          </Card>
-
-          <Card>
-            <div style={{ fontWeight: 800, marginBottom: 8 }}>Players</div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {(detail?.players || []).map(p => (
-                <div key={p.id} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto',
-                  gap: 8,
-                  borderBottom: '1px dashed rgba(255,255,255,0.12)',
-                  paddingBottom: 6
-                }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{p.name}{p.name === 'You' || p.id === userId ? ' (you)' : ''}</div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>{p.sittingOut ? 'Sitting out' : 'Active'}</div>
+        <div className="text-sm opacity-60">Loading tables…</div>
+      ) : tables && tables.length > 0 ? (
+        <div className="grid gap-2">
+          {tables.map((t) => (
+            <div
+              key={t.id}
+              className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                {t.is_private ? (
+                  <LockIcon className="w-5 h-5 opacity-70" />
+                ) : (
+                  <UsersIcon className="w-5 h-5 opacity-70" />
+                )}
+                <div>
+                  <div className="font-medium">{t.name}</div>
+                  <div className="text-xs opacity-70">
+                    Stakes {t.stakes} · {t.players_count}/{t.max_players} ·{" "}
+                    {t.status === "running" ? "Running" : "Waiting"}
                   </div>
-                  <div style={{ fontWeight: 700 }}>{chips(p.stack)}</div>
                 </div>
-              ))}
-              {(!detail?.players || detail.players.length === 0) && <div style={{ opacity: 0.7, fontSize: 13 }}>No players yet.</div>}
-            </div>
-          </Card>
+              </div>
 
-          <Card>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              <Button onClick={() => quickAction('check')}>Check</Button>
-              <Button onClick={() => quickAction('call')}>Call</Button>
-              <Button onClick={() => quickAction('fold')}>Fold</Button>
-              <Button onClick={() => quickAction('bet')}>Bet</Button>
+              <button
+                disabled={joining === t.id}
+                onClick={() => onJoin(t.id)}
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 border border-white/20 hover:border-white/40"
+              >
+                <PlayIcon className="w-4 h-4" />
+                {joining === t.id ? "Joining…" : "Join"}
+              </button>
             </div>
-            {msg && <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>{msg}</div>}
-          </Card>
-        </>
+          ))}
+        </div>
+      ) : (
+        <div className="text-sm opacity-60">No tables.</div>
       )}
+
+      {joinMsg && (
+        <div className="rounded-lg p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm">
+          {joinMsg}
+        </div>
+      )}
+
+      <footer className="flex items-center gap-2 text-xs opacity-70">
+        <ChipIcon className="w-4 h-4" />
+        <span>Dark/Light follows device. Account settings saved on server.</span>
+      </footer>
     </div>
   );
-};
-
-/** ---------- Optional combined wrapper (not used by App.tsx directly) ---------- */
-
-const LobbyAndGame: React.FC<Props> = (props) => {
-  const [tab, setTab] = useState<'lobby' | 'game'>('lobby');
-  return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 10,
-        position: 'sticky', top: 0, zIndex: 2,
-        background: 'var(--tg-theme-bg-color, #0f0f0f)',
-      }}>
-        <button
-          onClick={() => { setTab('lobby'); haptics.selection(); }}
-          style={{
-            padding: '10px 12px', borderRadius: 12,
-            border: '1px solid rgba(255,255,255,0.12)',
-            background: tab === 'lobby'
-              ? 'linear-gradient(180deg, rgba(40,40,40,0.9), rgba(20,20,20,0.9))'
-              : 'var(--tg-theme-secondary-bg-color, rgba(255,255,255,0.04))',
-            color: 'var(--tg-theme-text-color, #fff)', fontWeight: 800,
-          }}
-        >🏠 Lobby</button>
-        <button
-          onClick={() => { setTab('game'); haptics.selection(); }}
-          style={{
-            padding: '10px 12px', borderRadius: 12,
-            border: '1px solid rgba(255,255,255,0.12)',
-            background: tab === 'game'
-              ? 'linear-gradient(180deg, rgba(40,40,40,0.9), rgba(20,20,20,0.9))'
-              : 'var(--tg-theme-secondary-bg-color, rgba(255,255,255,0.04))',
-            color: 'var(--tg-theme-text-color, #fff)', fontWeight: 800,
-          }}
-        >🃏 Game</button>
-      </div>
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {tab === 'lobby' ? <LobbyPanel {...props} /> : <GamePanel {...props} />}
-      </div>
-    </div>
-  );
-};
-
-export default LobbyAndGame;
+}
