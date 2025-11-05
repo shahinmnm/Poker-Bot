@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { applyUXSettings, setFourColorDeck, setHapticsEnabled, haptics } from '../utils/uiEnhancers';
 
 /**
  * StatsAndAccount.tsx
@@ -12,17 +13,15 @@ import React, { useEffect, useMemo, useState } from 'react';
  *  - No size change; uses parent container’s width/height
  *  - Works even if backend endpoints aren’t ready (graceful fallback with hints)
  *
- * Integration plan (next step):
- *  - Import and render <StatsPanel .../> and <AccountPanel .../> from App.tsx tabs
- *  - Pass sessionToken (string), userId (number | null), username (string | null)
+ * Integration plan:
+ *  - Imported by App.tsx tabs (Stats & Account)
+ *  - Expects sessionToken (string), userId (number | null), username (string | null)
  *
- * Optional server endpoints (all optional; guarded if missing):
+ * Server endpoints (optional; guarded if missing):
  *  - GET  /api/user/stats
  *  - GET  /api/user/settings
  *  - POST /api/user/settings
- *  - POST /api/user/bonus (daily claim)
- *
- * You can adapt these paths to your backend later. For now, panels degrade nicely.
+ *  - POST /api/user/bonus
  */
 
 type Nullable<T> = T | null;
@@ -157,16 +156,24 @@ const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label
     <input
       type="checkbox"
       checked={checked}
-      onChange={(e) => onChange(e.target.checked)}
+      onChange={(e) => {
+        onChange(e.target.checked);
+        // UX cue
+        haptics.selection();
+      }}
       style={{ width: 20, height: 20 }}
       aria-label={label}
     />
   </label>
 );
 
-const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, style, ...rest }) => (
+const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, style, onClick, ...rest }) => (
   <button
     {...rest}
+    onClick={(e) => {
+      haptics.click();
+      onClick?.(e);
+    }}
     style={{
       width: '100%',
       padding: '12px 14px',
@@ -198,7 +205,6 @@ const ProgressBar: React.FC<{ label: string; value: number; max: number }> = ({ 
           width: `${p}%`,
           height: '100%',
           borderRadius: 6,
-          // poker-y accent (adapts fine in both themes)
           background: 'linear-gradient(90deg, #2ecc71, #27ae60)',
           transition: 'width .3s ease',
         }} />
@@ -227,7 +233,6 @@ export const StatsPanel: React.FC<Props> = ({ sessionToken, userId, username }) 
         });
         setServerAvailable(true);
       } else {
-        // Graceful: keep fallback stats; indicate server might be missing this endpoint
         setServerAvailable(false);
       }
       setLoading(false);
@@ -296,6 +301,7 @@ export const AccountPanel: React.FC<Props> = ({ sessionToken, userId, username }
   const [message, setMessage] = useState<string | null>(null);
   const [serverAvailable, setServerAvailable] = useState(true);
 
+  // Load settings, then apply UX effects immediately
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -303,13 +309,17 @@ export const AccountPanel: React.FC<Props> = ({ sessionToken, userId, username }
       const res = await safeFetch<SettingsResponse>('/api/user/settings', { method: 'GET' }, sessionToken);
       if (!mounted) return;
       if (res.ok && res.data) {
-        // Merge server settings with defaults
         const { balance: b, ...rest } = res.data;
-        setSettings({ ...defaultSettings, ...rest });
+        const merged: Settings = { ...defaultSettings, ...rest };
+        setSettings(merged);
         setBalance(typeof b === 'number' ? b : null);
         setServerAvailable(true);
+        // Apply UX instantly
+        applyUXSettings({ fourColorDeck: merged.fourColorDeck, haptics: merged.haptics });
       } else {
         setServerAvailable(false);
+        // Also apply defaults so UX reflects toggles even without server
+        applyUXSettings({ fourColorDeck: defaultSettings.fourColorDeck, haptics: defaultSettings.haptics });
       }
       setLoading(false);
     })();
@@ -317,7 +327,13 @@ export const AccountPanel: React.FC<Props> = ({ sessionToken, userId, username }
   }, [sessionToken]);
 
   const updateSetting = <K extends keyof Settings>(key: K, val: Settings[K]) => {
-    setSettings((prev) => ({ ...prev, [key]: val }));
+    setSettings((prev) => {
+      const next = { ...prev, [key]: val };
+      // Live-apply UX toggles
+      if (key === 'fourColorDeck') setFourColorDeck(!!val);
+      if (key === 'haptics') setHapticsEnabled(!!val);
+      return next;
+    });
   };
 
   const save = async () => {
@@ -330,8 +346,10 @@ export const AccountPanel: React.FC<Props> = ({ sessionToken, userId, username }
     if (res.ok) {
       setMessage('Settings saved ✅');
       if (res.data?.balance != null) setBalance(res.data.balance);
+      haptics.notification('success');
     } else {
       setMessage('Could not save settings. They will still apply locally.');
+      haptics.notification('warning');
     }
     setSaving(false);
   };
@@ -344,8 +362,10 @@ export const AccountPanel: React.FC<Props> = ({ sessionToken, userId, username }
       if (typeof res.data.amount === 'number' && balance != null) {
         setBalance(balance + res.data.amount);
       }
+      haptics.notification('success');
     } else {
       setMessage(res.data?.message || 'Bonus not available right now.');
+      haptics.notification('warning');
     }
   };
 
@@ -457,7 +477,7 @@ const StatsAndAccount: React.FC<Props> = (props) => {
         background: 'var(--tg-theme-bg-color, #0f0f0f)',
       }}>
         <button
-          onClick={() => setTab('stats')}
+          onClick={() => { setTab('stats'); haptics.selection(); }}
           aria-pressed={tab === 'stats'}
           style={{
             padding: '10px 12px',
@@ -471,7 +491,7 @@ const StatsAndAccount: React.FC<Props> = (props) => {
           }}
         >📊 Stats</button>
         <button
-          onClick={() => setTab('account')}
+          onClick={() => { setTab('account'); haptics.selection(); }}
           aria-pressed={tab === 'account'}
           style={{
             padding: '10px 12px',
