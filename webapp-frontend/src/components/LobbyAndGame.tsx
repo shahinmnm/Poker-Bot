@@ -1,168 +1,145 @@
 // webapp-frontend/src/components/LobbyAndGame.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { apiJoinTable, apiTables, TableDto } from "../lib/api";
-import {
-  ArrowRightIcon,
-  CardsIcon,
-  CoinsIcon,
-  LockIcon,
-  PlayIcon,
-  UsersIcon,
-} from "./icons";
+import { CardsIcon, LockIcon, PlayIcon, UsersIcon } from "./icons";
 
-type LobbyProps = {
-  onJoinSuccess(tableId: string): void;
-};
+type FetchState<T> =
+  | { status: "idle" | "loading" }
+  | { status: "ready"; data: T }
+  | { status: "error"; code?: number; message?: string };
 
-export const LobbyPanel: React.FC<LobbyProps> = ({ onJoinSuccess }) => {
-  const [loading, setLoading] = useState(true);
-  const [tables, setTables] = useState<TableDto[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState("");
-
-  async function refresh() {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiTables();
-      setTables(data);
-    } catch (e: any) {
-      setError(e?.message || "Failed to load tables");
-    } finally {
-      setLoading(false);
-    }
-  }
+export function LobbyPanel() {
+  const [query, setQuery] = useState("");
+  const [joining, setJoining] = useState<string | null>(null);
+  const [state, setState] = useState<FetchState<TableDto[]>>({ status: "loading" });
 
   useEffect(() => {
-    refresh();
+    let alive = true;
+    (async () => {
+      try {
+        const tables = await apiTables();
+        if (!alive) return;
+        setState({ status: "ready", data: tables });
+      } catch (e: any) {
+        if (!alive) return;
+        setState({ status: "error", code: e?.code, message: e?.message || String(e) });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const visible = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return tables;
-    return tables.filter((t) =>
-      [t.name, t.stakes, t.is_private ? "private" : "public", t.status]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [tables, filter]);
+  const filtered = useMemo(() => {
+    if (state.status !== "ready") return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return state.data;
+    return state.data.filter((t) => {
+      const vis = t.is_private ? "private" : "public";
+      const s = `${t.name} ${t.stakes} ${vis} ${t.players_count}/${t.max_players} ${t.status}`.toLowerCase();
+      return s.includes(q);
+    });
+  }, [state, query]);
 
-  async function handleJoin(t: TableDto) {
+  async function join(tableId: string) {
     try {
-      setError(null);
-      await apiJoinTable(t.id);
-      onJoinSuccess(t.id);
+      setJoining(tableId);
+      await apiJoinTable(tableId);
+      // In a real app: navigate to Game tab or open table HUD
+      alert(`Joined ${tableId} (server acknowledged).`);
     } catch (e: any) {
-      if (e?.code === 401) {
-        setError(
-          "Sign in inside Telegram to join tables (AUTH_REQUIRED). Open this WebApp from your bot."
-        );
-      } else {
-        setError(`Join failed: ${e?.message || "unknown error"}`);
-      }
+      if (e?.code === 401) alert("Please open the app inside Telegram to authenticate.");
+      else if (e?.code === 404) alert("Join endpoint not found on server.");
+      else alert(`Join failed: ${e?.message || e}`);
+    } finally {
+      setJoining(null);
     }
   }
 
   return (
-    <section className="panel">
-      <header className="panel-header">
+    <div className="panel">
+      <div className="panel-header">
         <div className="title">
           <CardsIcon className="icon" /> Tables Lobby
         </div>
-        <button className="btn ghost" onClick={refresh} disabled={loading}>
-          ↻ Refresh
-        </button>
-      </header>
-
-      <div className="card">
-        <input
-          className="input"
-          placeholder="Search by name, stake, visibility…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          inputMode="search"
-        />
       </div>
 
-      {error && <div className="alert warn">{error}</div>}
+      <input
+        className="input"
+        placeholder="Search by name, stake, visibility…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
 
-      {loading ? (
-        <div className="muted">Loading tables…</div>
-      ) : visible.length === 0 ? (
-        <div className="muted">No tables match your search.</div>
-      ) : (
+      {state.status === "loading" && <div className="card muted">Loading tables…</div>}
+      {state.status === "error" && (
+        <div className="alert warn">
+          {state.code === 404
+            ? "Server tables endpoint not found — implement /api/tables on your backend."
+            : "Could not load tables. Check network/server logs."}
+        </div>
+      )}
+
+      {state.status === "ready" && (
         <ul className="list">
-          {visible.map((t) => (
-            <li key={t.id} className="row">
-              <div className="row-main">
-                <div className="row-title">
-                  {t.name}{" "}
-                  {t.is_private ? (
-                    <span title="Private table">
-                      <LockIcon className="icon sm" />
+          {filtered.map((t) => {
+            const vis = t.is_private ? (
+              <>
+                <LockIcon className="icon sm" /> Private
+              </>
+            ) : (
+              "Public"
+            );
+
+            return (
+              <li key={t.id} className="row">
+                <div className="row-main">
+                  <div className="row-title">{t.name}</div>
+                  <div className="row-sub">
+                    <span>{vis}</span>
+                    <span>{t.status[0].toUpperCase() + t.status.slice(1)}</span>
+                    <span>
+                      💰 {t.stakes}
                     </span>
-                  ) : null}
+                    <span>
+                      <UsersIcon className="icon sm" /> {t.players_count}/{t.max_players}
+                    </span>
+                    <span className="chip">ID: {t.id}</span>
+                  </div>
                 </div>
-                <div className="row-sub">
-                  <CoinsIcon className="icon sm" /> {t.stakes} &nbsp;·&nbsp;
-                  <UsersIcon className="icon sm" /> {t.players_count}/{t.max_players}
-                  &nbsp;·&nbsp; {t.is_private ? "Private" : "Public"}
-                  &nbsp;·&nbsp; {t.status === "running" ? "Running" : "Waiting"}
-                  &nbsp;·&nbsp; ID: {t.id}
+                <div className="row-cta">
+                  <button
+                    className="btn"
+                    disabled={joining === t.id}
+                    onClick={() => join(t.id)}
+                    title="Join table"
+                  >
+                    <PlayIcon className="icon sm" />
+                    {joining === t.id ? "Joining…" : "Join"}
+                  </button>
                 </div>
-              </div>
-              <div className="row-cta">
-                <button
-                  className="btn"
-                  onClick={() => handleJoin(t)}
-                  disabled={t.is_private || t.status === "running"}
-                  title={
-                    t.is_private
-                      ? "Invite-only"
-                      : t.status === "running"
-                      ? "Game is already running"
-                      : "Join this table"
-                  }
-                >
-                  <PlayIcon className="icon" />
-                  Join
-                </button>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
-    </section>
+    </div>
   );
-};
+}
 
-type GameProps = {
-  currentTableId?: string | null;
-};
-
-export const GamePanel: React.FC<GameProps> = ({ currentTableId }) => {
+export function GamePanel() {
   return (
-    <section className="panel">
-      <header className="panel-header">
+    <div className="panel">
+      <div className="panel-header">
         <div className="title">
           <PlayIcon className="icon" /> Game
         </div>
-        {currentTableId ? (
-          <div className="chip">
-            Table <ArrowRightIcon className="icon sm" /> {currentTableId}
-          </div>
-        ) : (
-          <div className="muted">Join a table from the Lobby to start.</div>
-        )}
-      </header>
+      </div>
 
       <div className="card">
-        <p className="muted">
-          Game surface placeholder. Render your real-time table HUD/actions here and
-          attach to your channel (WebSocket/long-poll/Telegram callbacks).
-        </p>
+        This is the mini-app game surface. When your real-time channel is ready, mount your table HUD
+        and actions here (spectators, hand history, timers, etc).
       </div>
-    </section>
+    </div>
   );
-};
+}
