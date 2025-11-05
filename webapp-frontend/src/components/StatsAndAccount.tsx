@@ -1,368 +1,168 @@
 // webapp-frontend/src/components/StatsAndAccount.tsx
-//
-// Named exports: StatsPanel, AccountPanel
-// - Reads stats via apiUserStats()
-// - Reads settings via apiUserSettings()
-// - Friendly handling for 401 (AUTH_REQUIRED) and other HTTP errors
-// - Imports ONLY icons that exist in ./icons.tsx
-
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { apiUserSettings, apiUserStats } from "../lib/api";
 import {
   BadgeCheckIcon,
   BellIcon,
   ChartIcon,
-  CoinsIcon,
-  PercentIcon,
-  SettingsIcon,
+  CogIcon,
+  FlameIcon,
+  GlobeIcon,
+  PlusIcon,
   ShieldIcon,
+  WalletIcon,
+  CoinsIcon,
   TrophyIcon,
   UserIcon,
-  WalletIcon,
-  TrendingUpIcon,
-  TrendingDownIcon,
 } from "./icons";
 
-/* ------------ Types (match backend responses you showed) ------------ */
+type LoadState<T> = { status: "idle" | "loading" | "ready" | "error"; data?: T; error?: any };
 
-type StatsDto = {
-  user_id: number;
-  hands_played: number;
-  biggest_win: number;
-  biggest_loss: number;
-  win_rate: number; // 0..1
-  last_played: string; // ISO string
-  streak_days: number;
-  chip_balance: number;
-  rank: string;
-};
+export function StatsPanel() {
+  const [state, setState] = useState<LoadState<any>>({ status: "idle" });
 
-type SettingsDto = {
-  user_id: number;
-  theme: "auto" | "light" | "dark";
-  notifications: boolean;
-  locale: string;
-  currency: string; // "chips"
-  experimental: boolean;
-};
+  const refresh = async () => {
+    setState({ status: "loading" });
+    try {
+      const stats = await apiUserStats();
+      setState({ status: "ready", data: stats });
+    } catch (e: any) {
+      setState({ status: "error", error: e });
+    }
+  };
 
-/* ------------------------- Small UI primitives ------------------------- */
+  useEffect(() => { refresh(); }, []);
 
-function PanelShell(props: { title: React.ReactNode; children: React.ReactNode; right?: React.ReactNode }) {
+  const s = state.data || {
+    hands_played: 0,
+    biggest_win: 0,
+    biggest_loss: 0,
+    win_rate: 0,
+    last_played: "",
+    streak_days: 0,
+    chip_balance: 0,
+    rank: "-",
+  };
+
   return (
-    <section className="w-full max-w-3xl mx-auto rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/40 backdrop-blur p-4 md:p-6 shadow-sm">
-      <header className="flex items-center justify-between gap-3 mb-4">
-        <h2 className="text-base md:text-lg font-semibold flex items-center gap-2">{props.title}</h2>
-        {props.right}
-      </header>
-      <div>{props.children}</div>
-    </section>
-  );
-}
+    <div className="stack">
+      {state.status === "error" && (
+        <div className={`banner ${state.error?.code === 404 ? "" : "error"}`}>
+          {state.error?.code === 404
+            ? <>Server stats endpoint not found — showing local defaults. Once your backend exposes <code>/api/user/stats</code>, this panel will auto-populate.</>
+            : state.error?.code === 401
+              ? <>Authentication required. Open inside Telegram or enable dev user fallback.</>
+              : <>Couldn’t load stats ({String(state.error?.code || "")}).</>}
+        </div>
+      )}
 
-function StatCard(props: { label: string; value: React.ReactNode; icon?: React.ReactNode; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-black/10 dark:border-white/10 p-4 bg-black/[0.02] dark:bg-white/[0.04]">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs opacity-70">{props.label}</div>
-        {props.icon}
+      <div className="card stack">
+        <div className="section-title"><TrophyIcon /> Career Stats</div>
+        <button className="btn ghost" onClick={refresh}>↻ Refresh</button>
+
+        <div className="grid-2">
+          <div className="list-item"><div className="kv"><div className="label">Rank</div><div className="value">{s.rank}</div></div><BadgeCheckIcon /></div>
+          <div className="list-item"><div className="kv"><div className="label">Current streak</div><div className="value">{s.streak_days} <FlameIcon style={{verticalAlign:"-2px"}}/></div></div></div>
+
+          <div className="list-item"><div className="kv"><div className="label">Hands played</div><div className="value">{s.hands_played}</div></div></div>
+          <div className="list-item"><div className="kv"><div className="label">Win rate</div><div className="value">{Math.round((s.win_rate || 0) * 100)}%</div></div><ChartIcon /></div>
+
+          <div className="list-item"><div className="kv"><div className="label">Chip balance</div><div className="value chips">{s.chip_balance.toLocaleString()}</div></div><CoinsIcon /></div>
+          <div className="list-item"><div className="kv"><div className="label">Best / Worst</div><div className="value">{s.biggest_win.toLocaleString()} / {s.biggest_loss.toLocaleString()}</div></div></div>
+        </div>
+
+        <div className="small">Last played: {s.last_played ? new Date(s.last_played).toLocaleString() : "—"}</div>
       </div>
-      <div className="text-lg font-semibold">{props.value}</div>
-      {props.hint ? <div className="text-xs opacity-70 mt-1">{props.hint}</div> : null}
     </div>
   );
 }
 
-function Button(
-  props: React.ButtonHTMLAttributes<HTMLButtonElement> & { left?: React.ReactNode; variant?: "soft" | "plain" }
-) {
-  const { className = "", left, variant = "soft", children, ...rest } = props;
-  const base =
-    "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium border transition active:translate-y-[0.5px]";
-  const soft =
-    "border-black/10 dark:border-white/15 bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.10]";
-  const plain = "border-transparent hover:bg-black/[0.05] dark:hover:bg-white/[0.06]";
-  return (
-    <button {...rest} className={`${base} ${variant === "plain" ? plain : soft} ${className}`}>
-      {left}
-      {children}
-    </button>
-  );
-}
+export function AccountPanel() {
+  const [state, setState] = useState<LoadState<any>>({ status: "idle" });
 
-/* ------------------------------ Helpers ------------------------------ */
-
-function pct(n: number) {
-  if (!isFinite(n)) return "—";
-  return `${Math.round(n * 100)}%`;
-}
-function fmtNumber(n: number) {
-  try {
-    return new Intl.NumberFormat().format(n);
-  } catch {
-    return String(n);
-  }
-}
-function fmtDate(s: string) {
-  try {
-    const d = new Date(s);
-    return d.toLocaleString();
-  } catch {
-    return s;
-  }
-}
-
-/* ------------------------------- StatsPanel ------------------------------- */
-
-type StatsState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "loaded"; data: StatsDto }
-  | { kind: "error"; code?: number; message: string };
-
-export function StatsPanel(props: any) {
-  const [state, setState] = useState<StatsState>({ kind: "idle" });
-
-  const load = useCallback(async () => {
-    setState({ kind: "loading" });
+  const refresh = async () => {
+    setState({ status: "loading" });
     try {
-      const data = (await apiUserStats()) as StatsDto;
-      setState({ kind: "loaded", data });
-    } catch (err: any) {
-      if (err?.code === 401) {
-        setState({
-          kind: "error",
-          code: 401,
-          message: "Authentication required. Open inside Telegram (or use dev fallback user_id=1).",
-        });
-      } else if (typeof err?.code === "number") {
-        setState({ kind: "error", code: err.code, message: `Server error (HTTP ${err.code}).` });
-      } else {
-        setState({ kind: "error", message: "Network error while loading stats." });
-      }
+      const settings = await apiUserSettings();
+      setState({ status: "ready", data: settings });
+    } catch (e: any) {
+      setState({ status: "error", error: e });
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { refresh(); }, []);
 
-  const body = useMemo(() => {
-    if (state.kind === "idle" || state.kind === "loading") {
-      return <div className="flex items-center justify-center h-32 text-sm opacity-70">Loading stats…</div>;
-    }
-    if (state.kind === "error") {
-      return (
-        <div className="space-y-3">
-          <div className="rounded-xl border border-red-300/40 bg-red-50/60 dark:bg-red-900/20 p-3 text-sm">
-            <div className="font-medium">Couldn’t load stats</div>
-            <div className="opacity-80">
-              {state.message}
-              {state.code ? ` (code ${state.code})` : null}
-            </div>
-          </div>
-          <Button onClick={load}>Try again</Button>
-        </div>
-      );
-    }
-
-    const s = state.data;
-    const winrateUp = s.win_rate >= 0.5;
-
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <StatCard
-          label="Rank"
-          value={
-            <span className="inline-flex items-center gap-2">
-              <BadgeCheckIcon className="w-5 h-5 opacity-80" />
-              {s.rank}
-            </span>
-          }
-          hint={`Streak: ${s.streak_days} day${s.streak_days === 1 ? "" : "s"}`}
-        />
-        <StatCard
-          label="Hands Played"
-          value={fmtNumber(s.hands_played)}
-          icon={<ChartIcon className="w-5 h-5 opacity-60" />}
-          hint={`Last played: ${fmtDate(s.last_played)}`}
-        />
-        <StatCard
-          label="Win Rate"
-          value={
-            <span className="inline-flex items-center gap-1">
-              {winrateUp ? (
-                <TrendingUpIcon className="w-5 h-5 opacity-70" />
-              ) : (
-                <TrendingDownIcon className="w-5 h-5 opacity-70" />
-              )}
-              {pct(s.win_rate)}
-            </span>
-          }
-          icon={<PercentIcon className="w-5 h-5 opacity-60" />}
-          hint={winrateUp ? "On a heater" : "Variance happens"}
-        />
-        <StatCard
-          label="Chip Balance"
-          value={
-            <span className="inline-flex items-center gap-2">
-              <CoinsIcon className="w-5 h-5 opacity-80" />
-              {fmtNumber(s.chip_balance)} {/** currency is "chips" */}
-            </span>
-          }
-          hint={`Best win: ${fmtNumber(s.biggest_win)} • Worst loss: ${fmtNumber(s.biggest_loss)}`}
-        />
-      </div>
-    );
-  }, [state, load]);
+  const st = state.data || { user_id: 0, theme: "auto", notifications: true, locale: "en", currency: "chips", experimental: false };
 
   return (
-    <PanelShell
-      title={
-        <span className="inline-flex items-center gap-2">
-          <TrophyIcon className="w-5 h-5 opacity-70" />
-          Player Stats
-        </span>
-      }
-      right={<Button onClick={load}>Refresh</Button>}
-    >
-      {body}
-    </PanelShell>
-  );
-}
-
-/* ------------------------------ AccountPanel ------------------------------ */
-
-type SettingsState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "loaded"; data: SettingsDto }
-  | { kind: "error"; code?: number; message: string };
-
-export function AccountPanel(props: any) {
-  const [state, setState] = useState<SettingsState>({ kind: "idle" });
-
-  const load = useCallback(async () => {
-    setState({ kind: "loading" });
-    try {
-      const data = (await apiUserSettings()) as SettingsDto;
-      setState({ kind: "loaded", data });
-    } catch (err: any) {
-      if (err?.code === 401) {
-        setState({
-          kind: "error",
-          code: 401,
-          message: "Authentication required. Open inside Telegram (or use dev fallback user_id=1).",
-        });
-      } else if (typeof err?.code === "number") {
-        setState({ kind: "error", code: err.code, message: `Server error (HTTP ${err.code}).` });
-      } else {
-        setState({ kind: "error", message: "Network error while loading settings." });
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const body = useMemo(() => {
-    if (state.kind === "idle" || state.kind === "loading") {
-      return <div className="flex items-center justify-center h-32 text-sm opacity-70">Loading settings…</div>;
-    }
-    if (state.kind === "error") {
-      return (
-        <div className="space-y-3">
-          <div className="rounded-xl border border-red-300/40 bg-red-50/60 dark:bg-red-900/20 p-3 text-sm">
-            <div className="font-medium">Couldn’t load account settings</div>
-            <div className="opacity-80">
-              {state.message}
-              {state.code ? ` (code ${state.code})` : null}
-            </div>
-          </div>
-          <Button onClick={load}>Try again</Button>
+    <div className="stack">
+      {state.status === "error" && (
+        <div className={`banner ${state.error?.code === 404 ? "" : "error"}`}>
+          {state.error?.code === 404
+            ? <>Server settings endpoint not found — using local defaults. When you add <code>/api/user/settings</code> this will sync automatically.</>
+            : state.error?.code === 401
+              ? <>Authentication required. Open inside Telegram or enable dev user fallback.</>
+              : <>Couldn’t load settings ({String(state.error?.code || "")}).</>}
         </div>
-      );
-    }
+      )}
 
-    const s = state.data;
+      <div className="card stack">
+        <div className="section-title"><UserIcon /> Account & Settings</div>
+        <button className="btn ghost" onClick={refresh}>↻ Refresh</button>
 
-    return (
-      <div className="grid grid-cols-1 gap-3">
-        <div className="rounded-xl border border-black/10 dark:border-white/10 p-4 bg-black/[0.02] dark:bg-white/[0.04] space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="font-medium flex items-center gap-2">
-              <UserIcon className="w-5 h-5 opacity-70" />
-              Profile
-            </div>
-            <span className="text-xs opacity-70">User ID: {s.user_id}</span>
-          </div>
-          <div className="text-sm opacity-80">Locale: {s.locale}</div>
-        </div>
-
-        <div className="rounded-xl border border-black/10 dark:border-white/10 p-4 bg-black/[0.02] dark:bg-white/[0.04] space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="font-medium flex items-center gap-2">
-              <SettingsIcon className="w-5 h-5 opacity-70" />
-              Preferences
+        <div className="grid-2">
+          <div className="list-item">
+            <div className="kv">
+              <div className="label">User ID</div>
+              <div className="value">{st.user_id}</div>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="opacity-80">Theme</span>
-              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-black/10 dark:border-white/10">
-                {s.theme}
-              </span>
+          <div className="list-item">
+            <div className="kv">
+              <div className="label">Locale</div>
+              <div className="value"><GlobeIcon style={{verticalAlign:"-2px"}}/> {st.locale}</div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="opacity-80">Notifications</span>
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-black/10 dark:border-white/10">
-                <BellIcon className="w-4 h-4 opacity-70" />
-                {s.notifications ? "On" : "Off"}
-              </span>
+          </div>
+
+          <div className="list-item">
+            <div className="kv">
+              <div className="label">Theme</div>
+              <div className="value">{st.theme}</div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="opacity-80">Currency</span>
-              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-black/10 dark:border-white/10">
-                <WalletIcon className="w-4 h-4 opacity-70" />
-                {s.currency}
-              </span>
+            <CogIcon />
+          </div>
+
+          <div className="list-item">
+            <div className="kv">
+              <div className="label">Notifications</div>
+              <div className="value">{st.notifications ? "On" : "Off"}</div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="opacity-80">Experimental</span>
-              <span className="inline-flex items-center gap-2 px-2 py-1 rounded-lg border border-black/10 dark:border-white/10">
-                <ShieldIcon className="w-4 h-4 opacity-70" />
-                {s.experimental ? "Enabled" : "Disabled"}
-              </span>
+            <BellIcon />
+          </div>
+
+          <div className="list-item">
+            <div className="kv">
+              <div className="label">Currency</div>
+              <div className="value">{st.currency}</div>
             </div>
+            <WalletIcon />
+          </div>
+
+          <div className="list-item">
+            <div className="kv">
+              <div className="label">Experimental</div>
+              <div className="value">{st.experimental ? "Enabled" : "Disabled"}</div>
+            </div>
+            <ShieldIcon />
           </div>
         </div>
 
-        <div className="rounded-xl border border-black/10 dark:border-white/10 p-4 bg-black/[0.02] dark:bg-white/[0.04] space-y-2">
-          <div className="font-medium flex items-center gap-2">
-            <CoinsIcon className="w-5 h-5 opacity-70" />
-            Tips
-          </div>
-          <ul className="text-sm opacity-80 list-disc pl-5 space-y-1">
-            <li>Change theme in your device settings; the app follows Light/Dark when theme is set to <b>auto</b>.</li>
-            <li>Open inside Telegram for full features and authentication.</li>
-          </ul>
+        <hr className="sep" />
+        <div className="small">
+          • Change theme in your device settings; the app follows Light/Dark when theme is set to <b>auto</b>.<br/>
+          • Open inside Telegram for full features and authentication.
         </div>
       </div>
-    );
-  }, [state, load]);
-
-  return (
-    <PanelShell
-      title={
-        <span className="inline-flex items-center gap-2">
-          <SettingsIcon className="w-5 h-5 opacity-70" />
-          Account
-        </span>
-      }
-      right={<Button onClick={load}>Refresh</Button>}
-    >
-      {body}
-    </PanelShell>
+    </div>
   );
 }
